@@ -78,8 +78,10 @@ fi
 echo "  [image-bridge] 应用核心包补丁(幂等)..."
 run node "$HERE/bridge/apply-patch.mjs"
 
-# 5. settings 白名单补丁(设置页可写 aux)
-echo "  [settings-allowlist] 应用白名单补丁..."
+# 5. settings 动态暴露补丁(设置页可写 aux 配置,插件原生能力)
+echo "  [settings-dynamic-expose] 应用 dsh-settings 补丁(注册时声明 exposedToWeb)..."
+run node "$HERE/bridge/patch-settings-dynamic-expose.mjs"
+echo "  [settings-allowlist] 应用 api-proxy 动态暴露补丁(v2,从 listExposed 合并)..."
 run node "$HERE/bridge/patch-settings-allowlist.mjs"
 
 echo

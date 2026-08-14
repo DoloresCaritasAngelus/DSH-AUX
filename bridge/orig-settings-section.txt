@@ -1,0 +1,4 @@
+		const scope = sctx.settings.register(ns, schema, {
+			base: entry,
+			...hooks.validate === void 0 ? {} : { validate: hooks.validate }
+		});

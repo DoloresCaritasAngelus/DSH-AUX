@@ -214,7 +214,12 @@ export class AuxLlmService extends Service {
       onChange: () => {
         this._recomputeMerged();
       },
-      validate: validateAuxSettings
+      validate: validateAuxSettings,
+      // The settings page is a first-class capability of this plugin:
+      // declare the namespace exposed to the Web configuration client
+      // (requires the dynamic-expose patch on dsh-settings + api-proxy,
+      // see bridge/patch-settings-dynamic-expose.mjs).
+      exposedToWeb: true
     });
     this._registerTools();
     this._sessionImages = new Map();

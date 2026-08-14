@@ -63,7 +63,7 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
 - **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
 - **测试零依赖**:`cd tests && node --test aux.test.js`(63 项)+ `node --test bridge.test.js`(4 项)。
 - **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行;仅装插件本体的需单独跑 `bridge/apply-patch.mjs`)。它让**纯文本主模型也能直接粘贴图片**且 UI 保留缩略图(多模态模型原生看图不受影响);改 node_modules 核心包,`npm update` 后重跑一次即可。`/aux status` 会报告它的状态。
-- **settings 白名单补丁**(同样由 install.sh 应用):让设置页可写 aux 配置(不打补丁可用 `/aux model` 命令等效)。
+- **settings 动态暴露**(同样由 install.sh 应用):设置页读写 aux 配置是插件**原生能力**——dsh-aux 注册 namespace 时声明 `exposedToWeb`(dsh-settings 的 `listExposed()` + api-proxy 动态合并,即平台 api-proxy 注释中的 deferred work 本地实现,可整理为 upstream PR)。
 - **会话删除**:DSH 原生无此功能,配合社区插件(如 dsh-plugin-session-delete);删除会话时 dsh-aux 会自动清理其无引用图片。
 
 ## 文档

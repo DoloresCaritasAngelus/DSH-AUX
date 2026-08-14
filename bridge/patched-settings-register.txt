@@ -1,0 +1,16 @@
+	register(ns, schema, options) {
+		if (this.registrations.has(ns)) throw new Error(`settings namespace "${ns}" is already registered`);
+		const registration = {
+			ns,
+			schema,
+			base: options?.base,
+			applies: options?.applies ?? "live",
+			...options?.validate === void 0 ? {} : { validate: options.validate },
+			// dsh-aux dynamic expose (local patch): the plugin owning this
+			// namespace declares it readable/writable through the Web settings
+			// configuration client (settings.describe / settings.mutate).
+			exposedToWeb: options?.exposedToWeb === true,
+			resolved: deepFreeze(this.resolve(schema, options?.base, this.section(ns), options?.validate)),
+			revision: 0,
+			watchers: /* @__PURE__ */ new Set()
+		};

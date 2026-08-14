@@ -93,8 +93,9 @@ const result = await ctx.auxLlm.call("compress", {
   主模型**也能直接粘贴图片发送,且用户消息保留图片缩略图(模型输入边界按模态
   改写为路径文本,多模态模型原生看图)。修改 node_modules 核心包,`npm update`
   后重跑 `bridge/apply-patch.mjs` 即可;`/aux status` 会报告其状态。
-- **settings 白名单补丁**(install.sh 一并应用):设置页可写 aux 配置(不打补丁
-  可用 `/aux model` 命令等效)。
+- **settings 动态暴露**(install.sh 一并应用):设置页读写 aux 配置是插件
+  **原生能力**——注册 namespace 时声明 `exposedToWeb`,由 dsh-settings 的
+  `listExposed()` 与 api-proxy 动态合并实现(平台 deferred work 的本地实现)。
 - **会话删除**:DSH 原生无删除会话功能,配合社区插件(如
   `dsh-plugin-session-delete`)使用;删除会话时 dsh-aux 会自动清理其图片。
 
