@@ -984,7 +984,7 @@ export class AuxLlmService extends Service {
       this._imageCtx = imageCtx;
       imageCtx.tools.register(defineTool({
         name: "vision_analyze",
-        description: "Look at an image with the auxiliary vision model and answer a SPECIFIC question about it. Always state exactly what you need to know in the question parameter (extract text, count objects, read a chart, check a color, compare elements) — never ask for a generic description, because the vision model answers your intent, not a caption. If the returned description misses a detail you need, call again with a more specific question about that detail. Provide one of attachmentId (a session image attachment), imagePath (a local image file), or imageUrl (a remote image URL).",
+        description: "Look at an image with the auxiliary vision model and answer a SPECIFIC question about it. Always state exactly what you need to know in the question parameter (extract text, count objects, read a chart, check a color, compare elements) — never ask for a generic description, because the vision model answers your intent, not a caption. If the returned description misses a detail you need, call again with a more specific question about that detail. If the same image (same attachmentId) was already analyzed with the same question in this session, reuse that earlier result instead of re-analyzing. Provide one of attachmentId (a session image attachment), imagePath (a local image file), or imageUrl (a remote image URL).",
         parameters: {
           attachmentId: { type: "string", description: "Session attachment id of an image already attached to this conversation." },
           imagePath: { type: "string", description: "Path to a local PNG/JPEG/WebP/GIF image file." },
