@@ -89,10 +89,22 @@ const result = await ctx.auxLlm.call("compress", {
 ## 测试
 
 ```sh
-cd tests && node --test aux.test.js        # 60+ 项,零依赖
+cd tests && node --test aux.test.js        # 63 项,零依赖
+cd tests && node --test bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自动跳过)
 ```
+
+## 兼容性与依赖
+
+- **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。
+- **运行时零第三方依赖**:peerDependencies 全部为 DSH 官方包(DSH 环境自带),
+  无 `dependencies`;测试同样零依赖、无网络。
 
 ## 许可证与致谢
 
-MIT License。设计受 Hermes Agent / agent-vision-toolkit / dsh-vision 启发,
-详见 [CONTRIBUTIONS.md](./CONTRIBUTIONS.md)。
+[MIT License](./LICENSE) © 2026 dsh-aux contributors——自由使用、修改、分发,
+保留版权声明即可。
+
+设计受 **Hermes Agent**(辅助模型机制概念)、**agent-vision-toolkit**(focus-hint
+意图感知方法论、图内文字策略)、**dsh-vision**(prompt 引导与思考块剥离)、
+**deepseek-harness #733**(图片桥接思路)启发,逐条借鉴与差异说明见
+[CONTRIBUTIONS.md](./CONTRIBUTIONS.md)。
