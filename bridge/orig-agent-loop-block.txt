@@ -1,0 +1,5 @@
+	/**
+	* Compose one frozen request and bind it to the adapter registration that
+	* resolved its exact-model defaults.
+	*/
+	async buildRequest(turn, step, tools, system, boundaryMessages, signal) {

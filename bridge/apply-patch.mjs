@@ -1,0 +1,118 @@
+#!/usr/bin/env node
+/**
+ * dsh-image-bridge 补丁安装器 v2(适配 dsh-aux vision_analyze 版)
+ *
+ * 让纯文本对话模型(deepseek-v4-flash 等)也能接收用户粘贴的图片,同时
+ * 让用户在 UI 里看到自己发的图片缩略图:
+ *
+ *  1) @deepseek-ai/dsh-host-apiproxy(admit):image block 原样保留进
+ *     会话消息(UI 渲染缩略图),仅为每个附件对象补建带扩展名的硬链接。
+ *  2) @deepseek-ai/dsh-agent-loop(buildRequest):模型输入边界处,把
+ *     image block 改写为"本地路径文本"(仅当模型非图像能力——
+ *     resolveModelInfo 的 inputModalities 不含 image),模型用 dsh-aux
+ *     的 vision_analyze 工具(imagePath 参数)把图片交给辅助视觉模型。
+ *     多模态模型(如 volcengine-ark/doubao-seed-2.0-lite)保持原生图片。
+ *
+ * 用法:
+ *   node apply-patch.mjs            # 应用/升级补丁(自动定位、备份、替换、校验)
+ *   node apply-patch.mjs --dry-run  # 只检查,不修改
+ *   node apply-patch.mjs --rollback # 回滚到最近一次备份(两个目标各自回滚)
+ */
+import { readFile, writeFile, copyFile, readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { execFileSync } from "node:child_process";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+// ── 目标文件 ────────────────────────────────────────────────────────────────
+const TARGETS = [
+  {
+    label: "dsh-host-apiproxy",
+    file: "/home/user/dsh/node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js",
+    mark: "dsh-image bridge v2 (local patch)",
+    states: [
+      { name: "v2", detect: (d) => d.includes("dsh-image bridge v2 (local patch)"), action: "skip" },
+      { name: "v1", detect: (d) => d.includes("dsh-vision bridge (local patch)"), block: await readFile(join(HERE, "v1-block.txt"), "utf8"), action: "replace" },
+      { name: "original", detect: (d) => d.includes("MODEL_DOES_NOT_SUPPORT_IMAGES"), block: await readFile(join(HERE, "orig-block.txt"), "utf8"), action: "replace" }
+    ],
+    patched: await readFile(join(HERE, "patched-block.txt"), "utf8"),
+    backupPrefix: "index.js.bak-"
+  },
+  {
+    label: "dsh-agent-loop",
+    file: "/home/user/dsh/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js",
+    mark: "image-bridge v2 (local patch)",
+    states: [
+      { name: "patched", detect: (d) => d.includes("image-bridge v2 (local patch)") && d.includes("await this.bridgeImagesForModel(boundaryMessages"), action: "skip" },
+      { name: "half", detect: (d) => d.includes("image-bridge v2 (local patch)"), block: "messages: boundaryMessages,", replacement: "messages: await this.bridgeImagesForModel(boundaryMessages, config.provider, config.model, this.loopCtx.llm, signal),", action: "replace" },
+      { name: "original", detect: (d) => d.includes("Compose one frozen request and bind it to the adapter registration"), block: await readFile(join(HERE, "orig-agent-loop-block.txt"), "utf8"), action: "replace" }
+    ],
+    patched: await readFile(join(HERE, "patched-agent-loop-block.txt"), "utf8"),
+    backupPrefix: "index.js.bak-"
+  }
+];
+
+function log(msg) { console.log(`[dsh-image-bridge] ${msg}`); }
+
+function syntaxCheck(file, label) {
+  try {
+    execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
+    log(`${label} 语法检查通过`);
+  } catch (error) {
+    log(`${label} 语法检查失败: ${error.stderr?.toString() ?? error.message}`);
+    process.exitCode = 1;
+  }
+}
+
+async function rollbackOne(target) {
+  const file = target.file;
+  if (!existsSync(file)) { log(`${target.label} 不存在,跳过回滚`); return; }
+  const dir = dirname(file);
+  const baks = (await readdir(dir)).filter((f) => f.startsWith(target.backupPrefix) && !f.includes(".node"));
+  baks.sort().reverse();
+  if (baks.length === 0) { log(`${target.label} 无备份可回滚`); return; }
+  const bak = join(dir, baks[0]);
+  await copyFile(bak, file);
+  log(`${target.label} 已回滚: ${file} <- ${baks[0]}`);
+  syntaxCheck(file, target.label);
+}
+
+async function applyOne(target, dryRun) {
+  const file = target.file;
+  if (!existsSync(file)) { log(`${target.label} 未找到: ${file}`); return; }
+  const data = await readFile(file, "utf8");
+  let state;
+  for (const candidate of target.states) {
+    if (candidate.detect(data)) { state = candidate; break; }
+  }
+  if (state === void 0) {
+    log(`${target.label} 跳过(版本不匹配,未找到已知代码块): ${file}`);
+    return;
+  }
+  if (state.action === "skip") { log(`${target.label} 已是 v2,跳过: ${file}`); return; }
+  if (dryRun) { log(`[dry-run] ${target.label} 可从 ${state.name} 升级: ${file}`); return; }
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const bak = join(dirname(file), `${target.backupPrefix}${stamp}`);
+  await copyFile(file, bak);
+  log(`${target.label} 备份: ${bak}`);
+  const patched = data.replace(state.block.trim(), (state.replacement ?? target.patched).trim());
+  if (!patched.includes(target.mark)) {
+    log(`${target.label} 补丁块未生效(替换失败),回滚`);
+    await copyFile(bak, file);
+    process.exit(1);
+  }
+  await writeFile(file, patched);
+  log(`${target.label} 已打补丁(v2): ${file}`);
+  syntaxCheck(file, target.label);
+}
+
+const dryRun = process.argv.includes("--dry-run");
+const rollbackMode = process.argv.includes("--rollback");
+if (rollbackMode) {
+  for (const target of TARGETS) await rollbackOne(target);
+  process.exit(0);
+}
+for (const target of TARGETS) await applyOne(target, dryRun);
+log(dryRun ? "dry-run 完成" : "完成。请重启 DSH 生效。");

@@ -1,0 +1,98 @@
+# dsh-aux — 辅助模型系统(Auxiliary Model System for DSH)
+
+> 受 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 辅助模型机制启发、
+> 零历史包袱重做的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(DSH) 插件:
+> 统一辅助 LLM 路由服务 + 三个辅助任务工具,给主 agent 使用。
+> **不建立子智能体、不做会话协同**——辅助任务(视觉、网页提取、文本压缩)由独立辅助 LLM 完成。
+
+## 特性
+
+- **统一辅助 LLM 路由**(`ctx.auxLlm`):任务分派、路由解析、超时、并发控制、失败冷却、
+  主模型降级、聚合错误,全链路事件溯源(会话事件 + `aux-status` 投影,可审计可恢复)。
+- **三个辅助任务工具**:
+  | 工具 | 作用 |
+  |---|---|
+  | `vision_analyze` | 图像分析(attachmentId / imagePath / imageUrl),focus-hint 意图感知 |
+  | `web_extract` | 网页抓取与摘要(HTML 清洗,可指定问题) |
+  | `compress_text` | 长文本压缩(保数字/路径/标识符,目标比例可调) |
+- **/aux 命令**:状态查看、模型配置、图片 GC、视觉自检、图片记忆。
+- **设置页 + 状态 chip**:DSH Web 设置里按任务配置 provider/model/timeout/并发;
+  composer 状态 chip 显示最近一次辅助调用。
+- **会话图片生命周期管理**:删除会话时自动清理其无引用图片(事件驱动 + 冷会话对账),
+  共享图片保留,归档不误删;图片记忆跨重启可查。
+- **零配置可用**:未配置任何任务时,辅助任务自动使用会话主模型;想用专用辅助模型
+  在设置页按需配置(下拉只列本机 active 供应商)。
+
+## 安装
+
+要求:DSH ≥ 0.1.0-rc.6,Node ≥ 20。
+
+### 方式一:DSH 插件命令(推荐)
+
+```sh
+dsh plugin --profile web add dsh-aux          # 从 npm
+# 或从本地目录:
+# dsh plugin --profile web add file:/path/to/dsh-aux
+```
+
+### 方式二:手动
+
+```sh
+ln -s /path/to/dsh-aux <DSH>/node_modules/@dolorescaritasangelus/dsh-aux
+# 在 profile 的 cordis.patch.yml 追加:
+# - insert:
+#     - id: aux
+#       name: '@dolorescaritasangelus/dsh-aux'
+```
+
+然后重启 DSH。
+
+## 使用
+
+- 直接调用工具:主 agent 会在需要时使用 `vision_analyze` / `web_extract` / `compress_text`。
+- 命令行:`/aux status`(路由与最近调用)、`/aux model <task> [provider/model]`(查看/设置)、
+  `/aux vision <imagePath> <question...>`(命令行看图)、`/aux test <task>`(自检)、
+  `/aux memory [n]`(图片记忆)、`/aux gc-images [days]`(手动回收旧附件)。
+- 设置页:Web → 设置 → 辅助模型。
+
+### 编程调用(其他插件)
+
+```js
+const result = await ctx.auxLlm.call("compress", {
+  messages,      // DSH 消息(可含 image block)
+  system,        // 可选 system prompt
+  session,       // 记录 aux/llm-call 事件的会话
+  signal,        // 取消信号(与 per-task 超时融合)
+  purpose        // 语义标签(如 "compaction")
+});
+// => { text, provider, model }
+```
+
+自定义任务:`ctx.auxLlm.registerTask({ key, label, timeoutMs, maxConcurrency })`。
+
+## 配置
+
+每任务:`provider` + `model`(必须成对)、`timeoutMs`(默认 60000)、`maxConcurrency`(默认 2);
+全局:`fallbackToMain`(辅助模型失败自动降级主模型,默认开)。
+
+路由解析顺序:显式配置(settings/插件 config)> 未配置 → 会话主模型。
+失败冷却:同一 provider+model 连续失败 3 次 → 冷却 60s。
+
+## 可选配套
+
+- **image-bridge 补丁**(仓库 `bridge/` 目录,独立于插件本体):让**纯文本主模型**
+  也能直接粘贴图片发送,且用户消息保留图片缩略图(模型输入边界按模态改写为
+  路径文本,多模态模型原生看图)。修改 node_modules 核心包,`npm update` 后需重打。
+- **会话删除**:DSH 原生无删除会话功能,配合社区插件(如
+  `dsh-plugin-session-delete`)使用;删除会话时 dsh-aux 会自动清理其图片。
+
+## 测试
+
+```sh
+cd tests && node --test aux.test.js        # 60+ 项,零依赖
+```
+
+## 许可证与致谢
+
+MIT License。设计受 Hermes Agent / agent-vision-toolkit / dsh-vision 启发,
+详见 [CONTRIBUTIONS.md](./CONTRIBUTIONS.md)。

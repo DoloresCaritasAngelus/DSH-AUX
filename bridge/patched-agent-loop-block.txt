@@ -1,0 +1,53 @@
+	/**
+	* image-bridge v2 (local patch): at the model-input boundary, rewrite
+	* image blocks to local-path text for text-only models (the UI still
+	* renders the original image because the session log keeps the blocks).
+	* Multimodal models — resolveModelInfo declares "image" input — keep
+	* their native image blocks. See aux/bridge README for the design.
+	*/
+	async bridgeImagesForModel(messages, provider, model, llm, signal) {
+		const hasImage = Array.isArray(messages) && messages.some((m) => Array.isArray(m?.content) && m.content.some((b) => b?.type === "image"));
+		if (!hasImage) return messages;
+		let modalities;
+		try {
+			const info = await llm.resolveModelInfo(provider, model, signal);
+			modalities = info?.inputModalities;
+		} catch { modalities = void 0; }
+		// Non-empty and image-capable: the model sees images natively.
+		if (Array.isArray(modalities) && modalities.includes("image")) return messages;
+		const { link } = await import("node:fs/promises");
+		const home = process.env.DSH_HOME || (typeof process !== "undefined" && process.env.HOME ? `${process.env.HOME}/.dsh` : void 0);
+		const extOf = (mediaType) => mediaType === "image/jpeg" ? "jpg" : mediaType === "image/png" ? "png" : mediaType === "image/webp" ? "webp" : mediaType === "image/gif" ? "gif" : "png";
+		const rewritten = [];
+		for (const message of messages) {
+			if (!Array.isArray(message?.content) || !message.content.some((b) => b?.type === "image")) { rewritten.push(message); continue; }
+			const content = [];
+			for (const block of message.content) {
+				if (block?.type === "image" && block.attachment !== void 0) {
+					const id = String(block.attachment.attachmentId ?? "");
+					const match = /^sha256:([a-f0-9]{64})$/.exec(id);
+					const hash = match?.[1];
+					if (hash !== void 0 && home !== void 0) {
+						const real = `${home}/attachments/v1/objects/${hash.slice(0, 2)}/${hash}`;
+						const ext = extOf(block.attachment.mediaType);
+						const linkPath = `${real}.${ext}`;
+						try {
+							// Ensure the extension hard link exists (the admit bridge
+							// creates it for fresh uploads; older logs may lack it).
+							await link(real, linkPath).catch((e) => { if (e?.code !== "EEXIST") throw e; });
+						} catch { /* keep the real path when linking fails */ }
+						content.push({ type: "text", text: `[用户上传了一张图片，本地路径: ${linkPath}。请用 vision_analyze 工具（imagePath 参数）查看这张图片并回答用户的问题。]` });
+						continue;
+					}
+				}
+				content.push(block);
+			}
+			rewritten.push({ ...message, content });
+		}
+		return rewritten;
+	}
+	/**
+	* Compose one frozen request and bind it to the adapter registration that
+	* resolved its exact-model defaults.
+	*/
+	async buildRequest(turn, step, tools, system, boundaryMessages, signal) {

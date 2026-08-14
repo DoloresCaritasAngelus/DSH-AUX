@@ -1,0 +1,55 @@
+				const hasImage = content.some((part) => part.type === "image");
+				/**
+				* dsh-image bridge v2 (local patch): image blocks stay INTACT in the
+				* persisted user message so the UI renders thumbnails; the agent-loop
+				* bridge rewrites them to local-path text at the model-input boundary
+				* when the selected model is text-only. Here we only make sure every
+				* image object has an extension hard link next to it (vision_analyze's
+				* imagePath check is extension-based), then admit the message unchanged.
+				*/
+				const ensureImageHardlinks = async (blocks) => {
+					const home = process.env.DSH_HOME || (typeof process !== "undefined" && process.env.HOME ? `${process.env.HOME}/.dsh` : void 0);
+					const { link: link2 } = await import("node:fs/promises");
+					for (const block of blocks) {
+						if (block.type !== "image" || block.attachment === void 0) continue;
+						const ref = block.attachment;
+						const id = String(ref.attachmentId ?? "");
+						const match = /^sha256:([a-f0-9]{64})$/.exec(id);
+						if (match === null || home === void 0) continue;
+						const hash = match[1];
+						const ext = ref.mediaType === "image/jpeg" ? "jpg" : ref.mediaType === "image/png" ? "png" : ref.mediaType === "image/webp" ? "webp" : ref.mediaType === "image/gif" ? "gif" : "png";
+						const real = `${home}/attachments/v1/objects/${hash.slice(0, 2)}/${hash}`;
+						const link = `${real}.${ext}`;
+						try {
+							// Hard link (not symlink): vision tools realpath inputs, and a
+							// symlink would resolve back to the extension-less object and
+							// fail their extension check; a hard link keeps the .ext name.
+							await link2(real, link).catch((error) => {
+								if (error && typeof error === "object" && error.code === "EEXIST") return;
+								throw error;
+							});
+						} catch (_error) { /* fall through to the real path when linking fails */ }
+					}
+				};
+				const admit = async () => {
+					try {
+						const durable = await durablePromptContent(ctx, content);
+						if (hasImage) await ensureImageHardlinks(durable);
+						const message = createUserMessage({ content: durable, source });
+						if (mode === "steer") agent.steer(message);
+						else agent.followup(message);
+					} catch (error) {
+						if (error instanceof AttachmentError) return err(request, {
+							code: "attachment-error",
+							message: error.message,
+							details: { reason: error.code }
+						});
+						return err(request, {
+							code: "agent-busy",
+							message: "prompt rejected",
+							details: { reason: String(error) }
+						});
+					}
+					return ok(request, { accepted: true });
+				};
+				return hasImage ? serializeImageAdmission(agent, admit) : admit();

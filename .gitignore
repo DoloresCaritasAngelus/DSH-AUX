@@ -1,0 +1,23 @@
+# 依赖与构建产物
+node_modules/
+*.tgz
+*.log
+*.tmp
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 敏感配置(防止误提交真实配置)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# 本机运行时状态(不含附件本体,只防误提交)
+.vision-agent.id
+tmp-*.mjs

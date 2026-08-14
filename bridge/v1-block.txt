@@ -1,0 +1,76 @@
+				const hasImage = content.some((part) => part.type === "image");
+				/**
+				* dsh-vision bridge (local patch): when a message carries image
+				* blocks, persist them through the attachment store and rewrite the
+				* message into pure text that names each image's local path, so a
+				* text-only chat model (e.g. deepseek-v4-flash) can hand the path to
+				* the view_image tool instead of requiring native image input.
+				* The attachment store writes extension-less objects, so a symlink
+				* with the media-type extension is created next to each object for
+				* the view_image tool's extension-based MIME sniffing.
+				*/
+				const persistImagesToPaths = async (blocks) => {
+					const home = process.env.DSH_HOME || (typeof process !== "undefined" && process.env.HOME ? `${process.env.HOME}/.dsh` : void 0);
+					const imagePaths = [];
+					const { link: link2 } = await import("node:fs/promises");
+					for (const block of blocks) {
+						if (block.type !== "image" || block.attachment === void 0) continue;
+						const ref = block.attachment;
+						const id = String(ref.attachmentId ?? "");
+						const match = /^sha256:([a-f0-9]{64})$/.exec(id);
+						if (match === null || home === void 0) continue;
+						const hash = match[1];
+						const ext = ref.mediaType === "image/jpeg" ? "jpg" : ref.mediaType === "image/png" ? "png" : ref.mediaType === "image/webp" ? "webp" : ref.mediaType === "image/gif" ? "gif" : "png";
+						const real = `${home}/attachments/v1/objects/${hash.slice(0, 2)}/${hash}`;
+						const link = `${real}.${ext}`;
+						try {
+							// Hard link (not symlink): vision tools realpath inputs, and a
+							// symlink would resolve back to the extension-less object and
+							// fail their extension check; a hard link keeps the .ext name.
+							await link2(real, link).catch((error) => {
+								if (error && typeof error === "object" && error.code === "EEXIST") return;
+								throw error;
+							});
+						} catch (_error) { /* fall through to the real path when linking fails */ }
+						imagePaths.push(link);
+					}
+					const text = [];
+					for (const block of blocks) {
+						if (block.type === "image") {
+							const path = imagePaths.shift();
+							if (path !== void 0) text.push({ type: "text", text: `[用户上传了一张图片，本地路径: ${path}。请用 vision_analyze 工具（imagePath 参数）查看这张图片并回答用户的问题。]` });
+							continue;
+						}
+						text.push(block);
+					}
+					return text;
+				};
+				const admit = async () => {
+					try {
+						const durable = await durablePromptContent(ctx, content);
+						if (hasImage) {
+							// Bridge: images become local-path text; no model-modality rejection.
+							const rewritten = await persistImagesToPaths(durable);
+							const message = createUserMessage({ content: rewritten, source });
+							if (mode === "steer") agent.steer(message);
+							else agent.followup(message);
+							return ok(request, { accepted: true });
+						}
+						const message = createUserMessage({ content: durable, source });
+						if (mode === "steer") agent.steer(message);
+						else agent.followup(message);
+					} catch (error) {
+						if (error instanceof AttachmentError) return err(request, {
+							code: "attachment-error",
+							message: error.message,
+							details: { reason: error.code }
+						});
+						return err(request, {
+							code: "agent-busy",
+							message: "prompt rejected",
+							details: { reason: String(error) }
+						});
+					}
+					return ok(request, { accepted: true });
+				};
+				return hasImage ? serializeImageAdmission(agent, admit) : admit();
