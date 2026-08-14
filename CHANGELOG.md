@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0(2026-08-15)— 正式版
+
+- 自 0.1.0-rc.6 转正;功能不变,修复归属缓存覆盖 bug、gc-images 符号链接防逃逸
+- image-bridge 集成为安装组件(install.sh 一键),/aux status 显示其状态
+- 文档完善:README 面向用户重写、AI.md 安装指南、CONTRIBUTIONS.md 致谢
+
 ## 0.1.0-rc.6(2026-08-15)— 初始版本
 
 - 统一辅助 LLM 路由服务 `ctx.auxLlm`:任务分派、路由解析(显式配置 > 任务默认 > 主模型)、
