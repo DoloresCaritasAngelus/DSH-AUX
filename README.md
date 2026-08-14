@@ -65,15 +65,10 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
 - **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行;仅装插件本体的需单独跑 `bridge/apply-patch.mjs`)。它让**纯文本主模型也能直接粘贴图片**且 UI 保留缩略图(多模态模型原生看图不受影响);改 node_modules 核心包,`npm update` 后重跑一次即可。`/aux status` 会报告它的状态。
 - **settings 动态暴露**(同样由 install.sh 应用):设置页读写 aux 配置是插件**原生能力**——dsh-aux 注册 namespace 时声明 `exposedToWeb`(dsh-settings 的 `listExposed()` + api-proxy 动态合并,即平台 api-proxy 注释中的 deferred work 本地实现,可整理为 upstream PR)。
 - **会话删除**:DSH 原生无此功能,配合社区插件(如 dsh-plugin-session-delete);删除会话时 dsh-aux 会自动清理其无引用图片。
-- **平台压缩/剪枝组件**:DSH 自带的 `dsh-compaction-basic`(自动会话压缩)与 `dsh-compaction-tool-result-pruner`(超长工具结果剪枝,阈值 8192/4096/1024 字符)**在当前 web profile 中默认 disabled**(dsh-web-app 禁用)。需要时可在 profile 的 `cordis.patch.yml` 启用:
-  ```yaml
-  - config:
-      - id: compaction-basic
-        config: { disabled: false }
-  - config:
-      - id: tool-result-pruner
-        config: { disabled: false }
-  ```
+- **平台压缩/剪枝组件(自动工作,无需配置)**:DSH 自带的自动会话压缩
+  (`compaction/start → summary → end` 事件)与超长工具结果剪枝
+  (`compaction/prune`,阈值约 8192 字符)在上下文到达高水位时自动触发——
+  本插件实测在长会话中触发过完整压缩循环,无需手动启用。
 
 ## 文档
 
