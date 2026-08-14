@@ -29,17 +29,19 @@
 ## 快速开始
 
 ```sh
+# 方式一:克隆仓库后一键安装(推荐,含 image-bridge 集成组件)
+git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+cd DSH-AUX && ./install.sh          # 插件接线 + image-bridge 补丁 + 设置白名单,幂等可重跑
+
+# 方式二:仅装插件本体(之后可单独跑 bridge/apply-patch.mjs 补上集成组件)
 dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AUX.git
-# 或从本地目录:dsh plugin --profile web add file:/path/to/dsh-aux
 ```
 
 重启 DSH 后:
 
-1. **发一张图片**给 agent,它会用 `vision_analyze` 描述给你;
-2. 输入 `/aux status` 查看三个任务的路由;
+1. **发一张图片**给 agent,它会用 `vision_analyze` 描述给你(纯文本主模型也能发——image-bridge 已集成,UI 保留图片缩略图);
+2. 输入 `/aux status` 查看三个任务的路由(顺带显示 image-bridge 状态);
 3. 想让视觉走专用模型?`/aux model vision volcengine-ark/doubao-seed-2.0-lite`(或设置页下拉选择)。
-
-> 纯文本主模型想直接粘贴图片?装可选的 image-bridge 补丁(见下),UI 还会保留图片缩略图。
 
 ## 使用指南
 
@@ -60,9 +62,8 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。
 - **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
 - **测试零依赖**:`cd tests && node --test aux.test.js`(63 项)+ `node --test bridge.test.js`(4 项)。
-- **可选配套**(在仓库 `bridge/` 目录,独立于插件本体,按需安装):
-  - *image-bridge 补丁*:纯文本主模型也能粘贴图片(UI 保留缩略图);改 node_modules 核心包,`npm update` 后需重打。
-  - *settings 白名单补丁*:让设置页可写 aux 配置(不打补丁可用 `/aux model` 命令等效)。
+- **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行;仅装插件本体的需单独跑 `bridge/apply-patch.mjs`)。它让**纯文本主模型也能直接粘贴图片**且 UI 保留缩略图(多模态模型原生看图不受影响);改 node_modules 核心包,`npm update` 后重跑一次即可。`/aux status` 会报告它的状态。
+- **settings 白名单补丁**(同样由 install.sh 应用):让设置页可写 aux 配置(不打补丁可用 `/aux model` 命令等效)。
 - **会话删除**:DSH 原生无此功能,配合社区插件(如 dsh-plugin-session-delete);删除会话时 dsh-aux 会自动清理其无引用图片。
 
 ## 文档

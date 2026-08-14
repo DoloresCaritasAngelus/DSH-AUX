@@ -586,6 +586,18 @@ export class AuxLlmService extends Service {
       // cleanup that happened while the service was not watching.
       await this._reconcileSessionImages();
       const lines = ["辅助模型系统状态:"];
+      // Integrated image-bridge status: report it so a fresh install knows
+      // whether pasting images into a text-only main model will work.
+      const bridge = await this._imageBridgeStatus();
+      if (bridge !== "unknown") {
+        const label = {
+          v2: "已集成(v2:UI 保留缩略图)",
+          v1: "旧版 v1(建议运行 bridge/apply-patch.mjs 升级)",
+          partial: "部分安装(建议运行 bridge/apply-patch.mjs 补全)",
+          missing: "未安装(纯文本主模型发图会受限;运行仓库 install.sh 一键集成)"
+        }[bridge] ?? bridge;
+        lines.push("  - image-bridge: " + label);
+      }
       for (const entry of this.describe()) {
         const primary = entry.primary
           ? `${entry.primary.provider}/${entry.primary.model}`
@@ -776,6 +788,38 @@ export class AuxLlmService extends Service {
       }
     } catch { /* persistence absent or unreadable */ }
     return ids;
+  }
+
+  /**
+   * Detect whether the image-bridge patches are applied to the core DSH
+   * packages that live NEXT to this plugin in the deployment node_modules
+   * (dsh-host-apiproxy admit + dsh-agent-loop buildRequest). The bridge is
+   * an integrated part of the install (see the repo's install.sh), so the
+   * status command reports it and the AI guide treats it as a default step.
+   * @returns "v2" | "v1" | "partial" | "missing" | "unknown" (not in a
+   *   standard deployment layout, e.g. running from the source tree).
+   */
+  async _imageBridgeStatus() {
+    const base = new URL("../", import.meta.url);
+    const targets = [
+      ["dsh-host-apiproxy/lib/index.js", "dsh-image bridge v2 (local patch)", "dsh-vision bridge (local patch)"],
+      ["dsh-agent-loop/lib/index.js", "image-bridge v2 (local patch)", void 0]
+    ];
+    const states = [];
+    for (const [rel, v2Mark, v1Mark] of targets) {
+      try {
+        const src = await readFileText(new URL(rel, base));
+        if (src.includes(v2Mark)) states.push("v2");
+        else if (v1Mark !== void 0 && src.includes(v1Mark)) states.push("v1");
+        else states.push("missing");
+      } catch {
+        states.push("unknown");
+      }
+    }
+    if (states.some((state) => state === "unknown")) return "unknown";
+    if (states.every((state) => state === "v2")) return "v2";
+    if (states.every((state) => state === "missing")) return "missing";
+    return "partial";
   }
 
   /**

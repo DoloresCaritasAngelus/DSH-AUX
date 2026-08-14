@@ -34,13 +34,29 @@ grep -rn "dsh-aux" ~/.dsh/profiles/*/cordis.patch.yml 2>/dev/null
 
 ## 2. 安装
 
-### 方式 A:dsh plugin 命令(优先尝试)
+### 方式 A:一键安装脚本(推荐,含集成组件)
+
+如果拿到的是完整仓库(含 `install.sh` 与 `bridge/`):
+
+```sh
+./install.sh                 # 插件接线 + image-bridge 补丁 + settings 白名单,幂等
+```
+
+### 方式 B:dsh plugin 命令(仅插件本体)
 
 ```sh
 dsh plugin --profile web add <NAME>                 # 从 npm
 # 或本地/远程源码目录:
 dsh plugin --profile web add file:/path/to/dsh-aux
 dsh plugin --profile web add git+https://github.com/<user>/dsh-aux.git
+```
+
+方式 B 之后,请**补装集成组件**(纯文本主模型发图必需;有仓库时):
+
+```sh
+cd <仓库>/bridge
+node apply-patch.mjs                 # image-bridge(v2,幂等)
+node patch-settings-allowlist.mjs    # 设置页可写 aux(可选但推荐)
 ```
 
 检查输出无 error;成功后跳到 §3。
@@ -80,8 +96,9 @@ dsh --profile web --dump-config 2>/dev/null | grep -A1 "id: aux" | head -4
 #   - 会话工具列表出现 vision_analyze / web_extract / compress_text
 #   - 输入 /aux status 有输出(路由与最近调用)
 #   - Web 设置页出现「辅助模型」区块
-#   - 发一张图片,模型能调用 vision_analyze 描述它(多模态模型原生看图,
-#     纯文本模型需配合可选 image-bridge 补丁,见 §6)
+#   - 发一张图片,模型能调用 vision_analyze 描述它(纯文本主模型经
+#     image-bridge 集成组件;多模态模型原生看图)
+#   - /aux status 显示 image-bridge 状态(已集成/缺失)
 ```
 
 ## 4. 常见问题(故障排查)
@@ -105,19 +122,17 @@ rm "$DSH_ROOT/node_modules/<NAME>"
 # 可选:清理图片归属记录文件 ~/.dsh/attachments/v1/session-images.json(不影响附件本体)
 ```
 
-## 6. 可选配套(非插件本体,按需决定)
+## 6. 集成组件与配套
 
-- **image-bridge 补丁**(源码仓库 `bridge/` 目录):让纯文本主模型粘贴图片可用,
-  且用户消息显示图片缩略图。机制:admit 保留 image block(UI 显示),
-  agent-loop 在模型输入边界按模态改写为路径文本。安装:
-  ```sh
-  cd <repo>/bridge && node apply-patch.mjs   # 幂等,可 --dry-run / --rollback
-  ```
-  注意:改的是 node_modules 核心包,`npm update` 后需重打。
+- **image-bridge(集成组件,默认安装)**:让纯文本主模型粘贴图片可用,且用户消息
+  显示图片缩略图。机制:admit 保留 image block(UI 显示),agent-loop 在模型输入
+  边界按模态改写为路径文本(多模态模型原生看图)。安装:install.sh 已包含;
+  单独重装:`cd <repo>/bridge && node apply-patch.mjs`(幂等,可 --dry-run / --rollback)。
+  `npm update` 后需重跑;`/aux status` 会报告状态。
+- **settings 白名单补丁**(install.sh 一并应用):Web 设置页可写 aux 配置
+  (不打补丁时可用 `/aux model` 命令等效)。
 - **会话删除**:DSH 原生无删除会话功能,配合社区插件(如 dsh-plugin-session-delete);
   删除会话时 dsh-aux 会自动清理其无引用图片。
-- **settings 白名单补丁**(`bridge/patch-settings-allowlist.mjs`):让 Web 设置页
-  可写 aux 配置(不打补丁时可用 `/aux model` 命令等效配置)。
 
 ## 7. 给安装完成后的用户提示
 

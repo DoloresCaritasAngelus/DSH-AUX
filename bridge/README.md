@@ -1,4 +1,7 @@
-# dsh-image-bridge v2(适配 dsh-aux 版)
+# dsh-image-bridge v2(dsh-aux 集成组件)
+
+> **集成组件**:安装 dsh-aux 时随 `install.sh` 一并应用(非可选);仅装插件
+> 本体的,单独运行本目录脚本补上。`/aux status` 会报告其状态。
 
 让纯文本对话模型(deepseek-v4-flash 等)也能**直接粘贴图片发送**的 DSH 本地补丁,
 同时**用户在 UI 里能看到自己发的图片缩略图**(v2 关键改进)。

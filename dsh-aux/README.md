@@ -27,12 +27,21 @@
 
 要求:DSH ≥ 0.1.0-rc.6,Node ≥ 20。
 
-### 方式一:DSH 插件命令(推荐)
+### 方式一:一键安装(推荐,含 image-bridge 集成组件)
 
 ```sh
-dsh plugin --profile web add dsh-aux          # 从 npm
-# 或从本地目录:
-# dsh plugin --profile web add file:/path/to/dsh-aux
+git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+cd DSH-AUX && ./install.sh     # 插件接线 + image-bridge 补丁 + 设置白名单(幂等可重跑)
+```
+
+### 方式二:仅插件本体(之后需单独补集成组件)
+
+```sh
+dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+# 补 image-bridge(纯文本主模型发图必需):
+cd <仓库>/bridge && node apply-patch.mjs
+# 补 settings 白名单(设置页可写 aux):
+node <仓库>/bridge/patch-settings-allowlist.mjs
 ```
 
 ### 方式二:手动
@@ -78,11 +87,14 @@ const result = await ctx.auxLlm.call("compress", {
 路由解析顺序:显式配置(settings/插件 config)> 未配置 → 会话主模型。
 失败冷却:同一 provider+model 连续失败 3 次 → 冷却 60s。
 
-## 可选配套
+## 集成组件与配套
 
-- **image-bridge 补丁**(仓库 `bridge/` 目录,独立于插件本体):让**纯文本主模型**
-  也能直接粘贴图片发送,且用户消息保留图片缩略图(模型输入边界按模态改写为
-  路径文本,多模态模型原生看图)。修改 node_modules 核心包,`npm update` 后需重打。
+- **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行)。让**纯文本
+  主模型**也能直接粘贴图片发送,且用户消息保留图片缩略图(模型输入边界按模态
+  改写为路径文本,多模态模型原生看图)。修改 node_modules 核心包,`npm update`
+  后重跑 `bridge/apply-patch.mjs` 即可;`/aux status` 会报告其状态。
+- **settings 白名单补丁**(install.sh 一并应用):设置页可写 aux 配置(不打补丁
+  可用 `/aux model` 命令等效)。
 - **会话删除**:DSH 原生无删除会话功能,配合社区插件(如
   `dsh-plugin-session-delete`)使用;删除会话时 dsh-aux 会自动清理其图片。
 

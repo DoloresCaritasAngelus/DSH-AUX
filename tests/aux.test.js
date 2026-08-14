@@ -1107,3 +1107,11 @@ test('/aux gc-images: 跳过符号链接,绝不跟随到外部目录', async () 
   }
 });
 
+
+test('image-bridge 状态: 源码树运行(无核心包)时返回 unknown', async () => {
+  const { ctx } = await makeHarness();
+  // 测试环境从源码树加载,../dsh-host-apiproxy 不存在 → unknown
+  const status = await ctx.auxLlm._imageBridgeStatus();
+  assert.equal(status, 'unknown');
+});
+
