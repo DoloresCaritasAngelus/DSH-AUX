@@ -989,7 +989,7 @@ export class AuxLlmService extends Service {
           attachmentId: { type: "string", description: "Session attachment id of an image already attached to this conversation." },
           imagePath: { type: "string", description: "Path to a local PNG/JPEG/WebP/GIF image file." },
           imageUrl: { type: "string", description: "URL of a remote image to fetch and analyze." },
-          images: { type: "array", description: "Multiple images to analyze in parallel with the SAME question. Each entry must be an object with exactly one of: attachmentId, imagePath, imageUrl." },
+          images: { type: "array", description: "Multiple images (or GIFs) to analyze in parallel with the SAME question. Each entry must be an object with exactly one of: attachmentId, imagePath, imageUrl." },
           question: { type: "string", required: true, description: "The SPECIFIC thing you need to know about the image(s) (your intent). One focused question per call; ask a follow-up call for another detail." }
         },
         output: {

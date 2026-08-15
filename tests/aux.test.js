@@ -1176,3 +1176,10 @@ test('vision_analyze 工具: 多图时 question 仍必填', async () => {
   assert.equal(streams.length, 0, '不应发起辅助调用');
 });
 
+
+test('visionSystemPrompt: 含 GIF 动画的条件引导(不虚构静态图动作)', () => {
+  const p = visionSystemPrompt();
+  assert.ok(p.includes('ANIMATED GIF'), '应包含 GIF 引导');
+  assert.ok(p.includes('do not invent motion for a static image'), '应禁止静态图虚构动作');
+});
+
