@@ -984,24 +984,26 @@ export class AuxLlmService extends Service {
       this._imageCtx = imageCtx;
       imageCtx.tools.register(defineTool({
         name: "vision_analyze",
-        description: "Look at an image with the auxiliary vision model and answer a SPECIFIC question about it. Always state exactly what you need to know in the question parameter (extract text, count objects, read a chart, check a color, compare elements) — never ask for a generic description, because the vision model answers your intent, not a caption. If the returned description misses a detail you need, call again with a more specific question about that detail. If the same image (same attachmentId) was already analyzed with the same question in this session, reuse that earlier result instead of re-analyzing. Provide one of attachmentId (a session image attachment), imagePath (a local image file), or imageUrl (a remote image URL).",
+        description: "Look at one image (or several via the images array) with the auxiliary vision model and answer a SPECIFIC question about it/them. Always state exactly what you need to know in the question parameter (extract text, count objects, read a chart, check a color, compare elements) — never ask for a generic description, because the vision model answers your intent, not a caption. If the returned description misses a detail you need, call again with a more specific question about that detail. If the same image (same attachmentId) was already analyzed with the same question in this session, reuse that earlier result instead of re-analyzing. Provide one of attachmentId (a session image attachment), imagePath (a local image file), imageUrl (a remote image URL), or an images array (each entry exactly one of those three keys; analyzed in parallel — useful for comparing multiple images with one question).",
         parameters: {
           attachmentId: { type: "string", description: "Session attachment id of an image already attached to this conversation." },
           imagePath: { type: "string", description: "Path to a local PNG/JPEG/WebP/GIF image file." },
           imageUrl: { type: "string", description: "URL of a remote image to fetch and analyze." },
-          question: { type: "string", required: true, description: "The SPECIFIC thing you need to know about the image (your intent). One focused question per call; ask a follow-up call for another detail." }
+          images: { type: "array", description: "Multiple images to analyze in parallel with the SAME question. Each entry must be an object with exactly one of: attachmentId, imagePath, imageUrl." },
+          question: { type: "string", required: true, description: "The SPECIFIC thing you need to know about the image(s) (your intent). One focused question per call; ask a follow-up call for another detail." }
         },
         output: {
           schema: {
             type: "object",
             additionalProperties: false,
             properties: {
-              analysis: { type: "string", required: true },
+              analysis: { type: "string", description: "Present for single-image calls." },
+              analyses: { type: "array", description: "Present for multi-image calls; one entry per image." },
               provider: { type: "string", required: true },
               model: { type: "string", required: true }
             }
           },
-          render: (_args, value) => [{ type: "text", text: value.analysis }]
+          render: (_args, value) => [{ type: "text", text: Array.isArray(value.analyses) ? value.analyses.map((a, i) => "【图" + (i + 1) + "】" + a.analysis).join("\n\n") : value.analysis }]
         },
         timeoutMs: 120_000,
         isConcurrencySafe: () => true,
@@ -1065,25 +1067,53 @@ export class AuxLlmService extends Service {
     }));
   }
 
-  /** vision_analyze execution. */
+  /** vision_analyze execution. Supports ONE image via the classic single
+   * source fields, or MANY via `images` (analyzed in parallel, bounded by
+   * the task concurrency semaphore). */
   async _runVision(args, exec) {
-    const sources = [
+    const single = [
       args.attachmentId !== void 0 && args.attachmentId.length > 0,
       args.imagePath !== void 0 && args.imagePath.length > 0,
       args.imageUrl !== void 0 && args.imageUrl.length > 0
     ].filter(Boolean).length;
-    if (sources === 0) throw new Error("vision_analyze: provide one of attachmentId, imagePath, or imageUrl");
-    if (sources > 1) throw new Error("vision_analyze: provide exactly one of attachmentId, imagePath, or imageUrl");
-    const ref = await this._resolveImageRef(args, exec);
-    // Record ownership for disposal cleanup (session -> attachment id).
-    if (exec.agent?.session?.id !== void 0) {
-      this._recordAttachmentOwnership(exec.agent.session.id, ref.attachmentId);
+    const images = Array.isArray(args.images) ? args.images : [];
+    const itemCount = images.length + (single > 0 ? 1 : 0);
+    if (itemCount === 0) throw new Error("vision_analyze: provide one of attachmentId, imagePath, imageUrl, or an images array");
+    if (images.length > 0 && single > 0) throw new Error("vision_analyze: provide either the images array or a single image source, not both");
+    if (images.length > 0 && images.some((item) => !this._validImageItem(item))) {
+      throw new Error("vision_analyze: each images entry must be an object with exactly one of attachmentId, imagePath, or imageUrl");
     }
     const question = args.question ?? "";
     if (question.length === 0) {
       // Focus-hint contract: the vision model answers the caller's intent,
       // not a generic caption. Refuse instead of silently degrading.
       throw new Error("vision_analyze: question is required — state what you need to know about the image");
+    }
+    const items = images.length > 0
+      ? images
+      : [{ attachmentId: args.attachmentId, imagePath: args.imagePath, imageUrl: args.imageUrl }];
+    const results = await Promise.all(items.map((item) => this._analyzeOne(item, question, exec)));
+    if (images.length === 0) return results[0]; // classic single-image shape
+    return {
+      analyses: results,
+      provider: results[0].provider,
+      model: results[0].model
+    };
+  }
+
+  /** One `images` entry is valid when it names exactly one source. */
+  _validImageItem(item) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) return false;
+    const keys = ["attachmentId", "imagePath", "imageUrl"].filter((k) => typeof item[k] === "string" && item[k].length > 0);
+    return keys.length === 1;
+  }
+
+  /** Analyze exactly one image through the auxiliary vision route. */
+  async _analyzeOne(source, question, exec) {
+    const ref = await this._resolveImageRef(source, exec);
+    // Record ownership for disposal cleanup (session -> attachment id).
+    if (exec.agent?.session?.id !== void 0) {
+      this._recordAttachmentOwnership(exec.agent.session.id, ref.attachmentId);
     }
     const messages = [createUserMessage({
       content: [

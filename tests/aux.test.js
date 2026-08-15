@@ -1115,3 +1115,64 @@ test('image-bridge 状态: 源码树运行(无核心包)时返回 unknown', asyn
   assert.equal(status, 'unknown');
 });
 
+
+test('vision_analyze 工具: images 数组并行分析多图,输出 analyses', async () => {
+  const { ctx, tools, streams } = await makeHarness({
+    tasks: { vision: { provider: 'opencode-go', model: 'kimi-k2.7-code' } }
+  });
+  const tool = tools.find((t) => t.name === 'vision_analyze');
+  const exec = {
+    signal: new AbortController().signal,
+    agent: { session: makeSession(), options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } }
+  };
+  const value = await tool.execute({
+    images: [
+      { imagePath: '/tmp/a.png' },
+      { imagePath: '/tmp/b.png' },
+      { imagePath: '/tmp/c.png' }
+    ],
+    question: '每张图的主色调是什么?'
+  }, exec);
+  assert.ok(Array.isArray(value.analyses), '多图应返回 analyses 数组');
+  assert.equal(value.analyses.length, 3);
+  for (const a of value.analyses) {
+    assert.equal(a.analysis, 'OUTPUT_TEXT');
+    assert.equal(a.provider, 'opencode-go');
+    assert.equal(a.model, 'kimi-k2.7-code');
+  }
+  assert.equal(streams.length, 3, '应发起 3 次辅助调用');
+});
+
+test('vision_analyze 工具: images 与单图参数互斥,条目必须恰有一个来源', async () => {
+  const { ctx, tools } = await makeHarness({
+    tasks: { vision: { provider: 'opencode-go', model: 'kimi-k2.7-code' } }
+  });
+  const tool = tools.find((t) => t.name === 'vision_analyze');
+  const exec = { signal: new AbortController().signal, agent: { session: makeSession() } };
+  await assert.rejects(
+    () => tool.execute({ images: [{ imagePath: '/tmp/a.png' }], imagePath: '/tmp/b.png', question: 'q' }, exec),
+    /either the images array or a single image source/
+  );
+  await assert.rejects(
+    () => tool.execute({ images: [{ imagePath: '/tmp/a.png', imageUrl: 'https://x/y.png' }], question: 'q' }, exec),
+    /exactly one of attachmentId, imagePath, or imageUrl/
+  );
+  await assert.rejects(
+    () => tool.execute({ images: [{ nope: 1 }], question: 'q' }, exec),
+    /exactly one of/
+  );
+});
+
+test('vision_analyze 工具: 多图时 question 仍必填', async () => {
+  const { ctx, tools, streams } = await makeHarness({
+    tasks: { vision: { provider: 'opencode-go', model: 'kimi-k2.7-code' } }
+  });
+  const tool = tools.find((t) => t.name === 'vision_analyze');
+  const exec = { signal: new AbortController().signal, agent: { session: makeSession() } };
+  await assert.rejects(
+    () => tool.execute({ images: [{ imagePath: '/tmp/a.png' }] }, exec),
+    /question/i // schema 层或执行层都会因缺 question 拒绝
+  );
+  assert.equal(streams.length, 0, '不应发起辅助调用');
+});
+
