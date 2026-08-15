@@ -78,6 +78,10 @@ fi
 echo "  [image-bridge] 应用核心包补丁(幂等)..."
 run node "$HERE/bridge/apply-patch.mjs"
 
+# 4.5 会话事件 ignorable 补丁(插件自定义事件可安全读回,白名单不拒绝)
+echo "  [session-ignorable] 应用 dsh-session ignorable 补丁(append 支持 ignorable + 白名单放行 aux/llm-call)..."
+run node "$HERE/bridge/patch-session-ignorable.mjs"
+
 # 5. settings 动态暴露补丁(设置页可写 aux 配置,插件原生能力)
 echo "  [settings-dynamic-expose] 应用 dsh-settings 补丁(注册时声明 exposedToWeb)..."
 run node "$HERE/bridge/patch-settings-dynamic-expose.mjs"

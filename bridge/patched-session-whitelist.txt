@@ -1,0 +1,3 @@
+	"thinking/language",
+	"aux/llm-call", // dsh-aux session events (local patch)
+	"reasoning-chunks",

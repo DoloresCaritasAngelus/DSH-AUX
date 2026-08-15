@@ -552,11 +552,17 @@ export class AuxLlmService extends Service {
     }
   }
 
-  /** Log one auxiliary call as a session event, when a session is present. */
+  /**
+   * Log one auxiliary call as a session event, when a session is present.
+   * The event is marked ignorable (requires the dsh-session ignorable patch,
+   * see bridge/patch-session-ignorable.mjs): the persistence read path
+   * accepts out-of-repo event types when ignorable, while the event itself
+   * stays in the log so the aux-status projection replays normally.
+   */
   _recordEvent(session, data) {
     if (session === void 0) return;
     try {
-      session.append(AUX_CALL_EVENT, data);
+      session.append(AUX_CALL_EVENT, data, void 0, { ignorable: true });
     } catch {
       /* event logging must never fail the call */
     }

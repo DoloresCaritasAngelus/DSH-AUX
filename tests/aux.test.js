@@ -1206,3 +1206,16 @@ test('visionSystemPrompt: 含 GIF 动画的条件引导(不虚构静态图动作
   assert.ok(p.includes('do not invent motion for a static image'), '应禁止静态图虚构动作');
 });
 
+
+test('事件记录: aux/llm-call 以 ignorable 标记写入(白名单外事件可安全读回)', async () => {
+  const { ctx } = await makeHarness();
+  // 捕获 append 完整参数
+  const appended = [];
+  const session = { id: 'sess-cap', events: [], append(...args) { appended.push(args); } };
+  await ctx.auxLlm.call('compress', { messages: [], session });
+  assert.ok(appended.length > 0, '应发生 append');
+  const [type, data, surfaceOpts, ignorableOpts] = appended[0];
+  assert.equal(type, 'aux/llm-call');
+  assert.equal(ignorableOpts?.ignorable, true, '事件必须标记 ignorable,否则持久化读回会拒绝日志');
+});
+

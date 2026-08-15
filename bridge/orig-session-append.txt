@@ -1,0 +1,20 @@
+	append(type, data, ...opts) {
+		const surfaceOpts = opts[0];
+		const surfaceMetadata = {
+			...surfaceOpts?.sourceEventSeqs === void 0 ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
+			...surfaceOpts?.surfaceOp === void 0 ? {} : { surfaceOp: surfaceOpts.surfaceOp }
+		};
+		const dataSnapshot = snapshotJsonValue(data);
+		if (dataSnapshot === void 0) throw new Error(`session event "${type}" carries non-JSON-serializable data`);
+		assertSupportedRequestHeader(type, dataSnapshot, `session event "${type}"`);
+		const surfaceMetadataSnapshot = snapshotJsonValue(surfaceMetadata);
+		if (surfaceMetadataSnapshot === void 0) throw new Error(`session event "${type}" carries non-JSON-serializable surface metadata`);
+		const entry = attachments.get(this);
+		if (entry?.appending) throw new Error("session append cannot reenter while another append is being published");
+		const event = deepFreeze({
+			type,
+			seq: this.log.length,
+			time: Date.now(),
+			data: dataSnapshot,
+			...surfaceMetadataSnapshot
+		});
