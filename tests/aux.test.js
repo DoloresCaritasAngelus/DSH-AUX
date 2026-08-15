@@ -311,6 +311,8 @@ async function makeHarness(config) {
   const fiber = ctx.plugin(AuxLlmService, config ?? {});
   await fiber;
   await settle();
+  // 模拟真实部署(dsh-session 已打 ignorable 补丁);降级测试自行覆盖
+  ctx.auxLlm._sessionEventsSupportedCache = true;
   return { ctx, fiber, tools, projections, commands, appended, streams, sections };
 }
 
@@ -1217,5 +1219,23 @@ test('事件记录: aux/llm-call 以 ignorable 标记写入(白名单外事件�
   const [type, data, surfaceOpts, ignorableOpts] = appended[0];
   assert.equal(type, 'aux/llm-call');
   assert.equal(ignorableOpts?.ignorable, true, '事件必须标记 ignorable,否则持久化读回会拒绝日志');
+});
+
+
+test('事件记录: dsh-session 无 ignorable 补丁时降级不写事件(防会话日志损坏)', async () => {
+  const { ctx } = await makeHarness();
+  // 覆盖检测结果:模拟未打补丁
+  ctx.auxLlm._sessionEventsSupportedCache = false;
+  const appended = [];
+  const session = { id: 'sess-cap2', events: [], append(...args) { appended.push(args); } };
+  await ctx.auxLlm._recordEvent(session, { task: 'vision', ok: true });
+  assert.equal(appended.length, 0, '未打补丁时不应写入事件');
+  assert.equal(ctx.auxLlm._sessionEventsWarned, true, '应记录一次警告');
+  // 恢复缓存后写入
+  ctx.auxLlm._sessionEventsSupportedCache = true;
+  await ctx.auxLlm._recordEvent(session, { task: 'vision', ok: true });
+  assert.equal(appended.length, 1, '补丁存在时应写入事件');
+  const [, , , ignorableOpts] = appended[0];
+  assert.equal(ignorableOpts?.ignorable, true);
 });
 

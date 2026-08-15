@@ -129,6 +129,11 @@ rm "$DSH_ROOT/node_modules/<NAME>"
   边界按模态改写为路径文本(多模态模型原生看图)。安装:install.sh 已包含;
   单独重装:`cd <repo>/bridge && node apply-patch.mjs`(幂等,可 --dry-run / --rollback)。
   `npm update` 后需重跑;`/aux status` 会报告状态。
+- **会话事件注册通道(必装)**:dsh-aux 向会话写 `aux/llm-call` 事件;DSH
+  持久化读链对白名单外事件拒绝整个日志(官方无插件事件注册通道)。install.sh
+  中的 `bridge/patch-session-ignorable.mjs` 补齐 append 的 `ignorable` 写入
+  入口并放行白名单。**未装时插件自动降级为不写事件**(保护会话日志),
+  `/aux status` 显示"会话事件记录:已停用"。`npm update` 后重跑。
 - **settings 白名单补丁**(install.sh 一并应用):Web 设置页可写 aux 配置
   (不打补丁时可用 `/aux model` 命令等效)。
 - **会话删除**:DSH 原生无删除会话功能,配合社区插件(如 dsh-plugin-session-delete);

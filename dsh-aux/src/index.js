@@ -354,7 +354,7 @@ export class AuxLlmService extends Service {
         try {
           const output = await this._callRoute(task, definition, candidate, request);
           this._cooldown.recordSuccess(candidate.provider, candidate.model);
-          this._recordEvent(request.session, {
+          await this._recordEvent(request.session, {
             task,
             provider: candidate.provider,
             model: candidate.model,
@@ -375,7 +375,7 @@ export class AuxLlmService extends Service {
           if (entered) attempts[attempts.length - 1].enteredCooldown = true;
         }
       }
-      this._recordEvent(request.session, {
+      await this._recordEvent(request.session, {
         task,
         provider: attempts[0]?.provider ?? "",
         model: attempts[0]?.model ?? "",
@@ -553,14 +553,44 @@ export class AuxLlmService extends Service {
   }
 
   /**
+   * Whether the deployed dsh-session supports marking custom events
+   * ignorable (the bridge/patch-session-ignorable.mjs patch). Without it,
+   * appending "aux/llm-call" would write events the persistence read path
+   * rejects (unknown type, not ignorable) and the WHOLE session log becomes
+   * unreadable. Detection is cached; missing/undetectable ⇒ treated as
+   * unsupported so we degrade to not writing events at all.
+   */
+  async _sessionEventsSupported() {
+    if (this._sessionEventsSupportedCache !== void 0) return this._sessionEventsSupportedCache;
+    try {
+      const src = await readFileText(new URL("../dsh-session/lib/index.js", import.meta.url));
+      this._sessionEventsSupportedCache = src.includes("dsh-aux ignorable (local patch)");
+    } catch {
+      this._sessionEventsSupportedCache = false;
+    }
+    return this._sessionEventsSupportedCache;
+  }
+
+  /**
    * Log one auxiliary call as a session event, when a session is present.
    * The event is marked ignorable (requires the dsh-session ignorable patch,
    * see bridge/patch-session-ignorable.mjs): the persistence read path
    * accepts out-of-repo event types when ignorable, while the event itself
    * stays in the log so the aux-status projection replays normally.
+   * WITHOUT the patch we intentionally do NOT write the event: an
+   * unmarked custom event would make the whole session log unreadable.
    */
-  _recordEvent(session, data) {
+  async _recordEvent(session, data) {
     if (session === void 0) return;
+    if (!await this._sessionEventsSupported()) {
+      if (!this._sessionEventsWarned) {
+        this._sessionEventsWarned = true;
+        this.ctx.logger.warn(
+          "dsh-aux: dsh-session ignorable patch not found — aux/llm-call events are NOT written to keep session logs compatible. Run bridge/patch-session-ignorable.mjs (or the repo install.sh) to enable event tracing."
+        );
+      }
+      return;
+    }
     try {
       session.append(AUX_CALL_EVENT, data, void 0, { ignorable: true });
     } catch {
@@ -626,6 +656,13 @@ export class AuxLlmService extends Service {
         }[bridge] ?? bridge;
         lines.push("  - image-bridge: " + label);
       }
+      // Session-event tracing status: without the dsh-session ignorable
+      // patch, aux/llm-call events are not written (safety degradation).
+      const eventsSupported = await this._sessionEventsSupported();
+      lines.push(
+        "  - 会话事件记录: " +
+          (eventsSupported ? "已启用(ignorable 补丁已装)" : "已停用(缺 dsh-session ignorable 补丁,运行 bridge/patch-session-ignorable.mjs 或 install.sh 启用)")
+      );
       for (const entry of this.describe()) {
         const primary = entry.primary
           ? `${entry.primary.provider}/${entry.primary.model}`

@@ -64,6 +64,7 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
 - **测试零依赖**:`cd tests && node --test aux.test.js`(70 项)+ `node --test memory-race.test.js`(1 项,并发写回归)+ `node --test bridge.test.js`(4 项)。
 - **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行;仅装插件本体的需单独跑 `bridge/apply-patch.mjs`)。它让**纯文本主模型也能直接粘贴图片**且 UI 保留缩略图(多模态模型原生看图不受影响);改 node_modules 核心包,`npm update` 后重跑一次即可。`/aux status` 会报告它的状态。
 - **settings 动态暴露**(同样由 install.sh 应用):设置页读写 aux 配置是插件**原生能力**——dsh-aux 注册 namespace 时声明 `exposedToWeb`(dsh-settings 的 `listExposed()` + api-proxy 动态合并,即平台 api-proxy 注释中的 deferred work 本地实现,可整理为 upstream PR)。
+- **会话事件注册通道(必装补丁)**:dsh-aux 向会话写 `aux/llm-call` 事件;DSH 持久化读链对白名单外事件**拒绝整个日志**(官方注释:out-of-repo 插件事件无注册通道,deferred)。install.sh 中的 `patch-session-ignorable.mjs` 补齐 append 的 `ignorable` 写入入口 + 白名单放行;**未装该补丁时,dsh-aux 自动降级为不写事件**(保护会话日志),`/aux status` 会显示状态。`npm update` 后需重跑。
 - **会话删除协同**:DSH 原生无"删除会话"功能,由社区插件
   [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete)
   提供(Web UI 删除按钮 + 风险确认)。两者**零代码依赖、事件级协同**:
