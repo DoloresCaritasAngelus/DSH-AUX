@@ -238,6 +238,10 @@ export class AuxLlmService extends Service {
     this._sessionImages = new Map();
     this._sessionImagesLoaded = false;
     this._sessionImagesDirty = false;
+    // Serialize image-memory journal writes: the journal is a read-modify-
+    // write file, and multi-image analysis runs records in parallel — a
+    // concurrent race would drop entries (last writer wins).
+    this._memoryQueue = Promise.resolve();
     // Delete-triggered attachment GC: when a session is disposed (user
     // deletes it — archive does NOT dispose), remove images this session
     // owned that no other session still references. Multi-session disposal
@@ -1159,6 +1163,14 @@ export class AuxLlmService extends Service {
 
   /** Append one vision outcome to the memory journal (bounded, best-effort). */
   async _recordImageMemory(sessionId, attachmentId, question, summary) {
+    this._memoryQueue = this._memoryQueue.then(() =>
+      this._recordImageMemoryCore(sessionId, attachmentId, question, summary)
+    );
+    return this._memoryQueue;
+  }
+
+  /** The serialized journal append; never rejects (best-effort). */
+  async _recordImageMemoryCore(sessionId, attachmentId, question, summary) {
     const path = this._imageMemoryPath();
     if (path === void 0) return;
     try {

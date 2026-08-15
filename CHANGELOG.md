@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2(2026-08-15)— 多图与修复
+
+- vision_analyze 支持多图并行(images 数组,受任务并发信号量约束)
+- **修复 image-memory 并发写竞态**:多图并行时 read-modify-write 丢条目(实测 5 丢 4),改为串行队列,新增回归测试
+- 主 agent 引导段(aux:tools-guide):直接用 vision_analyze,不建子代理(guideText 可覆盖/禁用)
+- vision prompt 增加 GIF 动画条件引导(不虚构静态图动作)
+- COMPARISON.md 重写为最终结论版(移除过程性内容)
+
 ## 0.1.1(2026-08-15)— 修复与体验
 
 - 修正文档:平台压缩/剪枝组件实为自动触发(高水位),无需手动启用
