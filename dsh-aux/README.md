@@ -96,8 +96,12 @@ const result = await ctx.auxLlm.call("compress", {
 - **settings 动态暴露**(install.sh 一并应用):设置页读写 aux 配置是插件
   **原生能力**——注册 namespace 时声明 `exposedToWeb`,由 dsh-settings 的
   `listExposed()` 与 api-proxy 动态合并实现(平台 deferred work 的本地实现)。
-- **会话删除**:DSH 原生无删除会话功能,配合社区插件(如
-  `dsh-plugin-session-delete`)使用;删除会话时 dsh-aux 会自动清理其图片。
+- **会话删除协同**:DSH 原生无"删除会话"功能,由社区插件
+  [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete)
+  提供(Web UI 删除按钮 + 风险确认)。两者**零代码依赖、事件级协同**:
+  删除插件调用 `sessions.detachEntered()` → 平台广播 `session/disposed` →
+  dsh-aux 自动清理该会话的无引用图片(另有 5 分钟对账兜底)。没有它,
+  dsh-aux 其余能力完全不受影响。
 
 ## 测试
 
