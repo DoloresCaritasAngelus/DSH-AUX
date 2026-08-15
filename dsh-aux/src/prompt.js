@@ -5,6 +5,19 @@
  * @module @dolorescaritasangelus/dsh-aux/prompt
  */
 
+/**
+ * The main-agent guidance section (injected via systemPrompt.section).
+ * Tells the chat model that auxiliary tools exist, are executed by a
+ * separate auxiliary LLM (no main-context cost), and that image analysis
+ * should use vision_analyze directly — NOT a sub-agent.
+ */
+export const AUX_TOOLS_GUIDE = [
+  "## 辅助模型工具(dsh-aux)",
+  "本环境挂载了辅助模型系统:vision_analyze(图像/GIF 分析)、web_extract(网页提取与摘要)、compress_text(长文本压缩)由独立的辅助 LLM 执行,不消耗主模型上下文。",
+  "- 需要查看/分析图片或 GIF 时,直接用 vision_analyze 工具(imagePath / attachmentId / imageUrl / images 参数),不要为此创建子代理。",
+  "- 需要网页内容时用 web_extract;超长文本先用 compress_text 压缩再讨论。"
+].join("\n");
+
 /** Compress target ratio bounds. */
 export const MIN_TARGET_RATIO = 0.05;
 export const MAX_TARGET_RATIO = 0.5;

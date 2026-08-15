@@ -35,6 +35,7 @@ import {
   taskTimeoutMs
 } from "./route.js";
 import {
+  AUX_TOOLS_GUIDE,
   clampTargetRatio,
   compressSystemPrompt,
   compressUserMessage,
@@ -145,7 +146,7 @@ export class AuxCallError extends Error {
  * the `aux-status` projection.
  */
 export class AuxLlmService extends Service {
-  static inject = ["llm", "tools", "settings", "web", "fs"];
+  static inject = ["llm", "tools", "settings", "web", "fs", "systemPrompt"];
   static Config = z.object({
     tasks: z.object({
       vision: z.object({
@@ -206,6 +207,18 @@ export class AuxLlmService extends Service {
     this._cooldown = new FailureCooldown();
     this._customTasks = new Map();
     this._recomputeMerged();
+    // Main-agent guidance: tell the chat model the auxiliary tools exist and
+    // are executed by a separate auxiliary LLM, so it uses vision_analyze
+    // directly instead of spawning a sub-agent for image analysis. An empty
+    // guideText disables the section (escape hatch).
+    this.guideText = resolved.guideText;
+    if (this.guideText !== "") {
+      ctx.systemPrompt.section({
+        name: "aux:tools-guide",
+        order: 110,
+        text: () => this.guideText ?? AUX_TOOLS_GUIDE
+      });
+    }
     installSettingsSection(ctx, AUX_SETTINGS_NAMESPACE, AUX_SETTINGS_SCHEMA, projectSettings({}), {
       setSource: (current) => {
         this._source = current;

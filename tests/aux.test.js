@@ -254,11 +254,13 @@ async function makeHarness(config) {
   const commands = [];
   const appended = [];
   const streams = [];
+  const sections = [];
   await ctx.plugin({
     name: 'aux-stubs',
     apply(stubCtx) {
       stubCtx.provide('tools', { register(def) { tools.push(def); return () => {}; } });
       stubCtx.provide('settings', {});
+      stubCtx.provide('systemPrompt', { section(def) { sections.push(def); return () => {}; } });
       stubCtx.provide('web', {
         async fetch(request) {
           if (request.url.includes('missing')) throw new Error('fetch failed: ENOTFOUND');
@@ -309,7 +311,7 @@ async function makeHarness(config) {
   const fiber = ctx.plugin(AuxLlmService, config ?? {});
   await fiber;
   await settle();
-  return { ctx, fiber, tools, projections, commands, appended, streams };
+  return { ctx, fiber, tools, projections, commands, appended, streams, sections };
 }
 
 function makeSession() {
@@ -324,7 +326,7 @@ function makeSession() {
 }
 
 test('装配: ctx.auxLlm 可用,三工具注册,投影与命令注册', async () => {
-  const { ctx, tools, projections, commands } = await makeHarness();
+  const { ctx, tools, projections, commands, sections } = await makeHarness();
   assert.ok(ctx.auxLlm instanceof AuxLlmService);
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, ['compress_text', 'vision_analyze', 'web_extract']);
@@ -334,6 +336,23 @@ test('装配: ctx.auxLlm 可用,三工具注册,投影与命令注册', async ()
   assert.deepEqual(projections[0].view(projections[0].init()), { tasks: {} });
   assert.equal(commands.length, 1);
   assert.equal(commands[0].name, 'aux');
+  // 主 agent 引导段已注册
+  const guide = sections.find((s) => s.name === 'aux:tools-guide');
+  assert.ok(guide, '应注册 aux:tools-guide 引导段');
+  assert.equal(guide.order, 110);
+  assert.ok(guide.text({}).includes('vision_analyze'), '引导应提及 vision_analyze');
+  assert.ok(guide.text({}).includes('不要为此创建子代理'), '引导应阻止子代理绕路');
+});
+
+test('装配: guideText 为空字符串时禁用引导段', async () => {
+  const { sections } = await makeHarness({ guideText: '' });
+  assert.equal(sections.some((s) => s.name === 'aux:tools-guide'), false, '空 guideText 不应注册引导段');
+});
+
+test('resolveConfig: guideText 必须为字符串', () => {
+  assert.throws(() => resolveConfig({ guideText: 42 }), /guideText must be a string/);
+  const withGuide = resolveConfig({ guideText: '自定义引导' });
+  assert.equal(withGuide.guideText, '自定义引导');
 });
 
 test('投影: aux/llm-call 事件折叠为每任务最近记录', async () => {
@@ -391,6 +410,7 @@ test('call: 无路由且无主模型时抛错', async () => {
     name: 'min-stubs',
     apply(stubCtx) {
       stubCtx.provide('tools', { register() { return () => {}; } });
+      stubCtx.provide('systemPrompt', { section() { return () => {}; } });
       stubCtx.provide('settings', {});
       stubCtx.provide('web', { async fetch() { throw new Error('no'); } });
       stubCtx.provide('fs', { async resolve(p) { return { displayPath: p }; }, async stat() { return { type: 'file' }; }, async readBytes() { return new Uint8Array(0); } });
@@ -417,6 +437,7 @@ test('AuxCallError: 聚合所有尝试', async () => {
     name: 'fail-stubs',
     apply(stubCtx) {
       stubCtx.provide('tools', { register() { return () => {}; } });
+      stubCtx.provide('systemPrompt', { section() { return () => {}; } });
       stubCtx.provide('settings', {});
       stubCtx.provide('web', { async fetch() { throw new Error('no'); } });
       stubCtx.provide('fs', { async resolve(p) { return { displayPath: p }; }, async stat() { return { type: 'file' }; }, async readBytes() { return new Uint8Array(0); } });
@@ -513,6 +534,7 @@ test('能力门: 空模态列表(适配器未声明能力)视为未知放行', a
     name: 'empty-modality-stubs',
     apply(stubCtx) {
       stubCtx.provide('tools', { register() { return () => {}; } });
+      stubCtx.provide('systemPrompt', { section() { return () => {}; } });
       stubCtx.provide('settings', {});
       stubCtx.provide('web', { async fetch() { throw new Error('no'); } });
       stubCtx.provide('fs', { async resolve(p) { return { displayPath: p }; }, async stat() { return { type: 'file' }; }, async readBytes() { return new Uint8Array(0); } });
@@ -746,6 +768,7 @@ test('web_extract 工具: 无 web provider 时回退全局 fetch 并清洗 HTML'
     name: 'no-web-provider-stubs',
     apply(stubCtx) {
       stubCtx.provide('tools', { register() { return () => {}; } });
+      stubCtx.provide('systemPrompt', { section() { return () => {}; } });
       stubCtx.provide('settings', {});
       stubCtx.provide('web', {
         async fetch() { throw new Error('no usable web provider is registered'); }

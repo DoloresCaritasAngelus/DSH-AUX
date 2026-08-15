@@ -37,9 +37,9 @@ export function route(provider, model) {
  */
 export function resolveConfig(config) {
   const source = config ?? {};
-  const unknown = Object.keys(source).filter((key) => key !== "tasks");
+  const unknown = Object.keys(source).filter((key) => key !== "tasks" && key !== "guideText");
   if (unknown.length > 0) {
-    throw new Error(`AuxConfig has unknown key(s) ${unknown.join(", ")} — config is { tasks? }`);
+    throw new Error(`AuxConfig has unknown key(s) ${unknown.join(", ")} — config is { tasks?, guideText? }`);
   }
   const tasks = {};
   for (const task of AUX_TASKS) {
@@ -83,7 +83,10 @@ export function resolveConfig(config) {
     }
     tasks[task] = entry;
   }
-  return { tasks };
+  if (source.guideText !== void 0 && typeof source.guideText !== "string") {
+    throw new Error("AuxConfig guideText must be a string (empty string disables the main-agent guide section)");
+  }
+  return { tasks, ...(source.guideText === void 0 ? {} : { guideText: source.guideText }) };
 }
 
 /** Merge a settings section over plugin config (settings wins). */
