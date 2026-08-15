@@ -15,6 +15,7 @@
   | `vision_analyze` | 图像分析(attachmentId / imagePath / imageUrl),focus-hint 意图感知 |
   | `web_extract` | 网页抓取与摘要(HTML 清洗,可指定问题) |
   | `compress_text` | 长文本压缩(保数字/路径/标识符,目标比例可调) |
+- **会话压缩桥接**:新增 `compaction` 辅助任务,配置后原生 DSH 的自动/手动上下文压缩会改走 AUX 辅助模型路由,解决含图会话在纯文本主模型下无法压缩的问题。
 - **/aux 命令**:状态查看、模型配置、图片 GC、视觉自检、图片记忆。
 - **设置页 + 状态 chip**:DSH Web 设置里按任务配置 provider/model/timeout/并发;
   composer 状态 chip 显示最近一次辅助调用。
@@ -87,12 +88,29 @@ const result = await ctx.auxLlm.call("compress", {
 路由解析顺序:显式配置(settings/插件 config)> 未配置 → 会话主模型。
 失败冷却:同一 provider+model 连续失败 3 次 → 冷却 60s。
 
+`compaction` 任务:配置 provider/model 后即启用会话压缩桥接——原生
+`dsh-compaction-basic` 的摘要调用会通过 `ctx.auxLlm` 执行。建议为含图会话选择
+真正支持图片的模型(例如 `volcengine-ark/doubao-seed-2.1-turbo`)。
+
+```sh
+/aux model compaction volcengine-ark/doubao-seed-2.1-turbo
+```
+
+> 注意：原生 `dsh-compaction-basic` 是**单次全量摘要**，没有分片/渐进能力。
+> 对超大输入（实测 shadowed 449K tokens 可单次成功）请调大
+> `compaction.timeoutMs`（例如 `300000`），默认 60s 在超大输入时容易超时失败。
+
 ## 集成组件与配套
 
 - **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行)。让**纯文本
   主模型**也能直接粘贴图片发送,且用户消息保留图片缩略图(模型输入边界按模态
   改写为路径文本,多模态模型原生看图)。修改 node_modules 核心包,`npm update`
   后重跑 `bridge/apply-patch.mjs` 即可;`/aux status` 会报告其状态。
+- **compaction-bridge(会话压缩协同)**:运行时桥接,不修改 node_modules 文件。
+  当 `compaction` 任务配置了专用模型时,`dsh-aux` 会覆写
+  `BasicCompactionEngine.prototype.summarize`,让原生压缩的摘要调用走
+  `ctx.auxLlm.call("compaction", …)`,从而复用 AUX 的路由/超时/并发/冷却/降级/
+  事件记录;未配置时保持原生摘要行为不变。
 - **settings 动态暴露**(install.sh 一并应用):设置页读写 aux 配置是插件
   **原生能力**——注册 namespace 时声明 `exposedToWeb`,由 dsh-settings 的
   `listExposed()` 与 api-proxy 动态合并实现(平台 deferred work 的本地实现)。
@@ -106,7 +124,7 @@ const result = await ctx.auxLlm.call("compress", {
 ## 测试
 
 ```sh
-cd tests && node --test aux.test.js        # 63 项,零依赖
+cd tests && node --test aux.test.js        # 78 项,零依赖
 cd tests && node --test bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自动跳过)
 ```
 

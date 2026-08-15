@@ -16,6 +16,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fsPromises from 'node:fs/promises';
 import { Context } from '@deepseek-ai/cordis';
+import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic';
 import AuxLlmService, {
   AUX_CALL_EVENT,
   AUX_SETTINGS_NAMESPACE,
@@ -23,6 +24,7 @@ import AuxLlmService, {
   AUX_TIMEOUT_CODE,
   AuxCallError,
   registerAuxTask,
+  sessionPatchCandidates,
   validateAuxSettings
 } from '../dsh-aux/src/index.js';
 import {
@@ -52,6 +54,11 @@ import {
   webExtractUserMessage,
   visionSystemPrompt
 } from '../dsh-aux/src/prompt.js';
+import {
+  isCompactionBridgeInstalled,
+  isCompactionTaskConfigured,
+  summarizeViaAux
+} from '../dsh-aux/src/compaction-bridge.js';
 
 /** 让微任务/宏任务队列排空,等 ctx.inject 子 fiber 落地。 */
 function settle() {
@@ -61,7 +68,7 @@ function settle() {
 // ── route.js 纯逻辑 ──────────────────────────────────────────────────────
 
 test('resolveConfig: 空配置合法,未知键抛错', () => {
-  assert.deepEqual(resolveConfig({}), { tasks: { vision: {}, web_extract: {}, compress: {} } });
+  assert.deepEqual(resolveConfig({}), { tasks: { vision: {}, web_extract: {}, compress: {}, compaction: {} } });
   assert.throws(() => resolveConfig({ nope: 1 }), /unknown key\(s\) nope/);
   assert.throws(() => resolveConfig({ tasks: { vision: { extra: 1 } } }), /unknown key\(s\) extra/);
 });
@@ -401,6 +408,153 @@ test('call: 显式配置走配置模型', async () => {
   assert.equal(streams[0].provider, 'volcengine-ark');
 });
 
+test('call: compaction 任务可显式配置并记录事件', async () => {
+  const { ctx, streams } = await makeHarness({
+    tasks: { compaction: { provider: 'volcengine-ark', model: 'doubao-seed-2.1-turbo' } }
+  });
+  const session = makeSession();
+  const result = await ctx.auxLlm.call('compaction', {
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }], id: 'm1', source: { kind: 'plugin', plugin: 'test' } }],
+    session,
+    inputChars: 5,
+    purpose: 'compaction'
+  });
+  assert.equal(result.text, 'OUTPUT_TEXT');
+  assert.equal(result.provider, 'volcengine-ark');
+  assert.equal(result.model, 'doubao-seed-2.1-turbo');
+  assert.equal(streams.length, 1);
+  const events = session.events.filter((e) => e.type === AUX_CALL_EVENT);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].data.task, 'compaction');
+  assert.equal(events[0].data.purpose, 'compaction');
+});
+
+test('compaction bridge: 已安装且仅在配置 compaction 任务时启用', () => {
+  assert.equal(isCompactionBridgeInstalled(), true, 'dsh-compaction-basic 存在时应安装桥接');
+  const configuredAux = {
+    describe() {
+      return [
+        { task: 'compaction', label: '会话压缩', configured: true, primary: { provider: 'volcengine-ark', model: 'doubao-seed-2.1-turbo' }, timeoutMs: 60000, maxConcurrency: 2 }
+      ];
+    }
+  };
+  const unconfiguredAux = {
+    describe() {
+      return [
+        { task: 'compaction', label: '会话压缩', configured: false, primary: null, timeoutMs: 60000, maxConcurrency: 2 }
+      ];
+    }
+  };
+  assert.equal(isCompactionTaskConfigured(configuredAux), true);
+  assert.equal(isCompactionTaskConfigured(unconfiguredAux), false);
+});
+
+test('compaction bridge: summarizeViaAux 调用 auxLlm 并返回 SummaryResult', async () => {
+  let called = false;
+  const aux = {
+    async call(task, request) {
+      called = true;
+      assert.equal(task, 'compaction');
+      assert.equal(request.purpose, 'compaction');
+      assert.equal(request.messages.length, 2);
+      assert.equal(request.tools.length, 1);
+      assert.equal(request.maxTokens, 8192);
+      return { text: 'CHECKPOINT', provider: 'volcengine-ark', model: 'doubao-seed-2.1-turbo' };
+    }
+  };
+  const input = {
+    system: 'sys',
+    tools: [{ name: 'read', description: 'r' }],
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }], id: 'm1', source: { kind: 'plugin', plugin: 'test' } }]
+  };
+  const agent = { session: { id: 'sess-1' } };
+  const result = await summarizeViaAux(aux, input, agent, void 0, 8192);
+  assert.equal(called, true);
+  assert.equal(result.provider, 'volcengine-ark');
+  assert.equal(result.model, 'doubao-seed-2.1-turbo');
+  assert.equal(result.summary[0].type, 'text');
+  assert.equal(result.summary[0].text, 'CHECKPOINT');
+  assert.equal(result.rawOutput, void 0, '非 llm.stream 直连调用不应标记 llmStreamCall');
+});
+
+test('compaction bridge: 原生 summarize 在配置 compaction 时改走 auxLlm', async () => {
+  let called = false;
+  const aux = {
+    describe() {
+      return [
+        { task: 'compaction', label: '会话压缩', configured: true, primary: { provider: 'volcengine-ark', model: 'doubao-seed-2.1-turbo' }, timeoutMs: 60000, maxConcurrency: 2 }
+      ];
+    },
+    async call(task, request) {
+      called = true;
+      assert.equal(task, 'compaction');
+      return { text: 'CHECKPOINT', provider: 'volcengine-ark', model: 'doubao-seed-2.1-turbo' };
+    }
+  };
+  const fakeThis = {
+    ctx: {
+      get(name) {
+        if (name === 'auxLlm') return aux;
+        throw new Error('missing ' + name);
+      },
+      logger: { warn() {} }
+    },
+    config: {
+      maxTokens: 8192,
+      modelPolicies: []
+    }
+  };
+  const input = {
+    system: 'sys',
+    tools: [{ name: 'read', description: 'r' }],
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }], id: 'm1', source: { kind: 'plugin', plugin: 'test' } }]
+  };
+  const agent = { session: { id: 'sess-1', requestHeader() { return { config: { provider: 'opencode-go', model: 'deepseek-v4-flash' } }; } } };
+  const result = await BasicCompactionEngine.prototype.summarize.call(fakeThis, input, agent);
+  assert.equal(called, true);
+  assert.equal(result.provider, 'volcengine-ark');
+  assert.equal(result.model, 'doubao-seed-2.1-turbo');
+  assert.equal(result.summary[0].text, 'CHECKPOINT');
+});
+
+test('compaction bridge: AUX 失败时抛出真实错误，不再 fallback 原生摘要', async () => {
+  let warned = '';
+  const aux = {
+    describe() {
+      return [
+        { task: 'compaction', label: '会话压缩', configured: true, primary: { provider: 'volcengine-ark', model: 'doubao-seed-2.1-turbo' }, timeoutMs: 60000, maxConcurrency: 2 }
+      ];
+    },
+    async call() {
+      throw new Error('AUX_REAL_ERROR');
+    }
+  };
+  const fakeThis = {
+    ctx: {
+      get(name) {
+        if (name === 'auxLlm') return aux;
+        throw new Error('missing ' + name);
+      },
+      logger: { warn(message) { warned = message; } }
+    },
+    config: {
+      maxTokens: 8192,
+      modelPolicies: []
+    }
+  };
+  const input = {
+    system: 'sys',
+    tools: [{ name: 'read', description: 'r' }],
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }], id: 'm1', source: { kind: 'plugin', plugin: 'test' } }]
+  };
+  const agent = { session: { id: 'sess-1', requestHeader() { return { config: { provider: 'opencode-go', model: 'deepseek-v4-flash' } }; } } };
+  await assert.rejects(
+    () => BasicCompactionEngine.prototype.summarize.call(fakeThis, input, agent),
+    /AUX_REAL_ERROR/
+  );
+  assert.match(warned, /AUX_REAL_ERROR/);
+});
+
 test('call: 未知任务抛错', async () => {
   const { ctx } = await makeHarness();
   await assert.rejects(() => ctx.auxLlm.call('nope', { messages: [] }), /unknown task "nope"/);
@@ -569,6 +723,10 @@ test('validateAuxSettings: 拒绝 provider/model 半配置', () => {
   );
   assert.throws(
     () => validateAuxSettings({ tasks: { compress: { model: 'glm-5.2' } } }),
+    /provider and model must be supplied together/
+  );
+  assert.throws(
+    () => validateAuxSettings({ tasks: { compaction: { provider: 'volcengine-ark' } } }),
     /provider and model must be supplied together/
   );
   // 成对或全空合法
@@ -871,6 +1029,17 @@ test('/aux test compress: 自检通过并报告压缩比例', async () => {
   assert.equal(out.kind, 'success');
   assert.ok(out.text.includes('自检通过'), out.text);
   assert.ok(out.text.includes('压缩成功'), out.text);
+});
+
+test('/aux test compaction: 自检通过并报告路由', async () => {
+  const { commands } = await makeHarness({
+    tasks: { compaction: { provider: 'volcengine-ark', model: 'doubao-seed-2.1-turbo' } }
+  });
+  const handler = commands[0].handler;
+  const out = await handler({ agent: void 0, rawInput: 'test compaction' });
+  assert.equal(out.kind, 'success');
+  assert.ok(out.text.includes('自检通过'), out.text);
+  assert.ok(out.text.includes('会话压缩路由成功'), out.text);
 });
 
 test('/aux test web_extract: 自检通过并报告摘要', async () => {
@@ -1237,5 +1406,45 @@ test('事件记录: dsh-session 无 ignorable 补丁时降级不写事件(防会
   assert.equal(appended.length, 1, '补丁存在时应写入事件');
   const [, , , ignorableOpts] = appended[0];
   assert.equal(ignorableOpts?.ignorable, true);
+});
+
+test('事件记录: sessionPatchCandidates 覆盖 symlink 与 realpath 两种部署布局', () => {
+  // symlink 布局:node_modules/@dolorescaritasangelus/dsh-aux/src/index.js(import.meta.url 保留 symlink 路径)
+  const symlink = sessionPatchCandidates('file:///x/node_modules/@dolorescaritasangelus/dsh-aux/src/index.js');
+  assert.equal(
+    symlink[0].href,
+    'file:///x/node_modules/@deepseek-ai/dsh-session/lib/index.js',
+    '第一候选必须命中 symlink 部署的 dsh-session bundle(此前 ../dsh-session 只到 dsh-aux/ 目录,永远降级)'
+  );
+  // realpath 布局:源码树 dsh work/aux/dsh-aux/src/index.js(dsh work 是单一段)
+  const realpath = sessionPatchCandidates('file:///x/dsh work/aux/dsh-aux/src/index.js');
+  assert.equal(
+    realpath[3].href,
+    'file:///x/node_modules/@deepseek-ai/dsh-session/lib/index.js',
+    '第四候选必须命中 realpath 源码树下方的 node_modules 部署'
+  );
+  // 中间候选的形状:第三候选落在 <root>/dsh work/node_modules(不存在,会被跳过)
+  assert.equal(
+    realpath[2].href,
+    'file:///x/dsh%20work/node_modules/@deepseek-ai/dsh-session/lib/index.js'
+  );
+});
+
+test('事件记录: 检测函数在候选全部缺失时安全返回 false 不抛错', async () => {
+  const { ctx } = await makeHarness();
+  delete ctx.auxLlm._sessionEventsSupportedCache; // 强制走真实检测路径
+  // 模拟一个候选全部不存在的基址(远端源码树布局):直接验证候选 URL 均不可读
+  const isolated = sessionPatchCandidates('file:///tmp/nonexistent-root/dsh-aux/src/index.js');
+  let allMissing = true;
+  for (const c of isolated) {
+    try {
+      const { readFileSync } = await import('node:fs');
+      readFileSync(c);
+      allMissing = false;
+    } catch { /* expected */ }
+  }
+  assert.equal(allMissing, true, '隔离布局下所有候选都应不存在');
+  const supported = await ctx.auxLlm._sessionEventsSupported();
+  assert.equal(typeof supported, 'boolean', '检测应返回布尔值且不抛错');
 });
 

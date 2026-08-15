@@ -83,8 +83,8 @@ window.__ModuleLoader__.load({
 			const [saved, setSaved] = react.useState(false);
 			if (state.status === "loading") return react.createElement("div", { className: "ax-section" }, "加载辅助模型配置…");
 			if (state.status === "error") return react.createElement("div", { className: "ax-section" }, react.createElement("span", { className: "ax-error" }, "加载失败: " + state.error));
-			const tasks = ["vision", "web_extract", "compress"];
-			const labels = { vision: "图像分析 (vision_analyze)", web_extract: "网页提取 (web_extract)", compress: "文本压缩 (compress_text)" };
+			const tasks = ["vision", "web_extract", "compress", "compaction"];
+			const labels = { vision: "图像分析 (vision_analyze)", web_extract: "网页提取 (web_extract)", compress: "文本压缩 (compress_text)", compaction: "会话压缩 (compaction)" };
 			const field = (task, key) => draft?.tasks?.[task]?.[key];
 			const setField = (task, key, value) => {
 				setSaved(false);
@@ -178,7 +178,7 @@ window.__ModuleLoader__.load({
 			if (entries.length === 0) return null;
 			const last = entries[entries.length - 1];
 			const ok = last.ok === true;
-			const label = (last.task === "vision" ? "视觉" : last.task === "web_extract" ? "网页" : "压缩") + " " + (last.model ?? "").split("/").pop();
+			const label = (last.task === "vision" ? "视觉" : last.task === "web_extract" ? "网页" : last.task === "compaction" ? "会话压缩" : "压缩") + " " + (last.model ?? "").split("/").pop();
 			const title = `辅助调用 ${last.task}: ${last.provider}/${last.model} ${ok ? "成功" : "失败"} ${last.durationMs}ms${last.fallbackUsed ? " (已降级)" : ""}`;
 			return react.createElement("span", { className: "ax-wrap", title }, react.createElement("span", {
 				className: "ax-chip " + (ok ? "ax-ok" : "ax-fail"),

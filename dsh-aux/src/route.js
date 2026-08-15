@@ -7,7 +7,7 @@
  */
 
 /** Built-in auxiliary task keys. */
-export const AUX_TASKS = Object.freeze(["vision", "web_extract", "compress"]);
+export const AUX_TASKS = Object.freeze(["vision", "web_extract", "compress", "compaction"]);
 
 /** Default per-task timeout (ms). */
 export const DEFAULT_TASK_TIMEOUT_MS = 60_000;
@@ -29,7 +29,7 @@ export function route(provider, model) {
  * Validate the plugin config shape. Unknown keys fail at load rather than
  * being ignored. Supported shape:
  *
- *   { tasks: { vision?, webExtract?, compress? } }
+ *   { tasks: { vision?, webExtract?, compress?, compaction? } }
  *
  * Each task entry: { provider?, model?, timeoutMs?, maxConcurrency? }.
  * @param config raw plugin config (may be undefined).

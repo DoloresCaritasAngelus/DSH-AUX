@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.3(2026-08-16)— 会话压缩桥接与事件检测修复
+
+- 新增 `compaction` 辅助任务:设置页与 `/aux model compaction` 可配置专用会话压缩模型
+- 新增 compaction-bridge:配置 `compaction` 任务后,原生 `dsh-compaction-basic`
+  的摘要调用改走 `ctx.auxLlm`,复用 AUX 的超时/并发/冷却/降级/事件记录
+- 修复场景:会话含图片、摘要模型被路由到纯文本版本时,自动/手动压缩不可用
+- `ctx.auxLlm` 请求支持可选 `tools`,供 compaction bridge 回放工具 schema
+- `/aux status` 显示 compaction-bridge 状态
+- compaction-bridge 失败时不再 fallback 到原生摘要,直接抛出 AUX 真实错误
+  (AUX 调用内部已包含主模型 fallback,二次 fallback 只会掩盖根因)
+- 文档注明原生 `dsh-compaction-basic` 为单次全量摘要;超大输入请调大
+  `compaction.timeoutMs`(实测 shadowed 449K tokens 可单次成功)
+- **修复事件记录检测失效**: `_sessionEventsSupported()` 的候选路径原为
+  `../dsh-session`(从 src/index.js 只到 dsh-aux/ 目录,永远解析失败),
+  导致重启后所有 `aux/llm-call` 事件写入被永久降级禁用。现改为
+  `sessionPatchCandidates()` 多候选检测(symlink 部署 / realpath 源码树 /
+  上级 node_modules),任一候选命中补丁标记即启用;新增 3 项回归测试
+- 测试增至 80 项(aux)
+
 ## 0.1.2(2026-08-15)— 多图与修复
 
 - vision_analyze 支持多图并行(images 数组,受任务并发信号量约束)

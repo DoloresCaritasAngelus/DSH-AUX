@@ -1,6 +1,6 @@
 # PRD: dsh-aux — 辅助模型系统(参考 Hermes Agent,零历史包袱重做)
 
-> 状态: **已交付并端到端验证**(M1 + M2 完成;60 项测试全过;2026-08-14 实测:host 插件激活、/aux 命令可用、三工具注册、vision_analyze 分析真实图片成功、web_extract/compress_text 真实调用成功、配置持久化生效;2026-08-15 新增 /aux vision|test|memory 命令与图片记忆日志、会话删除附件清理(事件驱动 + 冷会话定时对账),配套社区插件 dsh-plugin-session-delete 提供删除入口,已实测删除热会话/冷会话清理链路;配套 image-bridge 补丁解决纯文本模型粘贴图片被拒问题,全链路闭环;实现说明见 README.md)
+> 状态: **已交付并端到端验证**(M1 + M2 完成;78 项测试全过;2026-08-14 实测:host 插件激活、/aux 命令可用、三工具注册、vision_analyze 分析真实图片成功、web_extract/compress_text 真实调用成功、配置持久化生效;2026-08-15 新增 /aux vision|test|memory 命令与图片记忆日志、会话删除附件清理(事件驱动 + 冷会话定时对账),配套社区插件 dsh-plugin-session-delete 提供删除入口,已实测删除热会话/冷会话清理链路;配套 image-bridge 补丁解决纯文本模型粘贴图片被拒问题,全链路闭环;后续新增 compaction-bridge,实现说明见 README.md)
 > 参考: [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
 > 需求来源: 用户与实现者(本会话)研究 Hermes 源码后的完整设计
 > 目标读者: 实现者
@@ -18,21 +18,22 @@
 - `installSettingsSection` + settings namespace:配置面
 - 会话事件溯源 + projection:状态持久化与 UI 可观测
 
-**目标(一句话)**:一个 DSH 插件包,提供统一辅助 LLM 路由服务(`ctx.auxLlm`)和三个辅助任务工具(`vision_analyze` / `web_extract` / `compress_text`),每任务可独立配置模型与超时,失败自动降级到主模型,完整管理 UI。
+**目标(一句话)**:一个 DSH 插件包,提供统一辅助 LLM 路由服务(`ctx.auxLlm`)和三个辅助任务工具(`vision_analyze` / `web_extract` / `compress_text`),每任务可独立配置模型与超时,失败自动降级到主模型,完整管理 UI;并通过 `compaction` 任务与原生会话压缩协同。
 
 ## 2. 目标
 
 1. 统一辅助 LLM 调用入口,任务分派(类比 Hermes `call_llm(task=...)`)
-2. 三任务落地:vision(图像分析)、web_extract(网页抓取+摘要)、compress(长文本压缩)
-3. 路由策略:每任务独立模型(默认)→ 失败降级主模型(可配置)
-4. 健壮性:per-task 超时、并发上限、失败冷却(不健康 provider TTL)、事件记录
-5. 完整管理 UI:设置页(每任务配置)+ 会话内调用状态可见
+2. 三工具落地:vision(图像分析)、web_extract(网页抓取+摘要)、compress(长文本压缩)
+3. 会话压缩桥接:新增 `compaction` 任务,让原生 DSH compaction 可选用 AUX 辅助模型
+4. 路由策略:每任务独立模型(默认)→ 失败降级主模型(可配置)
+5. 健壮性:per-task 超时、并发上限、失败冷却(不健康 provider TTL)、事件记录
+6. 完整管理 UI:设置页(每任务配置)+ 会话内调用状态可见
 
 ## 3. 非目标
 
 - 不做子智能体、不做会话协同(用户明确排除)
 - 不做多 provider 认证矩阵(Hermes 的屎山;DSH 的 LlmRuntime 已解决)
-- 不做全自动会话压缩/会话历史改写(只做工具级 `compress_text`,主 agent 主动调用;侵入 agent 循环的风险工作留待后续)
+- 不做全自动会话压缩/会话历史改写(只做工具级 `compress_text` 与 compaction 桥接;不自行侵入 agent 循环,而是让原生 DSH compaction 可选走 AUX 辅助模型)
 - 不做记忆/技能/多平台网关(Hermes 的其他功能域,不在本系统范围)
 - 不改写模型可见输出(压缩结果是新文本,不是对会话历史的篡改)
 
@@ -72,7 +73,7 @@ interface AuxLlmRequest {
 
 ```ts
 interface AuxTaskDefinition {
-  key: string;                 // "vision" | "web_extract" | "compress"
+  key: string;                 // "vision" | "web_extract" | "compress" | "compaction"
   label: string;               // UI 显示名
   defaultModel?: () => Route | undefined;   // 默认辅助模型(可读配置)
   fallbackToMain: boolean;     // 失败时是否降级主模型(默认 true)
@@ -210,13 +211,14 @@ interface AuxTaskDefinition {
 
 ## 6. 验收标准
 
-1. `/aux status` 显示三任务路由状态;`/aux model compress opencode-go/glm-5.2` 后 `compress_text` 走新模型
+1. `/aux status` 显示各任务路由状态;`/aux model compress opencode-go/glm-5.2` 后 `compress_text` 走新模型
 2. `vision_analyze` 能分析附件图片/本地图片/URL 图片,返回描述与模型信息
 3. `web_extract` 抓取网页并返回摘要;目标 URL 抓取失败时报错并说明
 4. `compress_text` 压缩长文本,返回压缩结果与统计;不改写会话历史
-5. 辅助模型超时/限流时自动降级主模型,事件记录 `fallbackUsed: true`;主模型也失败时返回聚合错误
-6. 设置页可配置每任务模型/超时/并发,立即生效
-7. 会话重启后投影状态保持(事件溯源)
+5. 配置 `compaction` 任务后,原生 DSH 自动/手动压缩的摘要调用走 AUX 辅助模型;未配置时保持原生行为
+6. 辅助模型超时/限流时自动降级主模型,事件记录 `fallbackUsed: true`;主模型也失败时返回聚合错误
+7. 设置页可配置每任务模型/超时/并发,立即生效
+8. 会话重启后投影状态保持(事件溯源)
 
 ## 7. 里程碑
 

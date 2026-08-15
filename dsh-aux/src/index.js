@@ -8,6 +8,9 @@
  * timeout, concurrency cap, failure cooldown, and logged session events so
  * every auxiliary call is observable and replayable.
  *
+ * A `compaction` task is also provided as a bridge: when configured, native
+ * `dsh-compaction-basic` summarization is routed through `ctx.auxLlm`.
+ *
  * @module @dolorescaritasangelus/dsh-aux
  */
 import { readdir, readFile as readFileText, rename as renameFile, stat as statFile, unlink as unlinkFile, writeFile as writeFileText } from "node:fs/promises";
@@ -45,6 +48,10 @@ import {
   webExtractUserMessage,
   visionSystemPrompt
 } from "./prompt.js";
+import {
+  isCompactionBridgeInstalled,
+  isCompactionTaskConfigured
+} from "./compaction-bridge.js";
 
 /** Settings namespace carrying the aux configuration section. */
 export const AUX_SETTINGS_NAMESPACE = settingsNamespace("aux");
@@ -78,6 +85,12 @@ const AUX_SETTINGS_SCHEMA = z.object({
       maxConcurrency: z.number().step(1).min(1)
     }),
     compress: z.object({
+      provider: z.string(),
+      model: z.string(),
+      timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
+      maxConcurrency: z.number().step(1).min(1)
+    }),
+    compaction: z.object({
       provider: z.string(),
       model: z.string(),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
@@ -162,6 +175,12 @@ export class AuxLlmService extends Service {
         maxConcurrency: z.number().step(1).min(1)
       }),
       compress: z.object({
+        provider: z.string(),
+        model: z.string(),
+        timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
+        maxConcurrency: z.number().step(1).min(1)
+      }),
+      compaction: z.object({
         provider: z.string(),
         model: z.string(),
         timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
@@ -480,7 +499,7 @@ export class AuxLlmService extends Service {
         const capability = await this._resolveImageCapability(target, callDeadline.signal);
         if (capability === false) {
           const error = new Error(
-            `aux: model "${target.model}" does not declare image input for vision task`
+            `aux: model "${target.model}" does not declare image input for ${task} task`
           );
           error.failure = { code: "UNSUPPORTED_CONTENT", message: error.message };
           throw error;
@@ -495,6 +514,7 @@ export class AuxLlmService extends Service {
       model: target.model,
       messages: request.messages,
       ...(request.system !== void 0 ? { system: request.system } : {}),
+      ...(request.tools === void 0 ? {} : { tools: [...request.tools] }),
       ...(request.temperature !== void 0 ? { temperature: request.temperature } : {}),
       ...(request.maxTokens !== void 0 ? { maxTokens: request.maxTokens } : {}),
       sessionId: request.session?.id,
@@ -562,12 +582,19 @@ export class AuxLlmService extends Service {
    */
   async _sessionEventsSupported() {
     if (this._sessionEventsSupportedCache !== void 0) return this._sessionEventsSupportedCache;
-    try {
-      const src = await readFileText(new URL("../dsh-session/lib/index.js", import.meta.url));
-      this._sessionEventsSupportedCache = src.includes("dsh-aux ignorable (local patch)");
-    } catch {
-      this._sessionEventsSupportedCache = false;
+    const candidates = sessionPatchCandidates(import.meta.url);
+    for (const candidate of candidates) {
+      try {
+        const src = await readFileText(candidate);
+        if (src.includes("dsh-aux ignorable (local patch)")) {
+          this._sessionEventsSupportedCache = true;
+          return true;
+        }
+      } catch {
+        /* try the next candidate */
+      }
     }
+    this._sessionEventsSupportedCache = false;
     return this._sessionEventsSupportedCache;
   }
 
@@ -655,6 +682,20 @@ export class AuxLlmService extends Service {
           missing: "未安装(纯文本主模型发图会受限;运行仓库 install.sh 一键集成)"
         }[bridge] ?? bridge;
         lines.push("  - image-bridge: " + label);
+      }
+      // Compaction bridge status: when dsh-compaction-basic is present and a
+      // dedicated `compaction` AUX route is configured, native session
+      // compaction is routed through AUX.
+      const compactionBridgeInstalled = isCompactionBridgeInstalled();
+      if (compactionBridgeInstalled) {
+        lines.push(
+          "  - compaction-bridge: " +
+            (isCompactionTaskConfigured(this)
+              ? "已启用(会话压缩走 AUX 辅助模型)"
+              : "已安装(未配置 compaction 任务 → 原生摘要)")
+        );
+      } else {
+        lines.push("  - compaction-bridge: 未安装(dsh-compaction-basic 缺失)");
       }
       // Session-event tracing status: without the dsh-session ignorable
       // patch, aux/llm-call events are not written (safety degradation).
@@ -1306,6 +1347,22 @@ ${value.analysis}` };
           { agent, signal: new AbortController().signal }
         );
         text = `抓取成功: ${value.url} | 摘要 ${value.summary.slice(0, 80)}...`;
+      } else if (task === "compaction") {
+        const result = await this.call("compaction", {
+          messages: [
+            {
+              role: "user",
+              content: [{ type: "text", text: "Test compaction route. Keep this summary short." }],
+              id: "aux-compaction-test",
+              source: { kind: "plugin", plugin: "dsh-aux" }
+            }
+          ],
+          session: agent?.session,
+          agent,
+          signal: new AbortController().signal,
+          purpose: "compaction"
+        });
+        text = `会话压缩路由成功: ${result.provider}/${result.model}`;
       } else {
         return { kind: "error", text: "/aux test vision 请用 /aux vision <imagePath> <question> 验证" };
       }
@@ -1503,6 +1560,24 @@ ${value.analysis}` };
  * validator so a half-configured task is refused where it is entered.
  * @param value - the resolved section, schema-valid by construction.
  */
+/**
+ * Candidate URLs for the patched dsh-session bundle, given this module's URL.
+ * Exported for tests; the service tries each candidate and accepts the first
+ * one that exists and carries the "dsh-aux ignorable (local patch)" marker.
+ */
+export function sessionPatchCandidates(baseUrl) {
+  return [
+    // symlink deploy: node_modules/@dolorescaritasangelus/dsh-aux/src -> ../../dsh-session
+    new URL("../../dsh-session/lib/index.js", baseUrl),
+    // one-level fallback (dsh-aux/dsh-session layout)
+    new URL("../dsh-session/lib/index.js", baseUrl),
+    // realpath'd source tree: <root>/dsh work/aux/dsh-aux/src -> <root>/node_modules
+    new URL("../../../node_modules/@deepseek-ai/dsh-session/lib/index.js", baseUrl),
+    // DSH home layout fallback
+    new URL("../../../../node_modules/@deepseek-ai/dsh-session/lib/index.js", baseUrl)
+  ];
+}
+
 export function validateAuxSettings(value) {
   for (const task of AUX_TASKS) {
     const entry = value?.tasks?.[task];
@@ -1520,7 +1595,8 @@ export function validateAuxSettings(value) {
 const TASK_LABELS = Object.freeze({
   vision: "图像分析",
   web_extract: "网页提取",
-  compress: "文本压缩"
+  compress: "文本压缩",
+  compaction: "会话压缩"
 });
 
 /**

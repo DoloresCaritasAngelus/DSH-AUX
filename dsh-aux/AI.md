@@ -99,6 +99,8 @@ dsh --profile web --dump-config 2>/dev/null | grep -A1 "id: aux" | head -4
 #   - 发一张图片,模型能调用 vision_analyze 描述它(纯文本主模型经
 #     image-bridge 集成组件;多模态模型原生看图)
 #   - /aux status 显示 image-bridge 状态(已集成/缺失)
+#   - /aux status 显示 compaction-bridge 状态;配置 `/aux model compaction ...`
+#     后原生自动/手动压缩会走 AUX 辅助模型
 ```
 
 ## 4. 常见问题(故障排查)

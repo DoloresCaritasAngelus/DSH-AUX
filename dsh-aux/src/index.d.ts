@@ -8,16 +8,19 @@
  * timeout, concurrency cap, failure cooldown, and logged session events so
  * every auxiliary call is observable and replayable.
  *
+ * A `compaction` task is also provided as a bridge: when configured, native
+ * `dsh-compaction-basic` summarization is routed through `ctx.auxLlm`.
+ *
  * @module @dolorescaritasangelus/dsh-aux
  */
 import { Context, Service } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
-import type { Message } from '@deepseek-ai/dsh-llm';
+import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm';
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session';
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings';
 
 /** The built-in auxiliary task keys. */
-export type AuxTaskKey = 'vision' | 'web_extract' | 'compress';
+export type AuxTaskKey = 'vision' | 'web_extract' | 'compress' | 'compaction';
 
 /** A resolved provider/model route. */
 export interface AuxRoute {
@@ -64,6 +67,8 @@ export interface AuxLlmRequest {
     messages: Message[];
     /** System prompt text. */
     system?: string;
+    /** Tool schemas forwarded to the LLM call (used by the compaction bridge). */
+    tools?: readonly ToolSchema[];
     temperature?: number;
     maxTokens?: number;
     /** Cancellation fused into the per-task deadline. */

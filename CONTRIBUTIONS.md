@@ -44,7 +44,7 @@ OpenCode),用透明代理 + 单文件插件改写模型输入;dsh-aux 在 DSH �
   工具可以;问具体问题,一次聚焦一个"。
 - **stripThink**:剥离 GLM/Kimi 系 thinking 模型内联的 `<think>…</think>`。
 
-**落地**:`stripThinkBlocks()` 接入 `_callRoute`,三个辅助任务统一生效;
+**落地**:`stripThinkBlocks()` 接入 `_callRoute`,各辅助任务统一生效;
 `visionSystemPrompt` 内置任务聚焦引导。
 
 **差异**:dsh-vision 自带 provider 解析矩阵(Zhipu/DashScope/Ark/Ollama/env
@@ -76,7 +76,7 @@ dsh-tool-fs(read_image 附件模式)、dsh-agent-default-model(设置页模式)�
 
 1. **统一 aux-LLM 路由服务**(`ctx.auxLlm`):任务分派 + 路由解析(显式配置
    > 任务默认 > 主模型)+ 失败分类 + 冷却 + 信号量 + 降级 + 聚合错误
-   (`AuxCallError`) + 事件溯源,一服务承载三任务(视觉/网页/压缩)。
+   (`AuxCallError`) + 事件溯源,一服务承载多任务(视觉/网页/压缩/会话压缩)。
 2. **图片能力门语义**:发起前查 `resolveModelInfo.inputModalities`;
    **空列表(适配器未声明)视为未知放行**——避免误拒豆包这类未声明能力的
    视觉模型;非空且不含 image 才判"明确不支持"并降级。

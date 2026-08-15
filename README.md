@@ -21,6 +21,7 @@
   | `web_extract` | 网页抓取 + 摘要 | "总结这个页面""回答某网页里的问题" |
   | `compress_text` | 长文本压缩(保数字/路径/标识符) | 压日志、压文档、喂给上下文 |
 
+- **会话压缩桥接**:新增 `compaction` 辅助任务,配置后原生 DSH 的自动/手动上下文压缩会改走 AUX 辅助模型路由,可解决含图会话在纯文本主模型下无法压缩的问题;`/aux status` 会显示桥接状态。
 - **`/aux` 命令**:状态查看、模型切换、图片回收、视觉自检、图片记忆。
 - **Web 设置页 + 状态 chip**:每任务模型下拉配置(只列你已配置的供应商),composer 上实时显示最近一次辅助调用。
 - **会话图片生命周期**:删除会话时自动清理它的无引用图片(共享保留、归档不误删);图片分析记忆跨重启可查。
@@ -40,7 +41,7 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
 重启 DSH 后:
 
 1. **发一张图片**给 agent,它会用 `vision_analyze` 描述给你(纯文本主模型也能发——image-bridge 已集成,UI 保留图片缩略图);
-2. 输入 `/aux status` 查看三个任务的路由(顺带显示 image-bridge 状态);
+2. 输入 `/aux status` 查看各任务路由(顺带显示 image-bridge 与 compaction-bridge 状态);
 3. 想让视觉走专用模型?`/aux model vision volcengine-ark/doubao-seed-2.0-lite`(或设置页下拉选择)。
 
 ## 使用指南
@@ -61,7 +62,7 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
 
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。
 - **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
-- **测试零依赖**:`cd tests && node --test aux.test.js`(70 项)+ `node --test memory-race.test.js`(1 项,并发写回归)+ `node --test bridge.test.js`(4 项)。
+- **测试零依赖**:`cd tests && node --test aux.test.js`(78 项)+ `node --test memory-race.test.js`(1 项,并发写回归)+ `node --test bridge.test.js`(4 项)。
 - **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行;仅装插件本体的需单独跑 `bridge/apply-patch.mjs`)。它让**纯文本主模型也能直接粘贴图片**且 UI 保留缩略图(多模态模型原生看图不受影响);改 node_modules 核心包,`npm update` 后重跑一次即可。`/aux status` 会报告它的状态。
 - **settings 动态暴露**(同样由 install.sh 应用):设置页读写 aux 配置是插件**原生能力**——dsh-aux 注册 namespace 时声明 `exposedToWeb`(dsh-settings 的 `listExposed()` + api-proxy 动态合并,即平台 api-proxy 注释中的 deferred work 本地实现,可整理为 upstream PR)。
 - **会话事件注册通道(必装补丁)**:dsh-aux 向会话写 `aux/llm-call` 事件;DSH 持久化读链对白名单外事件**拒绝整个日志**(官方注释:out-of-repo 插件事件无注册通道,deferred)。install.sh 中的 `patch-session-ignorable.mjs` 补齐 append 的 `ignorable` 写入入口 + 白名单放行;**未装该补丁时,dsh-aux 自动降级为不写事件**(保护会话日志),`/aux status` 会显示状态。`npm update` 后需重跑。
@@ -75,6 +76,10 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
   (`compaction/start → summary → end` 事件)与超长工具结果剪枝
   (`compaction/prune`,阈值约 8192 字符)在上下文到达高水位时自动触发——
   本插件实测在长会话中触发过完整压缩循环,无需手动启用。
+- **compaction-bridge(会话压缩协同)**:当你在 AUX 设置页或 `/aux model compaction`
+  配置了专用会话压缩模型后,dsh-aux 会把 `dsh-compaction-basic` 的摘要调用改走
+  `ctx.auxLlm` 的 `compaction` 任务,复用 AUX 的超时/并发/冷却/降级/事件记录。
+  这尤其解决“会话里有图片、但摘要模型被路由到纯文本版本”导致压缩不可用的问题。
 
 ## 文档
 
