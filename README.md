@@ -1,8 +1,40 @@
-# dsh-aux — DSH 辅助模型系统
-
 [English](README.en.md) | **简体中文**
 
+<div align="center"><img src="assets/deepseek-girl.png" alt="AUX" width="120" /></div>
+
+> 嗨~ 我是 AUX,主人的辅助模型小助手 💙
+> 主模型专心聊天,我负责看图、读网页、压长文!
+> 需要我的时候,直接叫我就好～
+
+<div align="center">
+
+![Version](https://img.shields.io/badge/version-v0.1.4-blue)
+![Tests](https://img.shields.io/badge/tests-87-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)
+
+</div>
+
+# dsh-aux — DSH 辅助模型系统
+
 > 给主 agent 配一个“副手”:**视觉分析、网页提取、长文本压缩**这些旁路任务,由独立辅助 LLM 完成,主模型专注对话。不建子智能体、不做会话协同——装完即用,零配置。
+
+---
+
+## 目录
+
+- [为什么需要它](#为什么需要它)
+- [核心特性](#核心特性)
+- [环境要求](#环境要求)
+- [快速开始](#快速开始)
+- [使用指南](#使用指南)
+- [工作原理](#工作原理)
+- [兼容性与依赖](#兼容性与依赖)
+- [常见问题](#常见问题)
+- [相关项目](#相关项目)
+- [文档](#文档)
+- [致谢与借鉴](#致谢与借鉴)
+- [许可证](#许可证)
 
 ---
 
@@ -29,6 +61,12 @@
 | `vision_analyze` | 图像分析(支持多图并行) | “这张图里是什么?” “读出图表数值” “对比两张图” |
 | `web_extract` | 网页抓取 + 摘要 | “总结这个页面” “回答某网页里的问题” |
 | `compress_text` | 长文本压缩(保数字/路径/标识符) | 压日志、压文档、喂给上下文 |
+
+## 环境要求
+
+- **DSH** ≥ 0.1.0-rc.6
+- **Node.js** ≥ 20
+- **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`,无需额外安装任何第三方运行时库。
 
 ## 快速开始
 
@@ -103,6 +141,27 @@ const result = await ctx.auxLlm.call("compress", {
 ### 极简 / Anchored Standard 兼容
 
 首个持久 `tool/call` 前只暴露 Minimal 工具对,并剥离自动注入上下文——这是这些预设实现“首轮轨迹锚定”的核心机制。dsh-aux **首轮绝不注入任何 AUX 上下文/提示词**;首个 `tool/call` 后目录开放,AUX 工具出现,并通过 `agent/pre-step` 注入一次提示,引导直接使用 `vision_analyze`,避免子代理绕路。Anchored Standard 的设计与实现见 [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main)。
+
+## 常见问题
+
+**Q1:为什么在极简 / Anchored Standard 预设的首轮看不到 `vision_analyze` 等 AUX 工具?**
+
+A:这些预设的“首轮轨迹锚定”机制会在首个持久 `tool/call` 前只暴露 Minimal 工具对,并剥离自动注入的上下文。dsh-aux 尊重这一机制,**首轮绝不注入任何 AUX 上下文/提示词**,也不会提前暴露自己的工具。首个 `tool/call` 之后工具目录开放,`vision_analyze` / `web_extract` / `compress_text` 就会出现,并通过 `agent/pre-step` 注入一次提示引导直接使用。
+
+**Q2:为什么 `/compact` 在含图会话里失败了?**
+
+A:如果会话消息里的 image block 对应附件对象已被 GC/清理(读回报 `Attachment object is missing.`),或所有可选压缩路由均不支持图片输入,图片对压缩不可用。此时 dsh-aux 会把图片**降级为文本占位**(`[图片: name (type, WxH) — 未纳入压缩摘要]`)后继续交给 AUX 压缩,避免整个压缩任务失败——所以正常情况下压缩不会因图片不可用而失败。
+
+**Q3:dsh-aux 需要配置模型才能用吗?**
+
+A:不需要。dsh-aux 是**零配置**的:不配任何模型也能跑,辅助任务会自动回退到会话主模型。你可以随时通过设置页或 `/aux model <task> <provider/model>` 为某个任务指定专用模型。
+
+## 相关项目
+
+- [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main) — Anchored Standard 预设的设计与实现
+- [dsh-vision-toolkit](https://github.com/Anionex/dsh-vision-toolkit) — 社区视觉工具集
+- [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete) — 会话删除插件(删除会话时自动清理无引用图片)
+- [SeekMaid-pet](https://github.com/DoloresCaritasAngelus/SeekMaid-pet) — SeekMaid 电子宠物
 
 ## 文档
 

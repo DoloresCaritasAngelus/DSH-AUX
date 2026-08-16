@@ -1,9 +1,35 @@
+[English](README.en.md) | **简体中文**
+
+<div align="center"><img src="../assets/deepseek-girl.png" alt="AUX" width="120" /></div>
+
+> 嗨~ 我是 AUX,主人的辅助模型小助手 💙 视觉、网页、压缩这些旁路任务都交给我啦,主人专注对话就好哦!
+
+---
+
 # dsh-aux — 辅助模型系统(Auxiliary Model System for DSH)
 
 > 受 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 辅助模型机制启发、
 > 零历史包袱重做的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(DSH) 插件:
 > 统一辅助 LLM 路由服务 + 三个辅助任务工具,给主 agent 使用。
 > **不建立子智能体、不做会话协同**——辅助任务(视觉、网页提取、文本压缩)由独立辅助 LLM 完成。
+
+[![版本](https://img.shields.io/badge/version-0.1.4-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+[![测试](https://img.shields.io/badge/tests-87-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+[![许可证](https://img.shields.io/badge/license-MIT-green)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+
+## 目录
+
+- [特性](#特性)
+- [环境要求](#环境要求)
+- [安装](#安装)
+- [使用](#使用)
+- [配置](#配置)
+- [集成组件与配套](#集成组件与配套)
+- [测试](#测试)
+- [兼容性与依赖](#兼容性与依赖)
+- [常见问题(FAQ)](#常见问题faq)
+- [相关项目](#相关项目)
+- [许可证与致谢](#许可证与致谢)
 
 ## 特性
 
@@ -24,9 +50,12 @@
 - **零配置可用**:未配置任何任务时,辅助任务自动使用会话主模型;想用专用辅助模型
   在设置页按需配置(下拉只列本机 active 供应商)。
 
-## 安装
+## 环境要求
 
-要求:DSH ≥ 0.1.0-rc.6,Node ≥ 20。
+- **DSH** ≥ 0.1.0-rc.6
+- **Node.js** ≥ 20
+
+## 安装
 
 ### 方式一:一键安装(推荐,含 image-bridge 集成组件)
 
@@ -147,6 +176,39 @@ node --test tests/bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自�
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。
 - **运行时零第三方依赖**:peerDependencies 全部为 DSH 官方包(DSH 环境自带),
   无 `dependencies`;测试同样零依赖、无网络。
+
+## 常见问题(FAQ)
+
+### 1. 为什么"极简 / Anchored Standard"模式下首轮用不了 AUX 工具?
+
+这是 **Anchored Standard Bootstrap 的设计行为**,不是缺陷:首个持久 `tool/call`
+之前只暴露 Minimal 工具对(`bash` + `str_replace_editor`),并剥离自动注入的上下文
+与提示,以便实现"首轮轨迹锚定"。dsh-aux **首轮绝不注入任何 AUX 上下文/提示词**
+(包括含图首轮);首个 `tool/call` 后工具目录开放,AUX 工具出现,并通过
+`agent/pre-step` 注入一次提示,引导模型直接使用 `vision_analyze`。详情见
+[Anchored Standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main)。
+
+### 2. 为什么含图会话压缩时图片会"退化"成文本占位?
+
+AUX 在压缩前会检查图片附件与路由能力:若附件可读且路由支持图片,则保留图像信息;
+若附件已被 GC/清理,或路由为纯文本(不支持图片的模型),则自动把图片降级为文本占位,
+避免 `/compact` 或自动压缩因一张不可用的图片整体失败。建议为含图会话选择真正支持
+图片的模型(例如 `volcengine-ark/doubao-seed-2.1-turbo`),并适当调大
+`compaction.timeoutMs`(超大输入时默认 60s 容易超时失败)。
+
+### 3. 为什么删除会话时图片会被清理?
+
+这是**会话图片生命周期管理**的一部分:删除会话时自动清理其无引用图片(事件驱动 +
+冷会话对账),共享图片保留、归档不误删;配合社区插件
+[dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete)
+提供删除入口,两者零代码依赖、事件级协同。
+
+## 相关项目
+
+- [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main):Anchored Standard 预设,首轮轨迹锚定与极简 Bootstrap。
+- [dsh-vision-toolkit](https://github.com/Anionex/dsh-vision-toolkit):视觉工具集。
+- [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete):会话删除插件,与 dsh-aux 事件级协同清理图片。
+- [SeekMaid-pet](https://github.com/DoloresCaritasAngelus/SeekMaid-pet):桌面宠物 SeekMaid(DeepSeek 娘)。
 
 ## 许可证与致谢
 

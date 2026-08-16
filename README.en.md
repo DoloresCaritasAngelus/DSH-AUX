@@ -1,8 +1,40 @@
-# dsh-aux — Auxiliary Model System for DSH
-
 **English** | [简体中文](README.md)
 
+<div align="center"><img src="assets/deepseek-girl.png" alt="AUX" width="120" /></div>
+
+> Hi~ I'm AUX, your auxiliary model little helper 💙
+> The main model stays focused on the chat; I take care of images, web pages, and compressing long text!
+> Whenever you need me, just call me directly～
+
+<div align="center">
+
+![Version](https://img.shields.io/badge/version-v0.1.4-blue)
+![Tests](https://img.shields.io/badge/tests-87-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)
+
+</div>
+
+# dsh-aux — Auxiliary Model System for DSH
+
 > Give the main agent a "co-pilot": **vision analysis, web extraction, and long-text compression** are handled by a separate auxiliary LLM, so the main model stays focused on the conversation. No sub-agents, no session orchestration — install and it just works, zero configuration.
+
+---
+
+## Table of Contents
+
+- [Why](#why)
+- [Key Features](#key-features)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+- [How It Works](#how-it-works)
+- [Compatibility & Dependencies](#compatibility--dependencies)
+- [FAQ](#faq)
+- [Related Projects](#related-projects)
+- [Documentation](#documentation)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
 
 ---
 
@@ -29,6 +61,12 @@ Conversation models are getting stronger, but "look at this image", "read this p
 | `vision_analyze` | Image analysis (multi-image parallel) | "What's in this image?" "Read the chart values" "Compare two images" |
 | `web_extract` | Fetch + summarize web pages | "Summarize this page" "Answer from this page" |
 | `compress_text` | Long-text compression (preserves numbers/paths/identifiers) | Compress logs, docs, or context |
+
+## Requirements
+
+- **DSH** ≥ 0.1.0-rc.6
+- **Node.js** ≥ 20
+- **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages (shipped with the environment); there is no `dependencies` block, so no extra third-party runtime packages are needed.
 
 ## Quick Start
 
@@ -103,6 +141,27 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 ### Minimal / Anchored Standard Compatibility
 
 Before the first durable `tool/call`, these presets expose only the Minimal tool pair and strip auto-injected context — that is the core of their first-round trajectory anchoring. dsh-aux **never injects any AUX context/prompt on the first round**; after the first `tool/call`, the catalog opens, AUX tools appear, and a one-time `agent/pre-step` reminder guides the model to use `vision_analyze` directly instead of spawning a sub-agent. See [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main) for the Anchored Standard design.
+
+## FAQ
+
+**Q1: Why are AUX tools like `vision_analyze` not visible in the first round of the Minimal / Anchored Standard presets?**
+
+A: Because of the "first-round trajectory anchoring" mechanism of these presets: before the first durable `tool/call`, only the Minimal tool pair is exposed and auto-injected context is stripped out. dsh-aux respects this — it **never injects any AUX context/prompt on the first round** and does not expose its tools early. After the first `tool/call`, the catalog opens, `vision_analyze` / `web_extract` / `compress_text` appear, and a one-time `agent/pre-step` reminder guides direct use.
+
+**Q2: Why did `/compact` fail with an image session?**
+
+A: If the image block in the replayed messages points to an attachment object that has already been GC'd/cleaned (reporting `Attachment object is missing.`), or none of the available compaction routes support image input, the images are unusable for compaction. In that case dsh-aux **degrades the images to text placeholders** (the actual placeholder is generated in Chinese, e.g. `[图片: name (type, WxH) — 未纳入压缩摘要]`) and continues compacting through AUX, so the compaction task does not fail outright.
+
+**Q3: Does dsh-aux require configuring models?**
+
+A: No. dsh-aux is **zero-config**: it works without configuring any model, and auxiliary tasks automatically fall back to the session's main model. You can assign a dedicated model to any task at any time via the settings page or `/aux model <task> <provider/model>`.
+
+## Related Projects
+
+- [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main) — design & implementation of the Anchored Standard preset
+- [dsh-vision-toolkit](https://github.com/Anionex/dsh-vision-toolkit) — community vision toolkit
+- [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete) — session-delete plugin (cleans up unreferenced images on session delete)
+- [SeekMaid-pet](https://github.com/DoloresCaritasAngelus/SeekMaid-pet) — SeekMaid electronic pet
 
 ## Documentation
 

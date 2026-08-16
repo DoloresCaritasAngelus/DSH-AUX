@@ -2,8 +2,9 @@
 
 ## 未发布 — 文档体验
 
-- 重写根 README,提升可读性(特性表格、命令表格、更清晰的分层)
-- 新增英文版 `README.en.md`,中英文顶部互链可切换
+- 重写根 README 与插件包 README,提升可读性(特性表格、命令表格、TOC、FAQ、相关项目)
+- 新增英文版 `README.en.md` 与 `dsh-aux/README.en.md`,中英文顶部互链可切换
+- README 开头加入 AUX 可爱向自我介绍,并使用 SeekMaid 桌宠形象图
 
 ## 0.1.4(2026-08-16)— 压缩桥接图片降级与 Bootstrap 预设引导
 
