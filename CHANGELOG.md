@@ -17,7 +17,11 @@
   导致重启后所有 `aux/llm-call` 事件写入被永久降级禁用。现改为
   `sessionPatchCandidates()` 多候选检测(symlink 部署 / realpath 源码树 /
   上级 node_modules),任一候选命中补丁标记即启用;新增 3 项回归测试
-- 测试增至 80 项(aux)
+- **修复 vision 等调用事件被静默丢弃**: 未传 `purpose` 的任务(如 vision)
+  写入的事件 data 含 undefined 字段,dsh-session 的 JSON 快照(walkJsonValue)
+  拒绝任何 undefined 属性值 → append 抛错被吞 → 事件丢失。现于事件构造前
+  剥离 undefined 字段,防御所有调用方;新增回归测试
+- 测试增至 81 项(aux)
 
 ## 0.1.2(2026-08-15)— 多图与修复
 

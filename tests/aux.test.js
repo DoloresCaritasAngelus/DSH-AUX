@@ -1408,6 +1408,36 @@ test('事件记录: dsh-session 无 ignorable 补丁时降级不写事件(防会
   assert.equal(ignorableOpts?.ignorable, true);
 });
 
+test('事件记录: 无 purpose 的调用(如 vision)写入的事件数据不含 undefined 字段', async () => {
+  const { ctx } = await makeHarness({
+    tasks: { vision: { provider: 'volcengine-ark', model: 'doubao-seed-2.1-turbo' } }
+  });
+  const appends = [];
+  const session = {
+    id: 'sess-undef',
+    events: [],
+    append(...args) {
+      appends.push(args);
+      this.events.push({ type: args[0], data: args[1] });
+    }
+  };
+  // vision 调用不传 purpose(request.purpose 为 undefined)——
+  // 曾经导致 data.purpose = undefined,dsh-session 的 JSON 快照
+  // (walkJsonValue 拒绝任何 undefined 属性值)使 append 抛错被吞,事件丢失。
+  await ctx.auxLlm.call('vision', {
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'q' }], id: 'm1', source: { kind: 'plugin', plugin: 'test' } }],
+    session,
+    inputChars: 1
+  });
+  assert.equal(appends.length, 1, 'vision 调用应写入事件');
+  const data = appends[0][1];
+  for (const value of Object.values(data)) {
+    assert.notEqual(value, void 0, '事件 data 不允许任何 undefined 字段值(否则 dsh-session 拒绝序列化)');
+  }
+  assert.equal(data.task, 'vision');
+  assert.equal('purpose' in data, false, '未传 purpose 时字段应被剥离而非保留为 undefined');
+});
+
 test('事件记录: sessionPatchCandidates 覆盖 symlink 与 realpath 两种部署布局', () => {
   // symlink 布局:node_modules/@dolorescaritasangelus/dsh-aux/src/index.js(import.meta.url 保留 symlink 路径)
   const symlink = sessionPatchCandidates('file:///x/node_modules/@dolorescaritasangelus/dsh-aux/src/index.js');

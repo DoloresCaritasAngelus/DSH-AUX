@@ -619,7 +619,16 @@ export class AuxLlmService extends Service {
       return;
     }
     try {
-      session.append(AUX_CALL_EVENT, data, void 0, { ignorable: true });
+      // Drop undefined fields before the event is snapshotted: dsh-session's
+      // JSON snapshot (walkJsonValue) rejects ANY undefined property value as
+      // "non-lossless JSON", which would make append() throw and silently
+      // drop the event. Optional request fields (purpose, errorCode, …) are
+      // absent from most calls, so strip them here defensively.
+      const clean = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (value !== void 0) clean[key] = value;
+      }
+      session.append(AUX_CALL_EVENT, clean, void 0, { ignorable: true });
     } catch {
       /* event logging must never fail the call */
     }
