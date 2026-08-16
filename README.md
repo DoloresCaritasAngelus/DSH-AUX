@@ -62,7 +62,7 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
 
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。
 - **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
-- **测试零依赖**:`node --test tests/aux.test.js`(83 项)+ `node --test tests/memory-race.test.js`(1 项,并发写回归)+ `node --test tests/bridge.test.js`(4 项)。
+- **测试零依赖**:`node --test tests/aux.test.js`(87 项)+ `node --test tests/memory-race.test.js`(1 项,并发写回归)+ `node --test tests/bridge.test.js`(4 项)。
 - **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行;仅装插件本体的需单独跑 `bridge/apply-patch.mjs`)。它让**纯文本主模型也能直接粘贴图片**且 UI 保留缩略图(多模态模型原生看图不受影响);改 node_modules 核心包,`npm update` 后重跑一次即可。`/aux status` 会报告它的状态。
 - **settings 动态暴露**(同样由 install.sh 应用):设置页读写 aux 配置是插件**原生能力**——dsh-aux 注册 namespace 时声明 `exposedToWeb`,由 dsh-settings 的 `listExposed()` + api-proxy 动态合并实现;对应补丁已随本仓库 `bridge/` 落地,不依赖官方 deepseek-harness 合入。
 - **会话事件注册通道(必装补丁)**:dsh-aux 向会话写 `aux/llm-call` 事件;DSH 持久化读链对白名单外事件**拒绝整个日志**(官方注释:out-of-repo 插件事件无注册通道,deferred)。install.sh 中的 `patch-session-ignorable.mjs` 补齐 append 的 `ignorable` 写入入口 + 白名单放行;**未装该补丁时,dsh-aux 自动降级为不写事件**(保护会话日志),`/aux status` 会显示状态。`npm update` 后需重跑。
@@ -80,10 +80,14 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
   配置了专用会话压缩模型后,dsh-aux 会把 `dsh-compaction-basic` 的摘要调用改走
   `ctx.auxLlm` 的 `compaction` 任务,复用 AUX 的超时/并发/冷却/降级/事件记录。
   这尤其解决“会话里有图片、但摘要模型被路由到纯文本版本”导致压缩不可用的问题。
-- **极简 / Anchored Standard 等预设的 Bootstrap 限制**:这类预设首轮可能只暴露
-  `shell/read` 两个工具,`vision_analyze` 要等首个 durable tool call 后才进入完整
-  工具目录。若希望首轮就能直接识图,需要在 preset 的 `commonTools` 中加入
-  `vision_analyze`(或使用非 Bootstrap 的 Standard 预设)。
+- **极简 / Anchored Standard 等预设的 Bootstrap 是设计行为**:首个持久 `tool/call`
+  前只暴露 Minimal 工具对(`bash` + `str_replace_editor`),且会剥离自动注入的
+  上下文与提示——这是这些预设实现“首轮轨迹锚定”的核心机制,不是缺陷。dsh-aux
+  **首轮绝不注入任何 AUX 上下文/提示词**(包括含图首轮),并在极简模式下把自己的
+  三个工具从 assembled 目录中过滤掉;首个 `tool/call` 后目录开放,AUX 工具出现,
+  通过 `agent/pre-step` 注入一次提示,引导模型直接使用 `vision_analyze`,避免为
+  看图创建子代理。`vision_analyze` 是否常驻取决于 preset 的 resident 目录/
+  `dev_tool_search` 解锁策略。
 
 ## 文档
 

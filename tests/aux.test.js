@@ -358,6 +358,135 @@ test('装配: guideText 为空字符串时禁用引导段', async () => {
   assert.equal(sections.some((s) => s.name === 'aux:tools-guide'), false, '空 guideText 不应注册引导段');
 });
 
+test('Bootstrap 预设引导: Anchored Standard / minimal 首轮不注入,晋升后注入提醒', async () => {
+  const { ctx } = await makeHarness();
+  const service = ctx.auxLlm;
+  const anchored = {
+    session: { header: { agentPreset: 'anchored-standard' }, events: [] }
+  };
+  const minimal = {
+    session: { header: { agentPreset: 'minimal' }, events: [] }
+  };
+  const standard = {
+    session: { header: { agentPreset: 'standard' }, events: [] }
+  };
+
+  // systemPrompt section 对 Bootstrap 预设返回空串(complete persona 下本来也会被丢弃)
+  assert.equal(service._auxToolsGuide({ agent: anchored }), '');
+  assert.equal(service._auxToolsGuide({ agent: minimal }), '');
+  assert.ok(service._auxToolsGuide({ agent: standard }).includes('vision_analyze'));
+
+  // 首轮(无 tool/call)不注入;极简和 Anchored Standard 都走 pre-step 通道
+  assert.equal(service._shouldUsePreStepAuxGuide(anchored), true);
+  assert.equal(service._isAuxGuidePromoted(anchored), false);
+  assert.equal(service._shouldUsePreStepAuxGuide(minimal), true, '极简模式晋升后也注入 AUX 提醒');
+  assert.equal(service._shouldUsePreStepAuxGuide(standard), false);
+
+  // 晋升后注入一次,文案包含直接使用 vision_analyze
+  anchored.session.events.push({ type: 'tool/call', data: { name: 'bash' } });
+  minimal.session.events.push({ type: 'tool/call', data: { name: 'bash' } });
+  assert.equal(service._isAuxGuidePromoted(anchored), true);
+  assert.match(service._auxPreStepReminderText(anchored), /Anchored Standard/);
+  assert.match(service._auxPreStepReminderText(anchored), /vision_analyze/);
+  assert.match(service._auxPreStepReminderText(minimal), /极简模式/);
+
+  // 自定义 guideText 时不走 pre-step 通道
+  const { ctx: customCtx } = await makeHarness({ guideText: '自定义引导' });
+  const customService = customCtx.auxLlm;
+  assert.equal(customService._shouldUsePreStepAuxGuide(anchored), false);
+});
+
+test('Bootstrap 预设引导: minimal 目录过滤掉 AUX 工具,Anchored Standard 不过滤', async () => {
+  const { ctx } = await makeHarness();
+  const service = ctx.auxLlm;
+  const minimalAgent = { session: { header: { agentPreset: 'minimal' }, events: [] } };
+  const anchoredAgent = { session: { header: { agentPreset: 'anchored-standard' }, events: [] } };
+  const allTools = [
+    { name: 'bash' },
+    { name: 'str_replace_editor' },
+    { name: 'vision_analyze' },
+    { name: 'web_extract' },
+    { name: 'compress_text' }
+  ];
+  const assembly = { tools: allTools, sections: [] };
+  const next = () => assembly;
+
+  const minimalAssembled = await ctx.waterfall('system-prompt/assemble', assembly, { agent: minimalAgent }, next);
+  const minimalNames = minimalAssembled.tools.map((t) => t.name);
+  assert.deepEqual(minimalNames, ['bash', 'str_replace_editor'], 'minimal 首轮应只保留非 AUX 工具');
+  assert.ok(!minimalNames.includes('vision_analyze'));
+
+  // 首个 tool/call 后 minimal 目录开放,AUX 工具重新出现
+  minimalAgent.session.events.push({ type: 'tool/call', data: { name: 'bash' } });
+  const minimalPromoted = await ctx.waterfall('system-prompt/assemble', assembly, { agent: minimalAgent }, next);
+  const minimalPromotedNames = minimalPromoted.tools.map((t) => t.name);
+  assert.deepEqual(minimalPromotedNames, allTools.map((t) => t.name), 'minimal 晋升后应开放 AUX 工具');
+  assert.ok(minimalPromotedNames.includes('vision_analyze'));
+
+  const anchoredAssembled = await ctx.waterfall('system-prompt/assemble', assembly, { agent: anchoredAgent }, next);
+  assert.equal(anchoredAssembled.tools.length, allTools.length, 'Anchored Standard 不在此处过滤工具');
+});
+
+test('Bootstrap 预设引导: pre-step 实际注入一次,晋升前不注入', async () => {
+  const { ctx } = await makeHarness();
+  const agent = {
+    session: {
+      id: 'sess-anchored-prestep',
+      header: { agentPreset: 'anchored-standard' },
+      events: []
+    }
+  };
+  const next = () => ({ kind: 'enter', messages: [] });
+
+  // 晋升前:不注入
+  const before = await ctx.waterfall('agent/pre-step', { agent }, next);
+  assert.equal(before.messages.some((m) => m.source?.kind === 'aux-guide'), false, '首轮不应注入 AUX 提醒');
+
+  // 晋升后:注入一次
+  agent.session.events.push({ type: 'tool/call', data: { name: 'bash' } });
+  const after = await ctx.waterfall('agent/pre-step', { agent }, next);
+  assert.equal(after.messages.some((m) => m.source?.kind === 'aux-guide'), true, '晋升后应注入 AUX 提醒');
+  assert.match(after.messages.find((m) => m.source?.kind === 'aux-guide').content[0].text, /vision_analyze/);
+
+  // 同会话第二次:不重复注入
+  const second = await ctx.waterfall('agent/pre-step', { agent }, next);
+  assert.equal(second.messages.some((m) => m.source?.kind === 'aux-guide'), false, '每个会话只注入一次');
+});
+
+test('Bootstrap 预设引导: 首轮含图也不注入,晋升后才注入可用提醒', async () => {
+  const { ctx } = await makeHarness();
+  const agent = {
+    session: {
+      id: 'sess-anchored-image',
+      header: { agentPreset: 'anchored-standard' },
+      events: []
+    }
+  };
+  const imageMessage = {
+    role: 'user',
+    content: [{ type: 'image', attachment: { attachmentId: 'sha256:dead', mediaType: 'image/png' } }],
+    id: 'img1',
+    source: { kind: 'user' }
+  };
+  const next = () => ({ kind: 'enter', messages: [imageMessage] });
+
+  // 首轮即使有图也绝不注入(保留极简 / Anchored Standard 的锚定)
+  const first = await ctx.waterfall('agent/pre-step', { agent }, next);
+  assert.equal(first.messages.some((m) => m.source?.kind === 'aux-guide'), false, '首轮含图也不应注入 AUX 提醒');
+
+  // 晋升后:注入“现在可用”的提醒
+  agent.session.events.push({ type: 'tool/call', data: { name: 'bash' } });
+  const promoted = await ctx.waterfall('agent/pre-step', { agent }, next);
+  const promotedGuides = promoted.messages.filter((m) => m.source?.kind === 'aux-guide');
+  assert.equal(promotedGuides.length, 1, '晋升后应注入可用提醒');
+  assert.match(promotedGuides[0].content[0].text, /晋升后工具目录已开放/);
+  assert.match(promotedGuides[0].content[0].text, /vision_analyze/);
+
+  // 同会话第二次:不重复注入
+  const second = await ctx.waterfall('agent/pre-step', { agent }, next);
+  assert.equal(second.messages.some((m) => m.source?.kind === 'aux-guide'), false, '每个会话只注入一次');
+});
+
 test('resolveConfig: guideText 必须为字符串', () => {
   assert.throws(() => resolveConfig({ guideText: 42 }), /guideText must be a string/);
   const withGuide = resolveConfig({ guideText: '自定义引导' });

@@ -61,6 +61,8 @@ export const AUX_TIMEOUT_CODE = "AUX_TIMEOUT";
 export const AUX_CALL_EVENT = "aux/llm-call";
 /** Projection key exposing the latest per-task aux call snapshot. */
 export const AUX_STATUS_KEY = "aux-status";
+/** Tool names registered by dsh-aux (hidden from the `minimal` preset). */
+const AUX_TOOL_NAMES = Object.freeze(["vision_analyze", "web_extract", "compress_text"]);
 /** Interval (ms) for reconciling the session-to-image ownership map against
  * the live session set. Cold sessions (not attached in memory after a
  * restart) never emit session/disposed when deleted, so the event-driven
@@ -231,11 +233,16 @@ export class AuxLlmService extends Service {
     // directly instead of spawning a sub-agent for image analysis. An empty
     // guideText disables the section (escape hatch).
     this.guideText = resolved.guideText;
+    // Sessions that already received the once-per-session pre-step reminder
+    // for Bootstrap presets (Minimal / Anchored Standard). The system-prompt
+    // section is suppressed by those presets' complete persona, so the AUX
+    // guidance is injected as a step message after promotion instead.
+    this._auxGuideInjectedSessions = new Set();
     if (this.guideText !== "") {
       ctx.systemPrompt.section({
         name: "aux:tools-guide",
         order: 110,
-        text: () => this.guideText ?? AUX_TOOLS_GUIDE
+        text: (context) => this._auxToolsGuide(context)
       });
     }
     installSettingsSection(ctx, AUX_SETTINGS_NAMESPACE, AUX_SETTINGS_SCHEMA, projectSettings({}), {
@@ -303,6 +310,43 @@ export class AuxLlmService extends Service {
         handler: ({ agent, rawInput }) => this._handleCommand(agent, rawInput)
       });
     });
+    // Minimal preset must keep its exact two-tool surface during the bootstrap
+    // phase (before the first durable tool/call) to preserve V4F/V4P
+    // post-training behavior. dsh-aux tools are registered globally, so remove
+    // them from the assembled catalog while the session is still unpromoted.
+    // After the first tool/call the catalog opens like Anchored Standard, so
+    // the filter stops applying.
+    ctx.on("system-prompt/assemble", async (_assembly, context, next) => {
+      const assembled = await next();
+      if (!this._isMinimalPreset(context?.agent)) return assembled;
+      if (this._isAuxGuidePromoted(context?.agent)) return assembled;
+      if (!Array.isArray(assembled.tools)) return assembled;
+      const filtered = assembled.tools.filter((tool) => !AUX_TOOL_NAMES.includes(tool.name));
+      return filtered.length === assembled.tools.length ? assembled : { ...assembled, tools: filtered };
+    });
+    // Minimal / Anchored Standard presets use a complete persona, which
+    // suppresses the aux:tools-guide system-prompt section entirely. Inject a
+    // compact reminder as a pre-step message ONLY after the session has
+    // produced a durable tool call (promotion): the model then knows AUX tools
+    // were not available on the first round, and that image analysis should go
+    // through vision_analyze directly instead of spawning a sub-agent. The
+    // first round is deliberately left completely untouched — those presets
+    // anchor V4F/V4P on the exact Minimal tool pair and system prompt, so any
+    // first-round injection would break their post-training fit.
+    ctx.on("agent/pre-step", async ({ agent }, next) => {
+      const decision = await next();
+      if (!this._shouldUsePreStepAuxGuide(agent)) return decision;
+      if (!this._isAuxGuidePromoted(agent)) return decision;
+      if (decision.kind === "reject" || !Array.isArray(decision.messages)) return decision;
+      const sessionId = agent?.session?.id;
+      if (sessionId === void 0 || this._auxGuideInjectedSessions.has(sessionId)) return decision;
+      this._auxGuideInjectedSessions.add(sessionId);
+      const reminder = createUserMessage({
+        content: [{ type: "text", text: this._auxPreStepReminderText(agent) }],
+        source: { kind: "aux-guide" }
+      });
+      return { ...decision, messages: [...decision.messages, reminder] };
+    });
   }
 
   /** Recomputed merged task config from the live settings source. */
@@ -317,6 +361,75 @@ export class AuxLlmService extends Service {
     }
     this._merged = merged;
     this.fallbackToMain = settings.fallbackToMain ?? true;
+  }
+
+  /**
+   * Dynamic system-prompt guide for the current agent.
+   *
+   * For ordinary presets (standard, unknown) the full AUX tool guide is
+   * injected through the `aux:tools-guide` section. For Bootstrap presets
+   * (Minimal / Anchored Standard) the section is suppressed by their complete
+   * persona anyway, so return an empty string here and let the pre-step
+   * reminder carry the guidance after promotion.
+   */
+  _auxToolsGuide(context) {
+    if (this.guideText !== void 0 && this.guideText !== "") return this.guideText;
+    if (this._isBootstrapPreset(context?.agent)) return "";
+    return AUX_TOOLS_GUIDE;
+  }
+
+  /** Whether this agent runs the `minimal` preset. */
+  _isMinimalPreset(agent) {
+    return agent?.session?.header?.agentPreset === "minimal";
+  }
+
+  /** Whether this agent runs a Minimal-like / Anchored Standard preset. */
+  _isBootstrapPreset(agent) {
+    const preset = agent?.session?.header?.agentPreset;
+    return typeof preset === "string" && (
+      preset === "minimal" ||
+      preset === "anchored-standard" ||
+      preset === "zero-anchored-standard" ||
+      preset === "whoami-standard"
+    );
+  }
+
+  /** Whether this agent runs an Anchored Standard family preset. */
+  _isAnchoredPreset(agent) {
+    const preset = agent?.session?.header?.agentPreset;
+    return preset === "anchored-standard" ||
+      preset === "zero-anchored-standard" ||
+      preset === "whoami-standard";
+  }
+
+  /** Whether the pre-step reminder channel should be used at all. */
+  _shouldUsePreStepAuxGuide(agent) {
+    // Minimal and Anchored Standard both open the catalog after the first
+    // durable tool/call, so both receive the post-promotion AUX reminder.
+    if (!this._isBootstrapPreset(agent)) return false;
+    // A user-supplied guideText remains the user's explicit choice; do not
+    // silently duplicate it through the pre-step channel.
+    return this.guideText === void 0 || this.guideText === "";
+  }
+
+  /**
+   * Promotion gate for the pre-step reminder. The installed Anchored Standard
+   * preset promotes on the first durable `tool/call`; requiring a tool call is
+   * also safe for newer resident-directory variants because it means the model
+   * has actually started using tools and the catalog has been expanded.
+   */
+  _isAuxGuidePromoted(agent) {
+    return Array.isArray(agent?.session?.events) &&
+      agent.session.events.some((event) => event.type === "tool/call");
+  }
+
+  /** Mode-aware reminder text injected once after Bootstrap promotion. */
+  _auxPreStepReminderText(agent) {
+    const preset = agent?.session?.header?.agentPreset;
+    if (preset === "minimal") {
+      return "辅助模型提示(dsh-aux):当前是极简模式。首轮 AUX 工具不可用;后续轮次中,需要查看/分析图片或 GIF 时,请直接使用 vision_analyze 工具,不要为此创建子代理。";
+    }
+    return "辅助模型提示(dsh-aux):当前是 Anchored Standard。首轮 AUX 工具不可用;晋升后工具目录已开放,需要查看/分析图片或 GIF 时,请直接使用 vision_analyze 工具,不要为此创建子代理。";
   }
 
   /** Settings schema snapshot for UIs. */

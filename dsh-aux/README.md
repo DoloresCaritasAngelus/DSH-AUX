@@ -124,15 +124,19 @@ const result = await ctx.auxLlm.call("compress", {
   删除插件调用 `sessions.detachEntered()` → 平台广播 `session/disposed` →
   dsh-aux 自动清理该会话的无引用图片(另有 5 分钟对账兜底)。没有它,
   dsh-aux 其余能力完全不受影响。
-- **极简 / Anchored Standard Bootstrap 兼容**:这类预设首轮只暴露 `shell/read`,
-  `vision_analyze` 要等首个 durable tool call 后才进入完整工具目录。若希望首轮
-  直接识图,可在 preset 的 `commonTools` 中加入 `vision_analyze`,或使用非
-  Bootstrap 的 Standard 预设。
+- **极简 / Anchored Standard Bootstrap 是设计行为**:首个持久 `tool/call` 前只
+  暴露 Minimal 工具对(`bash` + `str_replace_editor`),并剥离自动注入的上下文与
+  提示——这是这些预设实现“首轮轨迹锚定”的核心,不是缺陷。dsh-aux **首轮绝不注入
+  任何 AUX 上下文/提示词**(包括含图首轮),并在极简模式下把自己的三个工具从
+  assembled 目录中过滤掉;首个 `tool/call` 后目录开放,AUX 工具出现,通过
+  `agent/pre-step` 注入一次提示,引导模型直接使用 `vision_analyze`,避免为看图
+  创建子代理。`vision_analyze` 是否常驻取决于 preset 的 resident 目录/
+  `dev_tool_search` 解锁策略。
 
 ## 测试
 
 ```sh
-node --test tests/aux.test.js        # 83 项,零依赖
+node --test tests/aux.test.js        # 87 项,零依赖
 node --test tests/memory-race.test.js # 1 项,并发写回归
 node --test tests/bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自动跳过)
 ```

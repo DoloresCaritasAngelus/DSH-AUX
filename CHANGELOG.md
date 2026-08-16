@@ -10,6 +10,19 @@
   - 附件缺失/损坏或候选路由纯文本时,以 `[图片: name (type, WxH) — 未纳入压缩摘要]`
     占位,避免整个压缩任务失败
 - 新增 2 项回归测试(图片附件缺失降级、候选路由均不支持图片时直接文本化)
+- **Bootstrap 预设(极简 / Anchored Standard)引导**:
+  - **首轮绝不注入任何 AUX 上下文/提示词**(包括含图首轮),保留极简 / Anchored
+    Standard 对 V4F/V4P 的锚定;
+  - **极简模式**:首个持久 `tool/call` 前,dsh-aux 从 assembled 工具目录中过滤掉
+    自己的三个工具(`vision_analyze` / `web_extract` / `compress_text`),保持极简
+    两工具暴露;首个 `tool/call` 后目录开放,AUX 工具出现,并与 Anchored Standard
+    一样通过 `agent/pre-step` 注入一次晋升提醒;
+  - **Anchored Standard**:首个持久 `tool/call` 后目录开放,通过 `agent/pre-step`
+    注入一次提示:“首轮 AUX 工具不可用;后续看图请直接使用 vision_analyze,
+    不要创建子代理”;
+  - systemPrompt 的 `aux:tools-guide` 在 complete persona 下本就不生效,因此改用
+    pre-step 通道覆盖 Minimal / Anchored Standard。
+- 新增 4 项回归测试(引导逻辑、minimal 首轮过滤/晋升后开放、pre-step 实际注入一次、首轮含图也不注入)
 
 ## 0.1.3(2026-08-16)— 会话压缩桥接与事件检测修复
 
