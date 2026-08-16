@@ -83,7 +83,7 @@ After restarting DSH:
 
 1. Send an image to the agent — it will use `vision_analyze` to describe it (text-only main models work too; image-bridge is included);
 2. Run `/aux status` to see per-task routes;
-3. Want a dedicated vision model? `/aux model vision volcengine-ark/doubao-seed-2.0-lite`.
+3. Want a dedicated vision model? `/aux model vision <provider>/mimo-v2.5`.
 
 ## Usage
 

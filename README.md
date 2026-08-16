@@ -83,7 +83,7 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
 
 1. 发一张图片给 agent,它会用 `vision_analyze` 描述给你(纯文本主模型也能发——image-bridge 已集成);
 2. 输入 `/aux status` 查看各任务路由;
-3. 想让视觉走专用模型?`/aux model vision volcengine-ark/doubao-seed-2.0-lite`。
+3. 想让视觉走专用模型?`/aux model vision <provider>/mimo-v2.5`。
 
 ## 使用指南
 

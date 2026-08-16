@@ -111,10 +111,10 @@ global: `fallbackToMain` (automatically fall back to the main model when the aux
 Route resolution order: explicit config (settings/plugin config) > if unconfigured → session main model.
 Failure cooldown: 3 consecutive failures for the same provider+model → 60s cooldown.
 
-The `compaction` task: once provider/model is configured, the session compaction bridge is enabled — the `dsh-compaction-basic` summarization call goes through `ctx.auxLlm`. For image-bearing sessions, it is recommended to choose a model that truly supports images (e.g. `volcengine-ark/doubao-seed-2.1-turbo`).
+The `compaction` task: once provider/model is configured, the session compaction bridge is enabled — the `dsh-compaction-basic` summarization call goes through `ctx.auxLlm`. For image-bearing sessions, it is recommended to choose a model that truly supports images and has enough context (e.g. `mimo-v2.5` or `minimax-m3`).
 
 ```sh
-/aux model compaction volcengine-ark/doubao-seed-2.1-turbo
+/aux model compaction <provider>/mimo-v2.5
 ```
 
 > Note: native `dsh-compaction-basic` performs a **single full summarization**, with no chunking/progressive capability.
@@ -152,7 +152,7 @@ This is **by design in the Anchored Standard Bootstrap**, not a bug: before the 
 
 ### 2. Why do images get "degraded" to text placeholders when compacting an image-bearing session?
 
-Before compacting, AUX checks the image attachments and routing capability: if the attachment is readable and the route supports images, the image information is kept; if the attachment has been GC'd/cleaned, or the route is text-only (a model that doesn't support images), the image is automatically degraded to a text placeholder to prevent `/compact` or auto compaction from failing entirely because of a single unavailable image. It is recommended to choose a model that truly supports images for image-bearing sessions (e.g. `volcengine-ark/doubao-seed-2.1-turbo`) and to increase `compaction.timeoutMs` accordingly (the default 60s tends to time out on very large inputs).
+Before compacting, AUX checks the image attachments and routing capability: if the attachment is readable and the route supports images, the image information is kept; if the attachment has been GC'd/cleaned, or the route is text-only (a model that doesn't support images), the image is automatically degraded to a text placeholder to prevent `/compact` or auto compaction from failing entirely because of a single unavailable image. It is recommended to choose a model that truly supports images and has enough context for image-bearing sessions (e.g. `mimo-v2.5` or `minimax-m3`) and to increase `compaction.timeoutMs` accordingly (the default 60s tends to time out on very large inputs).
 
 ### 3. Why are images cleaned up when a session is deleted?
 

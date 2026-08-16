@@ -119,10 +119,10 @@ const result = await ctx.auxLlm.call("compress", {
 
 `compaction` 任务:配置 provider/model 后即启用会话压缩桥接——原生
 `dsh-compaction-basic` 的摘要调用会通过 `ctx.auxLlm` 执行。建议为含图会话选择
-真正支持图片的模型(例如 `volcengine-ark/doubao-seed-2.1-turbo`)。
+真正支持图片且上下文足够的模型(例如 `mimo-v2.5` 或 `minimax-m3`)。
 
 ```sh
-/aux model compaction volcengine-ark/doubao-seed-2.1-turbo
+/aux model compaction <provider>/mimo-v2.5
 ```
 
 > 注意：原生 `dsh-compaction-basic` 是**单次全量摘要**，没有分片/渐进能力。
@@ -193,7 +193,7 @@ node --test tests/bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自�
 AUX 在压缩前会检查图片附件与路由能力:若附件可读且路由支持图片,则保留图像信息;
 若附件已被 GC/清理,或路由为纯文本(不支持图片的模型),则自动把图片降级为文本占位,
 避免 `/compact` 或自动压缩因一张不可用的图片整体失败。建议为含图会话选择真正支持
-图片的模型(例如 `volcengine-ark/doubao-seed-2.1-turbo`),并适当调大
+图片的模型(例如 `mimo-v2.5` 或 `minimax-m3`),并适当调大
 `compaction.timeoutMs`(超大输入时默认 60s 容易超时失败)。
 
 ### 3. 为什么删除会话时图片会被清理?
