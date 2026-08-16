@@ -88,7 +88,7 @@ Then restart DSH.
 
 - Call the tools directly: the main agent will use `vision_analyze` / `web_extract` / `compress_text` when needed.
 - CLI: `/aux status` (routing and recent calls), `/aux model <task> [provider/model]` (view/set), `/aux vision <imagePath> <question...>` (look at an image from the CLI), `/aux test <task>` (self-test), `/aux memory [n]` (image memory), `/aux gc-images [days]` (manually reclaim old attachments).
-- Settings page: Web → Settings → Auxiliary Model.
+- Settings page: Web → Settings → Auxiliary Model. You can configure a model for `vision` / `web_extract` / `compress` / `compaction`; `compaction` is the session-compaction model — once configured, native compaction routes through AUX.
 
 ### Programmatic calls (for other plugins)
 

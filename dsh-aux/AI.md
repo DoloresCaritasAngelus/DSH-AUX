@@ -45,8 +45,6 @@ grep -rn "dsh-aux" ~/.dsh/profiles/*/cordis.patch.yml 2>/dev/null
 ### 方式 B:dsh plugin 命令(仅插件本体)
 
 ```sh
-# 仅当插件已发布到 npm 时可用(当前 DSH-AUX 尚未发布 npm,请用下面的 file: 方式)
-# dsh plugin --profile web add <NAME>
 # 本地源码目录(推荐):
 dsh plugin --profile web add "file:/path/to/dsh-aux"
 ```

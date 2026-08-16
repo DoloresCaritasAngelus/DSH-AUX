@@ -94,7 +94,8 @@ ln -s /path/to/dsh-aux <DSH>/node_modules/@dolorescaritasangelus/dsh-aux
 - 命令行:`/aux status`(路由与最近调用)、`/aux model <task> [provider/model]`(查看/设置)、
   `/aux vision <imagePath> <question...>`(命令行看图)、`/aux test <task>`(自检)、
   `/aux memory [n]`(图片记忆)、`/aux gc-images [days]`(手动回收旧附件)。
-- 设置页:Web → 设置 → 辅助模型。
+- 设置页:Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `compress` / `compaction`
+  配置模型;其中 `compaction` 即会话压缩模型,配置后原生压缩会走 AUX。
 
 ### 编程调用(其他插件)
 

@@ -102,7 +102,7 @@ After restarting DSH:
 
 ### Settings
 
-Web → Settings → Auxiliary Models
+Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model.
 
 ### Programmatic API (for plugin developers)
 
