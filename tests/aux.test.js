@@ -126,6 +126,14 @@ test('mergeTaskConfig: settings 覆盖插件配置,缺省继承', () => {
   assert.equal(merged.maxConcurrency, 4);
 });
 
+test('_semaphoreFor: 并发上限变更时复用同一 semaphore 对象', async () => {
+  const { ctx } = await makeHarness();
+  const a = ctx.auxLlm._semaphoreFor('x', 2);
+  const b = ctx.auxLlm._semaphoreFor('x', 3);
+  assert.equal(a, b, '应复用同一 semaphore,避免在途调用失去计数');
+  assert.equal(a.limit, 3);
+});
+
 test('taskTimeoutMs / taskConcurrency: 缺省值生效', () => {
   assert.equal(taskTimeoutMs({}), DEFAULT_TASK_TIMEOUT_MS);
   assert.equal(taskTimeoutMs({ timeoutMs: 5000 }), 5000);
@@ -1767,6 +1775,20 @@ test('vision_analyze 工具: images 数组并行分析多图,输出 analyses', a
     assert.equal(a.model, 'kimi-k2.7-code');
   }
   assert.equal(streams.length, 3, '应发起 3 次辅助调用');
+});
+
+test('vision_analyze 工具: images 数组超过 maxImagesPerMessage 时拒绝', async () => {
+  const { ctx, tools, streams } = await makeHarness({
+    tasks: { vision: { provider: 'opencode-go', model: 'kimi-k2.7-code' } }
+  });
+  const tool = tools.find((t) => t.name === 'vision_analyze');
+  const exec = { signal: new AbortController().signal, agent: { session: makeSession() } };
+  const images = Array.from({ length: 6 }, (_, i) => ({ imagePath: `/tmp/${i}.png` }));
+  await assert.rejects(
+    () => tool.execute({ images, question: 'q' }, exec),
+    /maxImagesPerMessage/
+  );
+  assert.equal(streams.length, 0, '超限时不应发起辅助调用');
 });
 
 test('vision_analyze 工具: images 与单图参数互斥,条目必须恰有一个来源', async () => {

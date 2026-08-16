@@ -108,6 +108,13 @@ test('resolveCompressionPlan: mode 是软提示,仍保留检测信号', () => {
   assert.equal(typeof plan.profile.signals.code, 'boolean');
 });
 
+test('resolveCompressionPlan: 非法 mode 产生警告并回退 auto', () => {
+  const plan = resolveCompressionPlan({ text: 'ordinary prose', mode: 'bogus' });
+  assert.equal(plan.profile.primary, 'general');
+  assert.equal(plan.modeHint, false);
+  assert.ok(plan.modeWarnings.some((w) => /bogus/.test(w)));
+});
+
 test('resolveCompressionPlan: 短文本显式 hierarchical 不会误报多轮', () => {
   const plan = resolveCompressionPlan({ text: 'short text', hierarchical: true });
   assert.equal(plan.multiRound, false);
@@ -260,6 +267,31 @@ test('compressWithPlan: 超长文本自动启用分层压缩(三轮)', async () 
   assert.equal(result.rounds, 3);
   assert.equal(result.strategy, 'doc');
   assert.equal(result.degraded, false);
+});
+
+test('compressWithPlan: 非法 mode 在结果 warnings 中可见', async () => {
+  const service = {
+    async call() { return { text: 'OK', provider: 'p', model: 'm' }; }
+  };
+  const result = await compressWithPlan(service, { text: 'hello', mode: 'bogus' }, {});
+  assert.ok(result.warnings.some((w) => /unknown mode/.test(w)));
+});
+
+test('compressWithPlan: skeleton 超过安全上限时跳过 refine 并标记 degraded', async () => {
+  const longText = Array.from({ length: 10000 }, (_, i) => `line ${i} with some facts ${i}`).join('\n');
+  let calls = 0;
+  const service = {
+    async call(task, request) {
+      calls += 1;
+      // 前 N 次是分段调用,第 N+1 次是 skeleton,返回超大结果
+      if (calls <= 10) return { text: 'SEG', provider: 'p', model: 'm' };
+      return { text: 'x'.repeat(600000), provider: 'p', model: 'm' };
+    }
+  };
+  const result = await compressWithPlan(service, { text: longText, mode: 'doc' }, {});
+  assert.equal(result.rounds, 2, 'skeleton 超限应停在第二轮');
+  assert.equal(result.degraded, true);
+  assert.ok(result.warnings.some((w) => /skeleton output exceeds/.test(w)));
 });
 
 test('compressWithPlan: 短文本单轮失败直接抛错', async () => {

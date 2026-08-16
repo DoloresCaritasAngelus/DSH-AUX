@@ -4,12 +4,12 @@
   "version": "0.1.6",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/<owner>/<repo>.git"
+    "url": "git+https://github.com/DoloresCaritasAngelus/DSH-AUX.git"
   },
   "bugs": {
-    "url": "https://github.com/<owner>/<repo>/issues"
+    "url": "https://github.com/DoloresCaritasAngelus/DSH-AUX/issues"
   },
-  "homepage": "https://github.com/<owner>/<repo>#readme",
+  "homepage": "https://github.com/DoloresCaritasAngelus/DSH-AUX#readme",
   "type": "module",
   "main": "src/index.js",
   "types": "src/index.d.ts",
@@ -17,6 +17,7 @@
     "src",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
     "AI.md",
     "LICENSE",
     "CONTRIBUTIONS.md"
@@ -84,7 +85,8 @@
     "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-web": "^0.1.0-rc.6",
-    "react": "^18.2.0"
+    "react": "^18.2.0",
+    "zod": "^4.4.3"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-commands": {

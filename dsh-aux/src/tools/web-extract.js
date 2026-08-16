@@ -7,6 +7,30 @@ import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { htmlToText, webExtractSystemPrompt, webExtractUserMessage } from "../prompt.js";
 import { assertSafeFetchUrlForService, fetchWithSsrf } from "../fetch.js";
 
+/** Read a response body as text, aborting as soon as the char cap is exceeded. */
+async function readTextCapped(response, maxChars) {
+  const reader = response.body?.getReader?.();
+  if (reader === void 0) {
+    const text = await response.text();
+    return text.length > maxChars ? text.slice(0, maxChars) + "\n[…truncated]" : text;
+  }
+  const decoder = new TextDecoder();
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+    if (text.length > maxChars) {
+      await reader.cancel().catch(() => {});
+      text = text.slice(0, maxChars) + "\n[…truncated]";
+      break;
+    }
+  }
+  text += decoder.decode();
+  if (text.length > maxChars) text = text.slice(0, maxChars) + "\n[…truncated]";
+  return text;
+}
+
 /** Split the model summary into summary + key points. */
 function extractKeyPoints(text) {
   const lines = text.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
@@ -57,11 +81,12 @@ export async function runWebExtract(service, args, exec) {
     if (!/no usable web provider|web provider/i.test(message)) throw error;
     const { response, finalUrl: redirectedUrl } = await fetchWithSsrf(service, url, "web_extract", exec.signal);
     if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
       throw new Error(`web_extract: HTTP ${response.status} fetching ${url}`);
     }
     finalUrl = redirectedUrl;
     const contentType = response.headers.get("content-type") ?? "";
-    const raw = await response.text();
+    const raw = await readTextCapped(response, maxChars);
     pageText = /html/i.test(contentType) ? htmlToText(raw) : raw;
   }
   if (pageText.length > maxChars) {

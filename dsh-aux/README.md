@@ -14,7 +14,7 @@
 > **不建立子智能体、不做会话协同**——辅助任务(视觉、网页提取、文本压缩)由独立辅助 LLM 完成。
 
 [![版本](https://img.shields.io/badge/version-0.1.6-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
-[![测试](https://img.shields.io/badge/tests-100-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+[![测试](https://img.shields.io/badge/tests-137-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 [![许可证](https://img.shields.io/badge/license-MIT-green)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 
 ## 目录
@@ -116,8 +116,9 @@ const result = await ctx.auxLlm.call("compress", {
 
 ## 配置
 
-每任务:`provider` + `model`(必须成对)、`timeoutMs`(默认 60000)、`maxConcurrency`(默认 2,**硬上限 10**);
-全局:`fallbackToMain`(辅助模型失败自动降级主模型,默认开)、`allowInternalUrls`(SSRF 防护,默认 `false`)。
+每任务:`provider` + `model`(必须成对)、`timeoutMs`(默认 60000)、`maxConcurrency`(默认 2,**硬上限 10**)。
+设置页全局项:`fallbackToMain`(辅助模型失败自动降级主模型,默认开)、`showStatusChip`(状态芯片开关,默认开)。
+插件配置全局项:`allowInternalUrls`(SSRF 防护,默认 `false`)、`guideText`(自定义主 agent 引导,受信任)。
 
 路由解析顺序:显式配置(settings/插件 config)> 未配置 → 会话主模型。
 失败冷却:同一 provider+model 连续失败 3 次 → 冷却 60s。
@@ -178,7 +179,8 @@ const result = await ctx.auxLlm.call("compress", {
 ## 测试
 
 ```sh
-node --test tests/aux.test.js        # 100 项,零依赖
+node --test tests/aux.test.js        # 102 项,零依赖
+node --test tests/compression.test.js # 30 项,压缩引擎回归
 node --test tests/memory-race.test.js # 1 项,并发写回归
 node --test tests/bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自动跳过)
 ```

@@ -14,7 +14,7 @@
 > **No sub-agents, no session collaboration** — auxiliary tasks (vision, web extraction, text compression) are handled by an independent auxiliary LLM.
 
 [![version](https://img.shields.io/badge/version-0.1.6-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
-[![tests](https://img.shields.io/badge/tests-100-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+[![tests](https://img.shields.io/badge/tests-137-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 [![license](https://img.shields.io/badge/license-MIT-green)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 
 ## Table of Contents
@@ -107,8 +107,9 @@ Custom tasks: `ctx.auxLlm.registerTask({ key, label, timeoutMs, maxConcurrency }
 
 ## Configuration
 
-Per task: `provider` + `model` (must be paired), `timeoutMs` (default 60000), `maxConcurrency` (default 2, **hard cap 10**);
-global: `fallbackToMain` (automatically fall back to the main model when the auxiliary model fails, enabled by default), `allowInternalUrls` (SSRF guard, default `false`).
+Per task: `provider` + `model` (must be paired), `timeoutMs` (default 60000), `maxConcurrency` (default 2, **hard cap 10**).
+Settings-page globals: `fallbackToMain` (automatically fall back to the main model when the auxiliary model fails, enabled by default), `showStatusChip` (status chip toggle, enabled by default).
+Plugin-config globals: `allowInternalUrls` (SSRF guard, default `false`), `guideText` (custom main-agent guide, trusted).
 
 Route resolution order: explicit config (settings/plugin config) > if unconfigured → session main model.
 Failure cooldown: 3 consecutive failures for the same provider+model → 60s cooldown.
@@ -145,7 +146,8 @@ The `compaction` task: once provider/model is configured, the session compaction
 ## Tests
 
 ```sh
-node --test tests/aux.test.js        # 100 tests, zero dependencies
+node --test tests/aux.test.js        # 102 tests, zero dependencies
+node --test tests/compression.test.js # 30 tests, compression engine regression
 node --test tests/memory-race.test.js # 1 test, concurrent-write regression
 node --test tests/bridge.test.js     # 4 tests, zero dependencies (auto-skipped without an agent-loop environment)
 ```

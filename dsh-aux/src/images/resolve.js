@@ -7,6 +7,42 @@
 import { basename, mediaTypeForPath, mediaTypeFromContentType } from "../media.js";
 import { fetchWithSsrf } from "../fetch.js";
 
+/** Read a response body as bytes, aborting as soon as the cap is exceeded. */
+async function readBytesCapped(response, byteCap) {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > byteCap) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error(`vision_analyze: image is ${contentLength} bytes, exceeding the ${byteCap}-byte limit`);
+  }
+  const reader = response.body?.getReader?.();
+  if (reader === void 0) {
+    const buf = await response.arrayBuffer();
+    if (buf.byteLength > byteCap) {
+      throw new Error(`vision_analyze: image is ${buf.byteLength} bytes, exceeding the ${byteCap}-byte limit`);
+    }
+    return new Uint8Array(buf);
+  }
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > byteCap) {
+      await reader.cancel().catch(() => {});
+      throw new Error(`vision_analyze: image exceeds the ${byteCap}-byte limit`);
+    }
+    chunks.push(value);
+  }
+  const data = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return data;
+}
+
 /** Resolve an image reference from attachmentId / imagePath / imageUrl. */
 export async function resolveImageRef(service, args, exec) {
   let attachments;
@@ -73,15 +109,17 @@ export async function resolveImageRef(service, args, exec) {
   if (attachments === void 0) throw new Error("vision_analyze: no attachment service mounted");
   const { response } = await fetchWithSsrf(service, args.imageUrl, "vision_analyze", exec.signal);
   if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
     throw new Error(`vision_analyze: fetching imageUrl failed with HTTP ${response.status}`);
   }
-  const data = new Uint8Array(await response.arrayBuffer());
+  const byteCap = Math.min(
+    attachments.imageLimits.maxImageBytes,
+    attachments.imageLimits.maxMessageImageBytes
+  );
+  const data = await readBytesCapped(response, byteCap);
   const mediaType = mediaTypeFromContentType(response.headers.get("content-type"));
   if (mediaType === void 0) {
     throw new Error("vision_analyze: imageUrl did not resolve to a supported image type");
-  }
-  if (data.length > attachments.imageLimits.maxImageBytes) {
-    throw new Error(`vision_analyze: image is ${data.length} bytes, exceeding the ${attachments.imageLimits.maxImageBytes}-byte limit`);
   }
   try {
     return await attachments.saveImage({ data, mediaType });

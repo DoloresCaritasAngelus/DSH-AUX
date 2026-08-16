@@ -192,6 +192,7 @@ export class AuxLlmService extends Service {
     // owned that no other session still references. Multi-session disposal
     // (process shutdown) is skipped wholesale to avoid mass deletion.
     ctx.on("session/disposed", (session) => {
+      this._auxGuideInjectedSessions.delete(session?.id ?? session?.sessionId);
       onSessionDisposed(this, session);
     });
     // Cold-session fallback: a session deleted while NOT attached (e.g. after
@@ -344,8 +345,13 @@ export class AuxLlmService extends Service {
           attempts.push({ ...candidate, kind, error });
           lastError = error;
           if (kind === "aborted") break;
-          const entered = this._cooldown.recordFailure(candidate.provider, candidate.model);
-          if (entered) attempts[attempts.length - 1].enteredCooldown = true;
+          // `content` failures are request-specific (e.g. unsupported image
+          // input), not route-health problems; don't poison the shared cooldown
+          // for other tasks using the same provider+model.
+          if (kind !== "content") {
+            const entered = this._cooldown.recordFailure(candidate.provider, candidate.model);
+            if (entered) attempts[attempts.length - 1].enteredCooldown = true;
+          }
         }
       }
       await recordAuxEvent(this, request.session, {
@@ -392,9 +398,13 @@ export class AuxLlmService extends Service {
   /** Per-task semaphore, created on first use. */
   _semaphoreFor(task, limit) {
     let semaphore = this._semaphores.get(task);
-    if (semaphore === void 0 || semaphore.limit !== limit) {
+    if (semaphore === void 0) {
       semaphore = new AsyncSemaphore(limit);
       this._semaphores.set(task, semaphore);
+    } else if (semaphore.limit !== limit) {
+      // Update in place so in-flight calls keep counting against the same
+      // semaphore; replacing it would transiently exceed the configured cap.
+      semaphore.limit = limit;
     }
     return semaphore;
   }
@@ -447,7 +457,7 @@ export class AuxLlmService extends Service {
       // burning a call the adapter will reject. Unknown capability (no
       // resolveModelInfo answer) passes through — the provider decides.
       const hasImage = request.messages.some((message) =>
-        message.content.some((block) => block.type === "image")
+        message.content?.some((block) => block.type === "image") ?? false
       );
       if (hasImage) {
         const capability = await this._resolveImageCapability(target, callDeadline.signal);

@@ -6,7 +6,7 @@
 - **输出预算**:新增 `maxOutputChars` 参数,优先于 `targetRatio` 控制输出大小。
 - **多轮/分层压缩**:超长输入自动分段压缩后合并;超过 200K 字符自动启用“骨架→精炼”分层压缩;单段失败自动重试/再切分,仍失败保留原文并标记 `degraded`。
 - **压缩元数据**:返回 `strategy`、`confidence`、`rounds`、`segments`、`degraded`、`warnings`。
-- 输入安全上限提升到 500K 字符;新增 22 项 compression 测试。
+- 输入安全上限提升到 500K 字符;新增 30 项 compression 测试。
 
 ## 0.1.6(2026-08-16)— 安全加固与源码拆分
 

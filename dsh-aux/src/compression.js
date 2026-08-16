@@ -154,7 +154,11 @@ export function resolveCompressionPlan(options = {}) {
   const text = options.text ?? "";
   const mode = options.mode ?? "auto";
   const detected = detectTextProfile(text);
+  const modeWarnings = [];
   const modeHint = mode !== "auto" && TEXT_TYPES.includes(mode);
+  if (mode !== "auto" && !TEXT_TYPES.includes(mode)) {
+    modeWarnings.push(`unknown mode "${mode}"`);
+  }
   const profile = !modeHint
     ? detected
     : { primary: mode, signals: detected.signals, confidence: Math.max(detected.confidence, 0.6) };
@@ -193,7 +197,8 @@ export function resolveCompressionPlan(options = {}) {
     hierarchical,
     preserve: options.preserve,
     modeHint,
-    preserveWarnings: preserve.warnings
+    preserveWarnings: preserve.warnings,
+    modeWarnings
   };
 }
 
@@ -450,7 +455,7 @@ export async function compressWithPlan(service, args, exec = {}) {
     hierarchical: args.hierarchical
   });
   const instruction = args.instruction ?? "";
-  const warnings = [...plan.preserveWarnings];
+  const warnings = [...plan.preserveWarnings, ...plan.modeWarnings];
   const profile = plan.profile;
 
   if (!plan.multiRound) {
@@ -494,16 +499,23 @@ export async function compressWithPlan(service, args, exec = {}) {
     try {
       const skeleton = await callSegment(service, merged, instruction, profile, plan, 2, exec);
       rounds = 2;
-      try {
-        const refined = await callSegment(service, skeleton.text, instruction, profile, plan, 3, exec);
-        finalText = refined.text;
-        lastResult = refined;
-        rounds = 3;
-      } catch (error) {
+      if (skeleton.text.length > MAX_COMPRESS_INPUT_CHARS) {
         finalText = skeleton.text;
         lastResult = skeleton;
         degraded = true;
-        warnings.push(`final refine round failed: ${error?.message ?? String(error)}`);
+        warnings.push("skeleton output exceeds the safety limit; skipped refine round");
+      } else {
+        try {
+          const refined = await callSegment(service, skeleton.text, instruction, profile, plan, 3, exec);
+          finalText = refined.text;
+          lastResult = refined;
+          rounds = 3;
+        } catch (error) {
+          finalText = skeleton.text;
+          lastResult = skeleton;
+          degraded = true;
+          warnings.push(`final refine round failed: ${error?.message ?? String(error)}`);
+        }
       }
     } catch (error) {
       degraded = true;

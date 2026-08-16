@@ -177,6 +177,8 @@ export declare class AuxLlmService extends Service {
     readonly taskDefaults: Record<string, AuxRoute>;
     /** Live fallback switch from the settings section. */
     fallbackToMain: boolean;
+    /** Whether the composer status chip is enabled (settings section). */
+    showStatusChip: boolean;
     /** Whether loopback/private URL fetches are allowed (SSRF guard). */
     allowInternalUrls: boolean;
     constructor(ctx: Context, config?: AuxConfig);
