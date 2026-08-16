@@ -21,3 +21,7 @@ Thumbs.db
 # 本机运行时状态(不含附件本体,只防误提交)
 .vision-agent.id
 tmp-*.mjs
+
+# 维护者专用(过程性内容,不进 GitHub —— 成品仓库只放用户触达的内容)
+.local/
+scripts/
