@@ -52,6 +52,13 @@ test('detectTextProfile: 识别文档', () => {
   assert.equal(profile.signals.doc, true);
 });
 
+test('detectTextProfile: 含代码块的 Markdown 文档识别为 doc', () => {
+  const md = '# Guide\n\nSome text.\n\n```js\nfunction f() { return 1; }\n```\n\n- item\n';
+  const profile = detectTextProfile(md);
+  assert.equal(profile.primary, 'doc');
+  assert.equal(profile.signals.code, true);
+});
+
 test('detectTextProfile: 混合内容保留多信号且低置信度回退 general', () => {
   const mixed = '2026-08-16 INFO start\n# Heading\n```js\nfunction f() { return 1; }\n```\n';
   const profile = detectTextProfile(mixed);

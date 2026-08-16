@@ -99,9 +99,17 @@ export function detectTextProfile(text) {
   const scores = scoreText(text);
   const signals = { code: scores.code > 0, log: scores.log > 0, doc: scores.doc > 0 };
   let primary = "general";
-  if (scores.log >= 2) primary = "log";
-  else if (scores.code >= 3) primary = "code";
-  else if (scores.doc >= 2) primary = "doc";
+  if (scores.log >= 2) {
+    primary = "log";
+  } else if (scores.doc >= 2 && scores.doc >= scores.code) {
+    // Markdown/docs with embedded code blocks should stay "doc" when the
+    // document signals are at least as strong as the code signals.
+    primary = "doc";
+  } else if (scores.code >= 3) {
+    primary = "code";
+  } else if (scores.doc >= 2) {
+    primary = "doc";
+  }
 
   const total = scores.code + scores.log + scores.doc;
   const top = Math.max(scores.code, scores.log, scores.doc, 0);
@@ -195,14 +203,18 @@ export function resolveCompressionPlan(options = {}) {
  */
 export function segmentText(text, type = "general", maxChars = DEFAULT_SINGLE_CALL_MAX_CHARS, maxSegments = DEFAULT_MAX_SEGMENTS) {
   if (text.length <= maxChars) return [text];
+  // When the caller caps the number of segments, target an even chunk size so
+  // no single segment becomes a giant outlier (which would defeat the purpose
+  // of multi-round window protection).
+  const target = Math.max(maxChars, Math.ceil(text.length / Math.max(1, maxSegments)));
   const lines = text.split("\n");
-  const natural = [];
+  const segments = [];
   let current = [];
   let currentLen = 0;
 
   const flush = () => {
     if (current.length > 0) {
-      natural.push(current.join("\n"));
+      segments.push(current.join("\n"));
       current = [];
       currentLen = 0;
     }
@@ -210,12 +222,12 @@ export function segmentText(text, type = "general", maxChars = DEFAULT_SINGLE_CA
 
   for (const line of lines) {
     const lineLen = line.length + 1; // + newline
-    if (currentLen + lineLen > maxChars && current.length > 0) {
+    if (currentLen + lineLen > target && current.length > 0) {
       flush();
     }
-    if (lineLen > maxChars && current.length === 0) {
-      for (let i = 0; i < line.length; i += maxChars) {
-        natural.push(line.slice(i, i + maxChars));
+    if (lineLen > target && current.length === 0) {
+      for (let i = 0; i < line.length; i += target) {
+        segments.push(line.slice(i, i + target));
       }
       continue;
     }
@@ -230,11 +242,22 @@ export function segmentText(text, type = "general", maxChars = DEFAULT_SINGLE_CA
   }
   flush();
 
-  while (natural.length > maxSegments) {
-    const merged = natural[0] + "\n" + natural[1];
-    natural.splice(0, 2, merged);
+  // If we still exceed the cap, merge the smallest adjacent pair repeatedly.
+  // This keeps segment sizes balanced instead of growing one giant chunk.
+  while (segments.length > maxSegments) {
+    let bestIdx = 0;
+    let bestSize = Infinity;
+    for (let i = 0; i < segments.length - 1; i++) {
+      const size = segments[i].length + segments[i + 1].length;
+      if (size < bestSize) {
+        bestSize = size;
+        bestIdx = i;
+      }
+    }
+    const merged = segments[bestIdx] + "\n" + segments[bestIdx + 1];
+    segments.splice(bestIdx, 2, merged);
   }
-  return natural;
+  return segments;
 }
 
 /**
