@@ -60,7 +60,7 @@ Conversation models are getting stronger, but "look at this image", "read this p
 |---|---|---|
 | `vision_analyze` | Image analysis (multi-image parallel) | "What's in this image?" "Read the chart values" "Compare two images" |
 | `web_extract` | Fetch + summarize web pages | "Summarize this page" "Answer from this page" |
-| `compress_text` | Long-text compression (preserves numbers/paths/identifiers) | Compress logs, docs, or context |
+| `compress_text` | Long-text compression (auto-detects code/log/doc, supports output budget, multi-round/hierarchical) | Compress logs, docs, or oversized context |
 
 ## Requirements
 

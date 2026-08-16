@@ -39,7 +39,7 @@
   |---|---|
   | `vision_analyze` | Image analysis (attachmentId / imagePath / imageUrl), focus-hint intent awareness |
   | `web_extract` | Web page fetching and summarization (HTML cleaning, optional question) |
-  | `compress_text` | Long-text compression (preserves numbers/paths/identifiers, adjustable target ratio) |
+  | `compress_text` | Long-text compression (auto-detects code/log/doc, supports `maxOutputChars`, multi-round/hierarchical) |
 - **Session compaction bridge**: adds a `compaction` auxiliary task; once configured, native DSH auto/manual context compaction goes through the AUX auxiliary model route, solving the problem of image-bearing sessions that cannot be compacted under a text-only main model.
 - **`/aux` commands**: status, model configuration, image GC, vision self-test, image memory.
 - **Settings page + status chip**: configure provider/model/timeout/concurrency per task in the DSH Web settings; the composer status chip shows the most recent auxiliary call.

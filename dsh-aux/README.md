@@ -40,7 +40,7 @@
   |---|---|
   | `vision_analyze` | 图像分析(attachmentId / imagePath / imageUrl),focus-hint 意图感知 |
   | `web_extract` | 网页抓取与摘要(HTML 清洗,可指定问题) |
-  | `compress_text` | 长文本压缩(保数字/路径/标识符,目标比例可调) |
+  | `compress_text` | 长文本压缩(自动识别代码/日志/文档,支持 `maxOutputChars`、多轮/分层压缩) |
 - **会话压缩桥接**:新增 `compaction` 辅助任务,配置后原生 DSH 的自动/手动上下文压缩会改走 AUX 辅助模型路由,解决含图会话在纯文本主模型下无法压缩的问题。
 - **/aux 命令**:状态查看、模型配置、图片 GC、视觉自检、图片记忆。
 - **设置页 + 状态 chip**:DSH Web 设置里按任务配置 provider/model/timeout/并发;

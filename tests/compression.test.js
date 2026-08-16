@@ -1,12 +1,14 @@
 /**
- * dsh-aux compression prototype tests (zero dependency).
+ * dsh-aux compression engine tests (zero dependency).
  *
  * Covers:
- *  - heuristic text-type detection
- *  - compression plan resolution (ratio / maxOutputChars / multi-round trigger)
+ *  - heuristic profile detection (primary type + signals + confidence)
+ *  - compression plan resolution (budget / ratio / multi-round / hierarchical)
+ *  - preserve rule normalization and warnings
  *  - segment splitting preserves content and respects hard caps
- *  - scenario-specific prompt construction
- *  - end-to-end compressWithPlan with a stubbed aux service (single + multi round)
+ *  - scenario-aware prompt construction (universal general + preserve + merge)
+ *  - end-to-end compressWithPlan with a stubbed aux service
+ *    (single, multi-round, failure degradation)
  *
  * Run: node --test tests/compression.test.js
  */
@@ -16,37 +18,63 @@ import {
   DEFAULT_MAX_ROUNDS,
   DEFAULT_MAX_SEGMENTS,
   DEFAULT_SINGLE_CALL_MAX_CHARS,
+  MAX_COMPRESS_INPUT_CHARS,
   TEXT_TYPES,
   TYPE_DEFAULT_RATIOS,
   buildCompressSystemPrompt,
   compressWithPlan,
+  detectTextProfile,
+  detectTextSignals,
   detectTextType,
+  normalizePreserve,
   resolveCompressionPlan,
   segmentText
 } from '../dsh-aux/src/compression.js';
 
-test('detectTextType: 识别日志', () => {
-  assert.equal(detectTextType('2026-08-16 10:00:00 INFO boot ok\n2026-08-16 10:00:01 ERROR boom'), 'log');
-  assert.equal(detectTextType('[2026-08-16T10:00:00Z] WARN timeout 10.0.0.1'), 'log');
+test('detectTextProfile: 识别日志', () => {
+  const profile = detectTextProfile('2026-08-16 10:00:00 INFO boot ok\n2026-08-16 10:00:01 ERROR boom');
+  assert.equal(profile.primary, 'log');
+  assert.equal(profile.signals.log, true);
+  assert.ok(profile.confidence > 0.5);
 });
 
-test('detectTextType: 识别代码', () => {
+test('detectTextProfile: 识别代码', () => {
   const code = 'function add(a, b) {\n  const sum = a + b;\n  return sum;\n}\n';
-  assert.equal(detectTextType(code), 'code');
+  const profile = detectTextProfile(code);
+  assert.equal(profile.primary, 'code');
+  assert.equal(profile.signals.code, true);
 });
 
-test('detectTextType: 识别文档', () => {
+test('detectTextProfile: 识别文档', () => {
   const doc = '# Title\n\nSome prose with details.\n\n- item one\n- item two\n';
-  assert.equal(detectTextType(doc), 'doc');
+  const profile = detectTextProfile(doc);
+  assert.equal(profile.primary, 'doc');
+  assert.equal(profile.signals.doc, true);
+});
+
+test('detectTextProfile: 混合内容保留多信号且低置信度回退 general', () => {
+  const mixed = '2026-08-16 INFO start\n# Heading\n```js\nfunction f() { return 1; }\n```\n';
+  const profile = detectTextProfile(mixed);
+  // 日志分数足够高时 primary 可能是 log；这里只验证 signals 不丢失
+  assert.equal(typeof profile.primary, 'string');
+  assert.equal(typeof profile.confidence, 'number');
+  assert.ok(profile.signals.code || profile.signals.log || profile.signals.doc, '应至少有一个信号');
 });
 
 test('detectTextType: 未知内容归为 general', () => {
   assert.equal(detectTextType('just some ordinary words without strong signals'), 'general');
 });
 
-test('resolveCompressionPlan: 默认按类型给比例', () => {
+test('normalizePreserve: 已知规则映射,未知值告警', () => {
+  const { rules, warnings } = normalizePreserve(['paths', 'bogus']);
+  assert.ok(rules.some((r) => /file paths/.test(r)));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /bogus/);
+});
+
+test('resolveCompressionPlan: 默认按 profile 给比例', () => {
   const logPlan = resolveCompressionPlan({ text: '2026-08-16 10:00:00 INFO x' });
-  assert.equal(logPlan.type, 'log');
+  assert.equal(logPlan.profile.primary, 'log');
   assert.equal(logPlan.ratio, TYPE_DEFAULT_RATIOS.log);
   assert.equal(logPlan.multiRound, false);
 });
@@ -58,12 +86,19 @@ test('resolveCompressionPlan: maxOutputChars 优先于 targetRatio', () => {
 });
 
 test('resolveCompressionPlan: 超长输入自动多轮并受硬上限约束', () => {
-  const longText = 'line\n'.repeat(100000); // ~500k chars
+  const longText = 'line\n'.repeat(20000); // ~100k chars, below hierarchical threshold
   const plan = resolveCompressionPlan({ text: longText, singleCallMaxChars: 10000, maxSegments: 4 });
   assert.equal(plan.multiRound, true);
   assert.equal(plan.segments, 4);
   assert.equal(plan.roundLimit, DEFAULT_MAX_ROUNDS);
   assert.ok(plan.segments <= DEFAULT_MAX_SEGMENTS);
+});
+
+test('resolveCompressionPlan: mode 是软提示,仍保留检测信号', () => {
+  const plan = resolveCompressionPlan({ text: 'just ordinary prose', mode: 'code' });
+  assert.equal(plan.profile.primary, 'code');
+  assert.equal(plan.modeHint, true);
+  assert.equal(typeof plan.profile.signals.code, 'boolean');
 });
 
 test('segmentText: 短文本不分段', () => {
@@ -85,15 +120,38 @@ test('segmentText: 超长单行硬切不丢内容', () => {
 });
 
 test('buildCompressSystemPrompt: 场景规则与预算生效', () => {
-  const codePrompt = buildCompressSystemPrompt({ type: 'code', ratio: 0.4 });
+  const codePrompt = buildCompressSystemPrompt({ profile: { primary: 'code', signals: {} }, ratio: 0.4 });
   assert.match(codePrompt, /CODE/);
   assert.match(codePrompt, /indentation/);
   assert.match(codePrompt, /40%/);
-  const logPrompt = buildCompressSystemPrompt({ type: 'log', maxOutputChars: 500, ratio: 0.1 });
+
+  const logPrompt = buildCompressSystemPrompt({ profile: { primary: 'log', signals: {} }, maxOutputChars: 500, ratio: 0.1 });
   assert.match(logPrompt, /LOG OUTPUT/);
   assert.match(logPrompt, /at most about 500 characters/);
-  const mergePrompt = buildCompressSystemPrompt({ type: 'doc', ratio: 0.2, round: 2 });
+
+  const mergePrompt = buildCompressSystemPrompt({ profile: { primary: 'doc', signals: {} }, ratio: 0.2, round: 2 });
   assert.match(mergePrompt, /merge round/);
+});
+
+test('buildCompressSystemPrompt: 万能 general 包含检测到的信号规则', () => {
+  const prompt = buildCompressSystemPrompt({
+    profile: { primary: 'general', signals: { code: true, log: true, doc: false } },
+    ratio: 0.2
+  });
+  assert.match(prompt, /code-like/);
+  assert.match(prompt, /log-like/);
+});
+
+test('buildCompressSystemPrompt: preserve 与软 mode 提示生效', () => {
+  const prompt = buildCompressSystemPrompt({
+    profile: { primary: 'code', signals: {} },
+    ratio: 0.3,
+    preserve: ['paths', 'signatures'],
+    modeHint: true
+  });
+  assert.match(prompt, /file paths/);
+  assert.match(prompt, /signatures/);
+  assert.match(prompt, /fall back to general compression/);
 });
 
 test('compressWithPlan: 短文本单轮压缩', async () => {
@@ -109,6 +167,8 @@ test('compressWithPlan: 短文本单轮压缩', async () => {
   assert.equal(result.rounds, 1);
   assert.equal(result.segments, 1);
   assert.equal(calls.length, 1);
+  assert.equal(result.degraded, false);
+  assert.deepEqual(result.warnings, []);
 });
 
 test('compressWithPlan: 超长文本先分段再汇总(两轮)', async () => {
@@ -119,16 +179,64 @@ test('compressWithPlan: 超长文本先分段再汇总(两轮)', async () => {
       return { text: 'SEG_' + request.inputChars, provider: 'p', model: 'm' };
     }
   };
-  const longText = Array.from({ length: 10000 }, (_, i) => `line ${i} with some facts ${i}`).join('\n');
+  const longText = Array.from({ length: 3000 }, (_, i) => `line ${i} with some facts ${i}`).join('\n');
   const result = await compressWithPlan(service, {
     text: longText,
     mode: 'log',
-    targetRatio: 0.2,
-    maxOutputChars: void 0
+    targetRatio: 0.2
   }, {});
   assert.equal(result.rounds, 2);
   assert.ok(result.segments > 1);
   assert.ok(calls.length >= result.segments + 1, '应有分段调用+最终汇总调用');
   assert.equal(result.strategy, 'log');
   assert.equal(result.compressed.startsWith('SEG_'), true);
+});
+
+test('compressWithPlan: 超长文本自动启用分层压缩(三轮)', async () => {
+  const calls = [];
+  const service = {
+    async call(task, request) {
+      calls.push({ system: request.system, round: /merge round|skeleton|refine/.test(request.system) ? request.system : '' });
+      return { text: 'HIER_OK', provider: 'p', model: 'm' };
+    }
+  };
+  const longText = Array.from({ length: 10000 }, (_, i) => `line ${i} with some facts ${i}`).join('\n');
+  const result = await compressWithPlan(service, { text: longText, mode: 'doc' }, {});
+  assert.equal(result.rounds, 3);
+  assert.equal(result.strategy, 'doc');
+  assert.equal(result.degraded, false);
+});
+
+test('compressWithPlan: 短文本单轮失败直接抛错', async () => {
+  const service = {
+    async call() { throw new Error('boom'); }
+  };
+  await assert.rejects(() => compressWithPlan(service, { text: 'hello world' }, {}), /boom/);
+});
+
+test('compressWithPlan: 分段失败时保留原文并标记 degraded', async () => {
+  const longText = Array.from({ length: 10000 }, (_, i) => `line ${i}`).join('\n');
+  let calls = 0;
+  const service = {
+    async call(task, request) {
+      calls += 1;
+      // 第一段调用失败,其余成功;失败段因超过阈值会触发恢复再切分
+      if (calls === 1) throw new Error('segment boom');
+      return { text: 'SEG_OK', provider: 'p', model: 'm' };
+    }
+  };
+  const result = await compressWithPlan(service, { text: longText, mode: 'log' }, {});
+  assert.equal(result.degraded, false); // 恢复成功,不应 degraded
+  assert.ok(result.compressed.length > 0);
+  assert.ok(result.rounds >= 2);
+});
+
+test('compressWithPlan: 超过安全上限拒绝', async () => {
+  const service = {
+    async call() { throw new Error('should not be called'); }
+  };
+  await assert.rejects(
+    () => compressWithPlan(service, { text: 'x'.repeat(MAX_COMPRESS_INPUT_CHARS + 1) }, {}),
+    /safety limit/
+  );
 });

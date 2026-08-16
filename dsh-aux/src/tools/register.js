@@ -79,7 +79,11 @@ export function registerAuxTools(service) {
     parameters: {
       text: { type: "string", required: true, description: "The text to compress." },
       instruction: { type: "string", description: "Optional additional compression requirements (e.g. 'keep every file path')." },
-      targetRatio: { type: "number", description: "Target compressed/original ratio (0.05-0.5, default 0.2)." }
+      targetRatio: { type: "number", description: "Target compressed/original ratio (0.05-0.5). If maxOutputChars is set, it takes precedence." },
+      maxOutputChars: { type: "integer", description: "Optional output budget in characters. Preferred over targetRatio when provided." },
+      mode: { type: "string", description: "Optional soft compression profile hint: auto, code, log, doc, or general. Auto is recommended." },
+      preserve: { type: "array", items: { type: "string" }, description: "Optional structured preservation hints: paths, numbers, headers, ids, urls, signatures, levels, stacktraces." },
+      hierarchical: { type: "boolean", description: "Optional deep compression for very large inputs (skeleton then refine). Usually auto-enabled above 200K chars." }
     },
     output: {
       schema: {
@@ -91,7 +95,13 @@ export function registerAuxTools(service) {
           compressedChars: { type: "integer", required: true },
           ratio: { type: "number", required: true },
           provider: { type: "string", required: true },
-          model: { type: "string", required: true }
+          model: { type: "string", required: true },
+          strategy: { type: "string", description: "Detected or requested compression profile." },
+          confidence: { type: "number", description: "Confidence of the profile detection (0-1)." },
+          rounds: { type: "integer", description: "Number of compression rounds used." },
+          segments: { type: "integer", description: "Number of input segments processed." },
+          degraded: { type: "boolean", description: "True when at least one segment/round failed and original text was kept." },
+          warnings: { type: "array", items: { type: "string" }, description: "Non-fatal warnings (e.g. unknown preserve hints, failed segment recovery)." }
         }
       },
       render: (args, value) => [{ type: "text", text: value.compressed }]

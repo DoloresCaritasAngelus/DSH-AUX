@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7(未发布)— compress_text 场景化压缩
+
+- **场景感知**:自动识别代码/日志/文档/通用,支持 `mode` 软提示与 `preserve` 结构化保留规则;混合内容走增强版通用模式。
+- **输出预算**:新增 `maxOutputChars` 参数,优先于 `targetRatio` 控制输出大小。
+- **多轮/分层压缩**:超长输入自动分段压缩后合并;超过 200K 字符自动启用“骨架→精炼”分层压缩;单段失败自动重试/再切分,仍失败保留原文并标记 `degraded`。
+- **压缩元数据**:返回 `strategy`、`confidence`、`rounds`、`segments`、`degraded`、`warnings`。
+- 输入安全上限提升到 500K 字符;新增 22 项 compression 测试。
+
 ## 0.1.6(2026-08-16)— 安全加固与源码拆分
 
 - **SSRF 防护(默认开启)**:`web_extract` 与 `vision_analyze` 的 `imageUrl` 现在默认
