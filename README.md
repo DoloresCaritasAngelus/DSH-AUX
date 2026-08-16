@@ -21,7 +21,7 @@
   | `web_extract` | 网页抓取 + 摘要 | "总结这个页面""回答某网页里的问题" |
   | `compress_text` | 长文本压缩(保数字/路径/标识符) | 压日志、压文档、喂给上下文 |
 
-- **会话压缩桥接**:新增 `compaction` 辅助任务,配置后原生 DSH 的自动/手动上下文压缩会改走 AUX 辅助模型路由,可解决含图会话在纯文本主模型下无法压缩的问题;`/aux status` 会显示桥接状态。
+- **会话压缩桥接**:新增 `compaction` 辅助任务,配置后原生 DSH 的自动/手动上下文压缩会改走 AUX 辅助模型路由,可解决含图会话在纯文本主模型下无法压缩的问题;`/aux status` 会显示桥接状态。含图会话压缩时,附件可读且路由支持图片则保留图像信息;附件缺失/损坏或路由为纯文本时自动降级为文本占位,避免压缩整体失败。
 - **`/aux` 命令**:状态查看、模型切换、图片回收、视觉自检、图片记忆。
 - **Web 设置页 + 状态 chip**:每任务模型下拉配置(只列你已配置的供应商),composer 上实时显示最近一次辅助调用。
 - **会话图片生命周期**:删除会话时自动清理它的无引用图片(共享保留、归档不误删);图片分析记忆跨重启可查。
@@ -62,9 +62,9 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
 
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。
 - **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
-- **测试零依赖**:`cd tests && node --test aux.test.js`(78 项)+ `node --test memory-race.test.js`(1 项,并发写回归)+ `node --test bridge.test.js`(4 项)。
+- **测试零依赖**:`node --test tests/aux.test.js`(83 项)+ `node --test tests/memory-race.test.js`(1 项,并发写回归)+ `node --test tests/bridge.test.js`(4 项)。
 - **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行;仅装插件本体的需单独跑 `bridge/apply-patch.mjs`)。它让**纯文本主模型也能直接粘贴图片**且 UI 保留缩略图(多模态模型原生看图不受影响);改 node_modules 核心包,`npm update` 后重跑一次即可。`/aux status` 会报告它的状态。
-- **settings 动态暴露**(同样由 install.sh 应用):设置页读写 aux 配置是插件**原生能力**——dsh-aux 注册 namespace 时声明 `exposedToWeb`(dsh-settings 的 `listExposed()` + api-proxy 动态合并,即平台 api-proxy 注释中的 deferred work 本地实现,可整理为 upstream PR)。
+- **settings 动态暴露**(同样由 install.sh 应用):设置页读写 aux 配置是插件**原生能力**——dsh-aux 注册 namespace 时声明 `exposedToWeb`,由 dsh-settings 的 `listExposed()` + api-proxy 动态合并实现;对应补丁已随本仓库 `bridge/` 落地,不依赖官方 deepseek-harness 合入。
 - **会话事件注册通道(必装补丁)**:dsh-aux 向会话写 `aux/llm-call` 事件;DSH 持久化读链对白名单外事件**拒绝整个日志**(官方注释:out-of-repo 插件事件无注册通道,deferred)。install.sh 中的 `patch-session-ignorable.mjs` 补齐 append 的 `ignorable` 写入入口 + 白名单放行;**未装该补丁时,dsh-aux 自动降级为不写事件**(保护会话日志),`/aux status` 会显示状态。`npm update` 后需重跑。
 - **会话删除协同**:DSH 原生无"删除会话"功能,由社区插件
   [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete)
@@ -80,6 +80,10 @@ dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AU
   配置了专用会话压缩模型后,dsh-aux 会把 `dsh-compaction-basic` 的摘要调用改走
   `ctx.auxLlm` 的 `compaction` 任务,复用 AUX 的超时/并发/冷却/降级/事件记录。
   这尤其解决“会话里有图片、但摘要模型被路由到纯文本版本”导致压缩不可用的问题。
+- **极简 / Anchored Standard 等预设的 Bootstrap 限制**:这类预设首轮可能只暴露
+  `shell/read` 两个工具,`vision_analyze` 要等首个 durable tool call 后才进入完整
+  工具目录。若希望首轮就能直接识图,需要在 preset 的 `commonTools` 中加入
+  `vision_analyze`(或使用非 Bootstrap 的 Standard 预设)。
 
 ## 文档
 

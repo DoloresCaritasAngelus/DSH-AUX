@@ -45,7 +45,7 @@ cd <仓库>/bridge && node apply-patch.mjs
 node <仓库>/bridge/patch-settings-allowlist.mjs
 ```
 
-### 方式二:手动
+### 方式三:手动
 
 ```sh
 ln -s /path/to/dsh-aux <DSH>/node_modules/@dolorescaritasangelus/dsh-aux
@@ -124,12 +124,17 @@ const result = await ctx.auxLlm.call("compress", {
   删除插件调用 `sessions.detachEntered()` → 平台广播 `session/disposed` →
   dsh-aux 自动清理该会话的无引用图片(另有 5 分钟对账兜底)。没有它,
   dsh-aux 其余能力完全不受影响。
+- **极简 / Anchored Standard Bootstrap 兼容**:这类预设首轮只暴露 `shell/read`,
+  `vision_analyze` 要等首个 durable tool call 后才进入完整工具目录。若希望首轮
+  直接识图,可在 preset 的 `commonTools` 中加入 `vision_analyze`,或使用非
+  Bootstrap 的 Standard 预设。
 
 ## 测试
 
 ```sh
-cd tests && node --test aux.test.js        # 78 项,零依赖
-cd tests && node --test bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自动跳过)
+node --test tests/aux.test.js        # 83 项,零依赖
+node --test tests/memory-race.test.js # 1 项,并发写回归
+node --test tests/bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自动跳过)
 ```
 
 ## 兼容性与依赖
