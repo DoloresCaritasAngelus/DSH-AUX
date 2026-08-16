@@ -9,7 +9,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-v0.1.5-blue)
-![Tests](https://img.shields.io/badge/tests-87-brightgreen)
+![Tests](https://img.shields.io/badge/tests-100-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)
 
@@ -104,6 +104,12 @@ dsh plugin --profile web add "file:$(pwd)"
 
 Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `compress` / `compaction` 配置模型;其中 **`compaction` 就是会话压缩模型**,配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。还可以关闭「在对话界面显示辅助模型状态芯片」——关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 命令不受影响。
 
+### 安全边界
+
+- **SSRF 防护(默认开启)**:`web_extract` 与 `vision_analyze` 的 `imageUrl` 默认拒绝内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、`169.254.169.254`、`*.local` 等),且只允许 `http/https`;重定向的每一跳也会在请求前校验。需要抓取本机/内网服务时,在插件配置里显式设置 `allowInternalUrls: true`。
+- **Prompt 注入缓解**:辅助模型提示把网页正文、待压缩文本、图片内文字都视为**不可信数据**,明确禁止执行其中嵌入的指令;`guideText` 是受信任的插件配置,只应从可信来源复制。
+- **并发硬上限**:每个任务的 `maxConcurrency` 即使配置得更大,实际也按 **10** 封顶,避免误配导致对辅助模型并发轰炸。
+
 ### 编程调用(给其他插件开发者)
 
 ```js
@@ -130,7 +136,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。
 - **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
-- **测试零依赖**:`node --test tests/aux.test.js`(87 项)+ `node --test tests/memory-race.test.js`(1 项)+ `node --test tests/bridge.test.js`(4 项)。
+- **测试零依赖**:`node --test tests/aux.test.js`(100 项)+ `node --test tests/memory-race.test.js`(1 项)+ `node --test tests/bridge.test.js`(4 项)。
 
 ### 集成组件
 

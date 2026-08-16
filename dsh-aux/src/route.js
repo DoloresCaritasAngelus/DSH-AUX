@@ -13,6 +13,8 @@ export const AUX_TASKS = Object.freeze(["vision", "web_extract", "compress", "co
 export const DEFAULT_TASK_TIMEOUT_MS = 60_000;
 /** Default per-task concurrency cap. */
 export const DEFAULT_TASK_CONCURRENCY = 2;
+/** Hard upper bound for any per-task concurrency cap. */
+export const MAX_TASK_CONCURRENCY = 10;
 /** Default input size cap (chars) for text tasks. */
 export const DEFAULT_MAX_INPUT_CHARS = 120_000;
 /** Failures in a row that put a route into cooldown. */
@@ -29,17 +31,19 @@ export function route(provider, model) {
  * Validate the plugin config shape. Unknown keys fail at load rather than
  * being ignored. Supported shape:
  *
- *   { tasks: { vision?, webExtract?, compress?, compaction? } }
+ *   { tasks: { vision?, webExtract?, compress?, compaction? }, allowInternalUrls? }
  *
  * Each task entry: { provider?, model?, timeoutMs?, maxConcurrency? }.
+ * `allowInternalUrls` is an explicit opt-in for fetching loopback/private URLs
+ * (SSRF guard); it defaults to false.
  * @param config raw plugin config (may be undefined).
  * @returns a detached, validated config.
  */
 export function resolveConfig(config) {
   const source = config ?? {};
-  const unknown = Object.keys(source).filter((key) => key !== "tasks" && key !== "guideText");
+  const unknown = Object.keys(source).filter((key) => key !== "tasks" && key !== "guideText" && key !== "allowInternalUrls");
   if (unknown.length > 0) {
-    throw new Error(`AuxConfig has unknown key(s) ${unknown.join(", ")} — config is { tasks?, guideText? }`);
+    throw new Error(`AuxConfig has unknown key(s) ${unknown.join(", ")} — config is { tasks?, guideText?, allowInternalUrls? }`);
   }
   const tasks = {};
   for (const task of AUX_TASKS) {
@@ -86,7 +90,14 @@ export function resolveConfig(config) {
   if (source.guideText !== void 0 && typeof source.guideText !== "string") {
     throw new Error("AuxConfig guideText must be a string (empty string disables the main-agent guide section)");
   }
-  return { tasks, ...(source.guideText === void 0 ? {} : { guideText: source.guideText }) };
+  if (source.allowInternalUrls !== void 0 && typeof source.allowInternalUrls !== "boolean") {
+    throw new Error("AuxConfig allowInternalUrls must be a boolean");
+  }
+  return {
+    tasks,
+    ...(source.guideText === void 0 ? {} : { guideText: source.guideText }),
+    ...(source.allowInternalUrls === void 0 ? {} : { allowInternalUrls: source.allowInternalUrls })
+  };
 }
 
 /** Merge a settings section over plugin config (settings wins). */
@@ -104,9 +115,9 @@ export function taskTimeoutMs(merged) {
   return merged.timeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
 }
 
-/** Effective concurrency cap for a task: config value, else default. */
+/** Effective concurrency cap for a task: config value (hard-capped), else default. */
 export function taskConcurrency(merged) {
-  return merged.maxConcurrency ?? DEFAULT_TASK_CONCURRENCY;
+  return Math.min(merged.maxConcurrency ?? DEFAULT_TASK_CONCURRENCY, MAX_TASK_CONCURRENCY);
 }
 
 /**

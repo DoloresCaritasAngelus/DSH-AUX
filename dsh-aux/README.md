@@ -14,7 +14,7 @@
 > **不建立子智能体、不做会话协同**——辅助任务(视觉、网页提取、文本压缩)由独立辅助 LLM 完成。
 
 [![版本](https://img.shields.io/badge/version-0.1.5-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
-[![测试](https://img.shields.io/badge/tests-87-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+[![测试](https://img.shields.io/badge/tests-100-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 [![许可证](https://img.shields.io/badge/license-MIT-green)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 
 ## 目录
@@ -116,11 +116,18 @@ const result = await ctx.auxLlm.call("compress", {
 
 ## 配置
 
-每任务:`provider` + `model`(必须成对)、`timeoutMs`(默认 60000)、`maxConcurrency`(默认 2);
-全局:`fallbackToMain`(辅助模型失败自动降级主模型,默认开)。
+每任务:`provider` + `model`(必须成对)、`timeoutMs`(默认 60000)、`maxConcurrency`(默认 2,**硬上限 10**);
+全局:`fallbackToMain`(辅助模型失败自动降级主模型,默认开)、`allowInternalUrls`(SSRF 防护,默认 `false`)。
 
 路由解析顺序:显式配置(settings/插件 config)> 未配置 → 会话主模型。
 失败冷却:同一 provider+model 连续失败 3 次 → 冷却 60s。
+
+**SSRF 防护(默认开启)**:`web_extract` 与 `vision_analyze` 的 `imageUrl` 默认拒绝
+内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、
+`169.254.169.254`、`*.local` 等),且只允许 `http/https`;重定向的每一跳也会在
+请求前校验。需要抓取本机/内网服务时,在插件配置里显式设置 `allowInternalUrls: true`。
+辅助模型提示把网页正文、待压缩文本、图片内文字视为**不可信数据**,明确禁止执行其中
+嵌入的指令;`guideText` 是受信任的插件配置,只应从可信来源复制。
 
 `compaction` 任务:配置 provider/model 后即启用会话压缩桥接——原生
 `dsh-compaction-basic` 的摘要调用会通过 `ctx.auxLlm` 执行。建议为含图会话选择
@@ -171,7 +178,7 @@ const result = await ctx.auxLlm.call("compress", {
 ## 测试
 
 ```sh
-node --test tests/aux.test.js        # 87 项,零依赖
+node --test tests/aux.test.js        # 100 项,零依赖
 node --test tests/memory-race.test.js # 1 项,并发写回归
 node --test tests/bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自动跳过)
 ```

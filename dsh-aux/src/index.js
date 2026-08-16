@@ -14,6 +14,7 @@
  * @module @dolorescaritasangelus/dsh-aux
  */
 import { readdir, readFile as readFileText, rename as renameFile, stat as statFile, unlink as unlinkFile, writeFile as writeFileText } from "node:fs/promises";
+import { lookup as dnsLookup } from "node:dns/promises";
 import { Service } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 import { z as zodz } from "zod";
@@ -52,6 +53,7 @@ import {
   isCompactionBridgeInstalled,
   isCompactionTaskConfigured
 } from "./compaction-bridge.js";
+import { assertSafeFetchUrl } from "./url-policy.js";
 
 /** Settings namespace carrying the aux configuration section. */
 export const AUX_SETTINGS_NAMESPACE = settingsNamespace("aux");
@@ -165,6 +167,8 @@ export class AuxCallError extends Error {
 export class AuxLlmService extends Service {
   static inject = ["llm", "tools", "settings", "web", "fs", "systemPrompt"];
   static Config = z.object({
+    allowInternalUrls: z.boolean(),
+    guideText: z.string(),
     tasks: z.object({
       vision: z.object({
         provider: z.string(),
@@ -226,6 +230,8 @@ export class AuxLlmService extends Service {
     // /aux model), which then takes precedence.
     this.taskDefaults = {};
     this.pluginTasks = resolved.tasks;
+    this.allowInternalUrls = resolved.allowInternalUrls ?? false;
+    this._dnsLookup = dnsLookup;
     this._semaphores = new Map();
     this._cooldown = new FailureCooldown();
     this._customTasks = new Map();
@@ -236,6 +242,8 @@ export class AuxLlmService extends Service {
     // are executed by a separate auxiliary LLM, so it uses vision_analyze
     // directly instead of spawning a sub-agent for image analysis. An empty
     // guideText disables the section (escape hatch).
+    // guideText is TRUSTED plugin config: it is injected verbatim into the
+    // main system prompt, so only copy it from sources you trust.
     this.guideText = resolved.guideText;
     // Sessions that already received the once-per-session pre-step reminder
     // for Bootstrap presets (Minimal / Anchored Standard). The system-prompt
@@ -291,6 +299,8 @@ export class AuxLlmService extends Service {
           /* best-effort: reconciliation must never crash the service */
         });
       }, SESSION_IMAGE_RECONCILE_INTERVAL_MS);
+      // A maintenance timer must not keep the process alive by itself.
+      timer.unref?.();
       return () => clearInterval(timer);
     });
     ctx.inject(["sessionProjections"], (projectionCtx) => {
@@ -1717,7 +1727,7 @@ ${value.analysis}` };
     }
     // imageUrl
     if (attachments === void 0) throw new Error("vision_analyze: no attachment service mounted");
-    const response = await fetch(args.imageUrl, { signal: exec.signal });
+    const { response } = await this._fetchWithSsrf(args.imageUrl, "vision_analyze", exec.signal);
     if (!response.ok) {
       throw new Error(`vision_analyze: fetching imageUrl failed with HTTP ${response.status}`);
     }
@@ -1736,10 +1746,46 @@ ${value.analysis}` };
     }
   }
 
+  /** Apply the SSRF guard before fetching a URL (web_extract or vision imageUrl). */
+  async _assertSafeFetchUrl(rawUrl, label = "web_extract") {
+    await assertSafeFetchUrl(rawUrl, {
+      allowInternalUrls: this.allowInternalUrls === true,
+      lookup: this._dnsLookup ?? dnsLookup,
+      label
+    });
+  }
+
+  /**
+   * Fetch a URL through the global fetch with SSRF checks on every redirect
+   * hop. Redirects are followed manually so an internal/private redirect
+   * target is rejected BEFORE the request is sent.
+   */
+  async _fetchWithSsrf(rawUrl, label, signal) {
+    const MAX_REDIRECTS = 5;
+    let currentUrl = rawUrl;
+    for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
+      await this._assertSafeFetchUrl(currentUrl, label);
+      const response = await fetch(currentUrl, { signal, redirect: "manual" });
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (location === null || location.length === 0) {
+          throw new Error(`${label}: redirect response missing Location header`);
+        }
+        // Release the redirect body before following the next hop.
+        try { await response.body?.cancel(); } catch { /* best-effort */ }
+        currentUrl = new URL(location, currentUrl).href;
+        continue;
+      }
+      return { response, finalUrl: currentUrl };
+    }
+    throw new Error(`${label}: too many redirects`);
+  }
+
   /** web_extract execution. */
   async _runWebExtract(args, exec) {
     const url = args.url.trim();
     if (url.length === 0) throw new Error("web_extract: url must be a non-empty string");
+    await this._assertSafeFetchUrl(url, "web_extract");
     const maxChars = args.maxChars ?? 8000;
     if (!Number.isInteger(maxChars) || maxChars <= 0) {
       throw new Error("web_extract: maxChars must be a positive integer");
@@ -1755,7 +1801,10 @@ ${value.analysis}` };
       if (fetchResult.statusCode >= 400) {
         throw new Error(`web_extract: HTTP ${fetchResult.statusCode} fetching ${url}`);
       }
-      finalUrl = fetchResult.url;
+      finalUrl = fetchResult.url ?? url;
+      // The provider may have followed redirects; reject a final URL that
+      // points back at an internal/private target (best-effort post-check).
+      await this._assertSafeFetchUrl(finalUrl, "web_extract");
       // HTML bodies are cleaned to plain text before reaching the auxiliary
       // model; text bodies pass through unchanged.
       pageText = fetchResult.body.kind === "html"
@@ -1764,11 +1813,11 @@ ${value.analysis}` };
     } catch (error) {
       const message = error?.message ?? String(error);
       if (!/no usable web provider|web provider/i.test(message)) throw error;
-      const response = await fetch(url, { signal: exec.signal, redirect: "follow" });
+      const { response, finalUrl: redirectedUrl } = await this._fetchWithSsrf(url, "web_extract", exec.signal);
       if (!response.ok) {
         throw new Error(`web_extract: HTTP ${response.status} fetching ${url}`);
       }
-      finalUrl = response.url ?? url;
+      finalUrl = redirectedUrl;
       const contentType = response.headers.get("content-type") ?? "";
       const raw = await response.text();
       pageText = /html/i.test(contentType) ? htmlToText(raw) : raw;

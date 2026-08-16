@@ -12,6 +12,8 @@ export declare const AUX_TASKS: readonly ['vision', 'web_extract', 'compress', '
 export declare const DEFAULT_TASK_TIMEOUT_MS: number;
 /** Default per-task concurrency cap. */
 export declare const DEFAULT_TASK_CONCURRENCY: number;
+/** Hard upper bound for any per-task concurrency cap. */
+export declare const MAX_TASK_CONCURRENCY: number;
 /** Default input size cap (chars) for text tasks. */
 export declare const DEFAULT_MAX_INPUT_CHARS: number;
 /** Failures in a row that put a route into cooldown. */
@@ -23,7 +25,7 @@ export declare const COOLDOWN_TTL_MS: number;
 export declare function route(provider: string, model: string): AuxRoute;
 
 /** Validate the plugin config shape; unknown keys fail at load. */
-export declare function resolveConfig(config: unknown): { tasks: Record<string, AuxTaskConfigEntry> };
+export declare function resolveConfig(config: unknown): { tasks: Record<string, AuxTaskConfigEntry>; guideText?: string; allowInternalUrls?: boolean };
 
 /** Merge a settings section over plugin config (settings wins). */
 export declare function mergeTaskConfig(pluginEntry: AuxTaskConfigEntry, settingsEntry: AuxTaskConfigEntry): AuxTaskConfigEntry;

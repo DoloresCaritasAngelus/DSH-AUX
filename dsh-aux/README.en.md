@@ -14,7 +14,7 @@
 > **No sub-agents, no session collaboration** — auxiliary tasks (vision, web extraction, text compression) are handled by an independent auxiliary LLM.
 
 [![version](https://img.shields.io/badge/version-0.1.5-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
-[![tests](https://img.shields.io/badge/tests-87-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+[![tests](https://img.shields.io/badge/tests-100-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 [![license](https://img.shields.io/badge/license-MIT-green)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 
 ## Table of Contents
@@ -107,11 +107,20 @@ Custom tasks: `ctx.auxLlm.registerTask({ key, label, timeoutMs, maxConcurrency }
 
 ## Configuration
 
-Per task: `provider` + `model` (must be paired), `timeoutMs` (default 60000), `maxConcurrency` (default 2);
-global: `fallbackToMain` (automatically fall back to the main model when the auxiliary model fails, enabled by default).
+Per task: `provider` + `model` (must be paired), `timeoutMs` (default 60000), `maxConcurrency` (default 2, **hard cap 10**);
+global: `fallbackToMain` (automatically fall back to the main model when the auxiliary model fails, enabled by default), `allowInternalUrls` (SSRF guard, default `false`).
 
 Route resolution order: explicit config (settings/plugin config) > if unconfigured → session main model.
 Failure cooldown: 3 consecutive failures for the same provider+model → 60s cooldown.
+
+**SSRF protection (on by default)**: `web_extract` and `vision_analyze`'s `imageUrl`
+reject internal/loopback/cloud-metadata addresses (`localhost`, `127.0.0.1`, `10.x`,
+`192.168.x`, `169.254.169.254`, `*.local`, etc.) by default and only allow `http/https`;
+every redirect hop is validated before the request is sent. To fetch local/intranet
+services, explicitly set `allowInternalUrls: true` in the plugin config. Auxiliary prompts
+treat page content, text-to-compress, and text inside images as **untrusted data** and
+explicitly forbid executing embedded instructions; `guideText` is trusted plugin config —
+only copy it from trusted sources.
 
 The `compaction` task: once provider/model is configured, the session compaction bridge is enabled — the `dsh-compaction-basic` summarization call goes through `ctx.auxLlm`. For image-bearing sessions, it is recommended to choose a model that truly supports images and has enough context (e.g. `mimo-v2.5` or `minimax-m3`).
 
@@ -136,7 +145,7 @@ The `compaction` task: once provider/model is configured, the session compaction
 ## Tests
 
 ```sh
-node --test tests/aux.test.js        # 87 tests, zero dependencies
+node --test tests/aux.test.js        # 100 tests, zero dependencies
 node --test tests/memory-race.test.js # 1 test, concurrent-write regression
 node --test tests/bridge.test.js     # 4 tests, zero dependencies (auto-skipped without an agent-loop environment)
 ```

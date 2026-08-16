@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.6(未发布)— 安全加固
+
+- **SSRF 防护(默认开启)**:`web_extract` 与 `vision_analyze` 的 `imageUrl` 现在默认
+  拒绝内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、
+  `169.254.169.254`、`*.local` 等),且只允许 `http/https`;新增插件配置
+  `allowInternalUrls: true` 可显式放行本机/内网抓取。新增 DNS 解析检查,
+  可拦截 `localtest.me` 这类解析到内网地址的绕过手法;原生 fetch 回退路径
+  改为手动跟随重定向,每一跳在发出请求前都做 SSRF 校验。
+- 维护定时器改为 `unref`,避免测试进程被 5 分钟对账定时器挂住无法退出。
+- **Prompt 注入缓解**:`web_extract` / `compress_text` 的系统提示明确将网页正文与
+  待压缩文本视为不可信数据,禁止执行其中嵌入的指令;`guideText` 文档标注为受信任
+  插件配置,只应从可信来源复制。
+- **并发硬上限**:每个任务的 `maxConcurrency` 即使配置得更大,实际按 **10** 封顶,
+  避免误配导致对辅助模型并发轰炸。
+- 测试增至 100 项(aux)。
+
 ## 0.1.5(2026-08-16)— 命名空间脱敏、文档双语与隐私改进
 
 - **包名去官方化**:从 `@deepseek-ai/dsh-aux` 改为 `@dolorescaritasangelus/dsh-aux`,避免冒充 DeepSeek 官方命名空间;同步更新 client 插件 id、文档、bridge 路径解析与测试

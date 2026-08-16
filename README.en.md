@@ -9,7 +9,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-v0.1.5-blue)
-![Tests](https://img.shields.io/badge/tests-87-brightgreen)
+![Tests](https://img.shields.io/badge/tests-100-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)
 
@@ -104,6 +104,12 @@ After restarting DSH:
 
 Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. You can also disable "Show auxiliary model status chip in conversation UI" — when disabled, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
 
+### Security boundaries
+
+- **SSRF protection (on by default)**: `web_extract` and `vision_analyze`'s `imageUrl` reject internal/loopback/cloud-metadata addresses (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.169.254`, `*.local`, etc.) by default and only allow `http/https`; every redirect hop is validated before the request is sent. To fetch local/intranet services, explicitly set `allowInternalUrls: true` in the plugin config.
+- **Prompt-injection mitigation**: auxiliary prompts treat page content, text-to-compress, and text inside images as **untrusted data** and explicitly forbid executing embedded instructions; `guideText` is trusted plugin config — only copy it from trusted sources.
+- **Concurrency hard cap**: even if a task's `maxConcurrency` is configured higher, the effective value is capped at **10**, preventing misconfiguration from flooding the auxiliary model.
+
 ### Programmatic API (for plugin developers)
 
 ```js
@@ -130,7 +136,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 - **Platform**: DSH ≥ 0.1.0-rc.6; Node ≥ 20.
 - **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages; no `dependencies`.
-- **Zero-dependency tests**: `node --test tests/aux.test.js` (87) + `node --test tests/memory-race.test.js` (1) + `node --test tests/bridge.test.js` (4).
+- **Zero-dependency tests**: `node --test tests/aux.test.js` (100) + `node --test tests/memory-race.test.js` (1) + `node --test tests/bridge.test.js` (4).
 
 ### Integrated Components
 

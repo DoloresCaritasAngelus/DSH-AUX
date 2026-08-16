@@ -59,6 +59,10 @@ export interface AuxTaskConfigEntry {
 /** Plugin config: optional per-task overrides. */
 export interface AuxConfig {
     tasks?: Partial<Record<AuxTaskKey, AuxTaskConfigEntry>>;
+    /** User-supplied main-agent guide section (trusted plugin config). */
+    guideText?: string;
+    /** Opt-in to fetching loopback/private URLs (SSRF guard, default false). */
+    allowInternalUrls?: boolean;
 }
 
 /** One auxiliary LLM request. */
@@ -165,6 +169,8 @@ export declare class AuxLlmService extends Service {
     readonly taskDefaults: Record<string, AuxRoute>;
     /** Live fallback switch from the settings section. */
     fallbackToMain: boolean;
+    /** Whether loopback/private URL fetches are allowed (SSRF guard). */
+    allowInternalUrls: boolean;
     constructor(ctx: Context, config?: AuxConfig);
     /**
      * Run one auxiliary LLM call. Route resolution per task: explicit config,
