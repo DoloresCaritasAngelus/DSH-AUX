@@ -178,6 +178,25 @@ test('compressWithPlan: 短文本单轮压缩', async () => {
   assert.deepEqual(result.warnings, []);
 });
 
+test('compressWithPlan: maxOutputChars 只作用于最终合并,不传给每个分段', async () => {
+  const calls = [];
+  const service = {
+    async call(task, request) {
+      calls.push({ system: request.system, inputChars: request.inputChars });
+      return { text: 'SEG', provider: 'p', model: 'm' };
+    }
+  };
+  const longText = Array.from({ length: 3000 }, (_, i) => `line ${i} with some facts ${i}`).join('\n');
+  await compressWithPlan(service, { text: longText, mode: 'log', maxOutputChars: 2000 }, {});
+  const segmentCalls = calls.filter((c) => !c.system.includes('at most about 2000 characters'));
+  const mergeCalls = calls.filter((c) => c.system.includes('at most about 2000 characters'));
+  assert.ok(segmentCalls.length > 0, '应有分段调用');
+  assert.ok(mergeCalls.length > 0, '最终合并应携带总预算');
+  for (const call of segmentCalls) {
+    assert.ok(!call.system.includes('at most about 2000 characters'), '分段调用不应携带总预算');
+  }
+});
+
 test('compressWithPlan: 超长文本先分段再汇总(两轮)', async () => {
   const calls = [];
   const service = {

@@ -342,18 +342,24 @@ export function buildCompressSystemPrompt(options = {}) {
 /**
  * Run one compression call against the aux service.
  */
-async function callSegment(service, segment, instruction, profile, plan, round, exec) {
+async function callSegment(service, segment, instruction, profile, plan, round, exec, options = {}) {
   const messages = [createUserMessage({
     content: [{ type: "text", text: compressUserMessage(segment, instruction) }],
     source: { kind: "plugin", plugin: "dsh-aux" }
   })];
+  // Segment calls must NOT each receive the full maxOutputChars budget, or the
+  // total output would be segments × budget. Segment rounds use the relative
+  // ratio; the final merge/skeleton/refine rounds apply the absolute budget.
+  const maxOutputChars = Object.prototype.hasOwnProperty.call(options, "maxOutputChars")
+    ? options.maxOutputChars
+    : plan.maxOutputChars;
   return service.call("compress", {
     messages,
     system: buildCompressSystemPrompt({
       profile,
       preserve: plan.preserve,
       ratio: plan.ratio,
-      maxOutputChars: plan.maxOutputChars,
+      maxOutputChars,
       round,
       hierarchical: plan.hierarchical,
       modeHint: plan.modeHint
@@ -374,8 +380,9 @@ async function callSegment(service, segment, instruction, profile, plan, round, 
  *   - if still failing, keep the original text and mark degraded.
  */
 async function compressSegmentWithRecovery(service, segment, instruction, profile, plan, exec) {
+  const segmentOptions = { maxOutputChars: void 0 };
   try {
-    const result = await callSegment(service, segment, instruction, profile, plan, 1, exec);
+    const result = await callSegment(service, segment, instruction, profile, plan, 1, exec, segmentOptions);
     return { text: result.text, degraded: false, warnings: [] };
   } catch (error) {
     const message = error?.message ?? String(error);
@@ -393,7 +400,7 @@ async function compressSegmentWithRecovery(service, segment, instruction, profil
     }
     // Small segment: retry once before giving up.
     try {
-      const retry = await callSegment(service, segment, instruction, profile, plan, 1, exec);
+      const retry = await callSegment(service, segment, instruction, profile, plan, 1, exec, segmentOptions);
       return { text: retry.text, degraded: false, warnings: [`segment recovered after retry (${message})`] };
     } catch {
       return { text: segment, degraded: true, warnings: [`segment compression failed: ${message}`] };
@@ -461,8 +468,13 @@ export async function compressWithPlan(service, args, exec = {}) {
   let finalText = merged;
   let rounds = 1;
   let lastResult;
+  const canMerge = merged.length <= MAX_COMPRESS_INPUT_CHARS;
+  if (!canMerge) {
+    degraded = true;
+    warnings.push("merged segments exceed the safety limit; skipped final merge round");
+  }
 
-  if (plan.hierarchical) {
+  if (canMerge && plan.hierarchical) {
     try {
       const skeleton = await callSegment(service, merged, instruction, profile, plan, 2, exec);
       rounds = 2;
@@ -481,7 +493,7 @@ export async function compressWithPlan(service, args, exec = {}) {
       degraded = true;
       warnings.push(`skeleton round failed: ${error?.message ?? String(error)}`);
     }
-  } else if (compressedSegments.length > 1) {
+  } else if (canMerge && compressedSegments.length > 1) {
     try {
       const finalResult = await callSegment(service, merged, instruction, profile, plan, 2, exec);
       finalText = finalResult.text;
