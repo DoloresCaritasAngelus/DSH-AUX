@@ -383,7 +383,7 @@ async function compressSegmentWithRecovery(service, segment, instruction, profil
   const segmentOptions = { maxOutputChars: void 0 };
   try {
     const result = await callSegment(service, segment, instruction, profile, plan, 1, exec, segmentOptions);
-    return { text: result.text, degraded: false, warnings: [] };
+    return { text: result.text, degraded: false, warnings: [], provider: result.provider, model: result.model };
   } catch (error) {
     const message = error?.message ?? String(error);
     // Large segment: split once and compress the pieces.
@@ -396,12 +396,25 @@ async function compressSegmentWithRecovery(service, segment, instruction, profil
       const degraded = results.some((r) => r.degraded);
       const warnings = results.flatMap((r) => r.warnings);
       if (!degraded) warnings.push("segment recovered by re-splitting after a failure");
-      return { text, degraded, warnings };
+      const lastOk = [...results].reverse().find((r) => r.provider !== void 0);
+      return {
+        text,
+        degraded,
+        warnings,
+        provider: lastOk?.provider,
+        model: lastOk?.model
+      };
     }
     // Small segment: retry once before giving up.
     try {
       const retry = await callSegment(service, segment, instruction, profile, plan, 1, exec, segmentOptions);
-      return { text: retry.text, degraded: false, warnings: [`segment recovered after retry (${message})`] };
+      return {
+        text: retry.text,
+        degraded: false,
+        warnings: [`segment recovered after retry (${message})`],
+        provider: retry.provider,
+        model: retry.model
+      };
     } catch {
       return { text: segment, degraded: true, warnings: [`segment compression failed: ${message}`] };
     }
@@ -463,6 +476,7 @@ export async function compressWithPlan(service, args, exec = {}) {
   const compressedSegments = segmentResults.map((r) => r.text);
   warnings.push(...segmentResults.flatMap((r) => r.warnings));
   const degraded = segmentResults.some((r) => r.degraded);
+  const lastOkSegment = [...segmentResults].reverse().find((r) => r.provider !== void 0);
 
   const merged = compressedSegments.join("\n\n");
   let finalText = merged;
@@ -514,8 +528,8 @@ export async function compressWithPlan(service, args, exec = {}) {
     originalChars: text.length,
     compressedChars: finalText.length,
     ratio: text.length > 0 ? Math.round((finalText.length / text.length) * 100) / 100 : 0,
-    provider: lastResult?.provider ?? "",
-    model: lastResult?.model ?? "",
+    provider: lastResult?.provider ?? lastOkSegment?.provider ?? "",
+    model: lastResult?.model ?? lastOkSegment?.model ?? "",
     strategy: profile.primary,
     confidence: profile.confidence,
     rounds,
