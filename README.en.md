@@ -102,7 +102,7 @@ After restarting DSH:
 
 ### Settings
 
-Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model.
+Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. You can also disable "Show auxiliary model status chip in conversation UI" — when disabled, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
 
 ### Programmatic API (for plugin developers)
 

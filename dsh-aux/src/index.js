@@ -73,6 +73,7 @@ const SESSION_IMAGE_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 /** Settings schema: global fallback switch plus one section per task. */
 const AUX_SETTINGS_SCHEMA = z.object({
   fallbackToMain: z.boolean().default(true),
+  showStatusChip: z.boolean().default(true),
   tasks: z.object({
     vision: z.object({
       provider: z.string(),
@@ -107,6 +108,7 @@ const AUX_SETTINGS_SCHEMA = z.object({
  */
 function projectSettings(settings) {
   const fallbackToMain = settings?.fallbackToMain ?? true;
+  const showStatusChip = settings?.showStatusChip ?? true;
   const tasks = {};
   for (const task of AUX_TASKS) {
     const raw = settings?.tasks?.[task] ?? {};
@@ -117,7 +119,7 @@ function projectSettings(settings) {
       ...(raw.maxConcurrency !== void 0 ? { maxConcurrency: raw.maxConcurrency } : {})
     };
   }
-  return { fallbackToMain, tasks };
+  return { fallbackToMain, showStatusChip, tasks };
 }
 
 /**
@@ -227,6 +229,8 @@ export class AuxLlmService extends Service {
     this._semaphores = new Map();
     this._cooldown = new FailureCooldown();
     this._customTasks = new Map();
+    this._projectionCtx = void 0;
+    this._auxStatusProjectionDispose = void 0;
     this._recomputeMerged();
     // Main-agent guidance: tell the chat model the auxiliary tools exist and
     // are executed by a separate auxiliary LLM, so it uses vision_analyze
@@ -249,9 +253,11 @@ export class AuxLlmService extends Service {
       setSource: (current) => {
         this._source = current;
         this._recomputeMerged();
+        this._syncAuxStatusProjection();
       },
       onChange: () => {
         this._recomputeMerged();
+        this._syncAuxStatusProjection();
       },
       validate: validateAuxSettings,
       // The settings page is a first-class capability of this plugin:
@@ -288,20 +294,8 @@ export class AuxLlmService extends Service {
       return () => clearInterval(timer);
     });
     ctx.inject(["sessionProjections"], (projectionCtx) => {
-      projectionCtx.sessionProjections.register({
-        key: AUX_STATUS_KEY,
-        schema: zodz.object({ tasks: zodz.record(zodz.any()) }),
-        init: () => ({ tasks: {} }),
-        apply: (state, event) => {
-          if (event.type === AUX_CALL_EVENT) {
-            const tasks = { ...state.tasks, [event.data.task]: event.data };
-            return { tasks };
-          }
-          return state;
-        },
-        view: (state) => state,
-        stateVersion: 1
-      });
+      this._projectionCtx = projectionCtx;
+      this._syncAuxStatusProjection();
     });
     ctx.inject(["commands"], (commandCtx) => {
       commandCtx.commands.register({
@@ -351,7 +345,7 @@ export class AuxLlmService extends Service {
 
   /** Recomputed merged task config from the live settings source. */
   _recomputeMerged() {
-    const settings = this._source?.() ?? { fallbackToMain: true, tasks: {} };
+    const settings = this._source?.() ?? { fallbackToMain: true, showStatusChip: true, tasks: {} };
     const merged = {};
     for (const task of AUX_TASKS) {
       merged[task] = mergeTaskConfig(
@@ -361,6 +355,58 @@ export class AuxLlmService extends Service {
     }
     this._merged = merged;
     this.fallbackToMain = settings.fallbackToMain ?? true;
+    this.showStatusChip = settings.showStatusChip ?? true;
+  }
+
+  /**
+   * Register or unregister the `aux-status` projection according to the
+   * `showStatusChip` setting. The projection is the Web-visible surface for
+   * the composer chip; when the user disables the chip, we stop exposing it
+   * to third-party plugins entirely. The `/aux status` command reads session
+   * events directly and is not affected.
+   */
+  _syncAuxStatusProjection() {
+    if (this._projectionCtx === void 0) return;
+    const enabled = this.showStatusChip !== false;
+    if (enabled && this._auxStatusProjectionDispose === void 0) {
+      this._auxStatusProjectionDispose = this._projectionCtx.sessionProjections.register({
+        key: AUX_STATUS_KEY,
+        schema: zodz.object({
+          tasks: zodz.record(zodz.object({
+            task: zodz.string(),
+            ok: zodz.boolean(),
+            fallbackUsed: zodz.boolean(),
+            durationMs: zodz.number()
+          }))
+        }),
+        init: () => ({ tasks: {} }),
+        apply: (state, event) => {
+          if (event.type === AUX_CALL_EVENT) {
+            const data = event.data;
+            // Privacy minimization: only expose what the UI chip needs.
+            // provider/model, errorCode, inputChars/outputChars stay in the
+            // session event log (for /aux status and audit) but are NOT
+            // published through the projection to Web/third-party readers.
+            const tasks = {
+              ...state.tasks,
+              [data.task]: {
+                task: data.task,
+                ok: data.ok === true,
+                fallbackUsed: data.fallbackUsed === true,
+                durationMs: data.durationMs
+              }
+            };
+            return { tasks };
+          }
+          return state;
+        },
+        view: (state) => state,
+        stateVersion: 1
+      });
+    } else if (!enabled && this._auxStatusProjectionDispose !== void 0) {
+      this._auxStatusProjectionDispose();
+      this._auxStatusProjectionDispose = void 0;
+    }
   }
 
   /**

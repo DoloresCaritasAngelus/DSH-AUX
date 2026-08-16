@@ -102,7 +102,7 @@ dsh plugin --profile web add "file:$(pwd)"
 
 ### 设置页
 
-Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `compress` / `compaction` 配置模型;其中 **`compaction` 就是会话压缩模型**,配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。
+Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `compress` / `compaction` 配置模型;其中 **`compaction` 就是会话压缩模型**,配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。还可以关闭「在对话界面显示辅助模型状态芯片」——关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 命令不受影响。
 
 ### 编程调用(给其他插件开发者)
 

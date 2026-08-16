@@ -114,6 +114,10 @@ window.__ModuleLoader__.load({
 					if (draft.fallbackToMain) ops.push({ op: "set", path: ["fallbackToMain"], value: true });
 					else ops.push({ op: "unset", path: ["fallbackToMain"] });
 				}
+				if (draft?.showStatusChip !== void 0) {
+					if (draft.showStatusChip === false) ops.push({ op: "set", path: ["showStatusChip"], value: false });
+					else ops.push({ op: "unset", path: ["showStatusChip"] });
+				}
 				api.settings.mutate({ ns: "aux", ops, expectedRevision: state.revision }).then((response) => {
 					setSaving(false);
 					if (!response.result.ok) {
@@ -159,6 +163,10 @@ window.__ModuleLoader__.load({
 					react.createElement("input", { type: "checkbox", checked: draft?.fallbackToMain !== false, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.fallbackToMain = e.target.checked; return next; }); } }),
 					"失败时降级到主模型 (fallbackToMain)"
 				),
+				react.createElement("label", { className: "ax-switch" },
+					react.createElement("input", { type: "checkbox", checked: draft?.showStatusChip !== false, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.showStatusChip = e.target.checked; return next; }); } }),
+					"在对话界面显示辅助模型状态芯片"
+				),
 				react.createElement("div", { className: "ax-actions" },
 					react.createElement("button", { type: "button", className: "ax-save", disabled: saving || !state.writable, onClick: save }, saving ? "保存中…" : "保存"),
 					saveError !== null && react.createElement("span", { className: "ax-status ax-error", role: "alert" }, saveError),
@@ -178,8 +186,9 @@ window.__ModuleLoader__.load({
 			if (entries.length === 0) return null;
 			const last = entries[entries.length - 1];
 			const ok = last.ok === true;
-			const label = (last.task === "vision" ? "视觉" : last.task === "web_extract" ? "网页" : last.task === "compaction" ? "会话压缩" : "压缩") + " " + (last.model ?? "").split("/").pop();
-			const title = `辅助调用 ${last.task}: ${last.provider}/${last.model} ${ok ? "成功" : "失败"} ${last.durationMs}ms${last.fallbackUsed ? " (已降级)" : ""}`;
+			const taskLabel = last.task === "vision" ? "视觉" : last.task === "web_extract" ? "网页" : last.task === "compaction" ? "会话压缩" : "压缩";
+			const label = taskLabel + (ok ? " ✓" : " ✗");
+			const title = `辅助调用 ${last.task}: ${ok ? "成功" : "失败"} ${last.durationMs}ms${last.fallbackUsed ? " (已降级)" : ""}`;
 			return react.createElement("span", { className: "ax-wrap", title }, react.createElement("span", {
 				className: "ax-chip " + (ok ? "ax-ok" : "ax-fail"),
 				"aria-label": title

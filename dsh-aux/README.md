@@ -96,6 +96,8 @@ ln -s /path/to/dsh-aux <DSH>/node_modules/@dolorescaritasangelus/dsh-aux
   `/aux memory [n]`(图片记忆)、`/aux gc-images [days]`(手动回收旧附件)。
 - 设置页:Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `compress` / `compaction`
   配置模型;其中 `compaction` 即会话压缩模型,配置后原生压缩会走 AUX。
+  还可关闭「在对话界面显示辅助模型状态芯片」,关闭后不再向 Web/第三方暴露
+  `aux-status` 投影,`/aux status` 命令不受影响。
 
 ### 编程调用(其他插件)
 

@@ -302,7 +302,16 @@ async function makeHarness(config) {
         async readBytes(target, signal, byteCap) { return new Uint8Array([1, 2, 3]); }
       });
       stubCtx.provide('sessionProjections', {
-        register(definition) { projections.push(definition); return () => {}; }
+        register(definition) {
+          projections.push(definition);
+          let removed = false;
+          return () => {
+            if (removed) return;
+            removed = true;
+            const index = projections.indexOf(definition);
+            if (index >= 0) projections.splice(index, 1);
+          };
+        }
       });
       stubCtx.provide('commands', {
         register(definition) { commands.push(definition); return () => {}; }
@@ -505,7 +514,30 @@ test('投影: aux/llm-call 事件折叠为每任务最近记录', async () => {
   });
   assert.equal(state.tasks.vision.ok, true);
   assert.equal(state.tasks.compress.ok, false);
-  assert.equal(state.tasks.vision.model, 'm');
+  assert.equal(state.tasks.vision.durationMs, 10);
+  assert.equal(state.tasks.vision.fallbackUsed, false);
+  // 隐私最小化:投影不暴露 provider/model/errorCode/inputChars/outputChars
+  assert.equal(state.tasks.vision.provider, void 0);
+  assert.equal(state.tasks.vision.model, void 0);
+  assert.equal(state.tasks.vision.errorCode, void 0);
+  assert.equal(state.tasks.vision.inputChars, void 0);
+  assert.equal(state.tasks.vision.outputChars, void 0);
+});
+
+test('隐私: showStatusChip=false 时注销 aux-status 投影,重新开启后恢复', async () => {
+  const { ctx, projections } = await makeHarness();
+  assert.equal(projections.length, 1, '默认应注册 aux-status 投影');
+  assert.equal(projections[0].key, AUX_STATUS_KEY);
+
+  // 关闭状态芯片 → 注销投影
+  ctx.auxLlm.showStatusChip = false;
+  ctx.auxLlm._syncAuxStatusProjection();
+  assert.equal(projections.length, 0, '关闭后不应暴露 aux-status 投影');
+
+  // 重新开启 → 重新注册
+  ctx.auxLlm.showStatusChip = true;
+  ctx.auxLlm._syncAuxStatusProjection();
+  assert.equal(projections.length, 1, '重新开启后应恢复 aux-status 投影');
 });
 
 test('call: 未配置任务用默认辅助模型,成功返回文本与路由', async () => {
