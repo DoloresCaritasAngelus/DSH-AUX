@@ -32,6 +32,7 @@ import {
   resolveConfig,
   resolvePrimaryRoute,
   route,
+  shouldFallback,
   taskConcurrency,
   taskTimeoutMs
 } from "./route.js";
@@ -312,6 +313,19 @@ export class AuxLlmService extends Service {
         candidates.push(mainRoute);
       }
       if (candidates.length === 0) {
+        // No route at all (no configured primary and no main model). Log the
+        // failure explicitly so the no-route case is observable in the status
+        // projection even though it never reaches the attempt loop.
+        await recordAuxEvent(this, request.session, {
+          task,
+          provider: "",
+          model: "",
+          ok: false,
+          durationMs: Date.now() - startedAt,
+          errorCode: "no-route",
+          fallbackUsed: false,
+          purpose: request.purpose
+        });
         throw new Error(`aux task "${task}": no route configured and no main model available`);
       }
       let lastError;
@@ -344,7 +358,7 @@ export class AuxLlmService extends Service {
           const kind = classifyFailure(error, request.signal);
           attempts.push({ ...candidate, kind, error });
           lastError = error;
-          if (kind === "aborted") break;
+          if (!shouldFallback(kind)) break;
           // `content` failures are request-specific (e.g. unsupported image
           // input), not route-health problems; don't poison the shared cooldown
           // for other tasks using the same provider+model.
@@ -549,6 +563,20 @@ export class AuxLlmService extends Service {
         primary: primary ?? null,
         timeoutMs: taskTimeoutMs(definition),
         maxConcurrency: taskConcurrency(definition)
+      });
+    }
+    // Custom tasks registered via registerTask/registerAuxTask also appear in
+    // the status view (label defaults to the task key).
+    for (const [key, definition] of this._customTasks) {
+      const customDef = { task: key, ...definition };
+      const primary = resolvePrimaryRoute(customDef, this.taskDefaults);
+      out.push({
+        task: key,
+        label: definition.label ?? key,
+        configured: definition?.provider !== void 0,
+        primary: primary ?? null,
+        timeoutMs: taskTimeoutMs(customDef),
+        maxConcurrency: taskConcurrency(customDef)
       });
     }
     return out;

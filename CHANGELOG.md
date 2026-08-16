@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.8(未发布)— 低/中优先级质量加固
+
+- **路由可观测性**:无路由失败也会记录 `aux/llm-call` 事件;`shouldFallback` 从死代码变为实际使用。
+- **自定义任务**:`registerTask` 注册的任务现在出现在 `/aux status`,并可通过 `/aux model` 查看(写入仍不支持)。
+- **压缩引擎**:
+  - `compressWithPlan` 支持透传 `singleCallMaxChars` / `maxRounds` / `maxSegments`;
+  - `maxRounds < 3` 时自动禁用分层压缩;
+  - `maxOutputChars` 强制正整数;
+  - 单行超长文本保持完整行,不再因硬切破坏 `\n` 重组。
+- **抓取与视觉**:
+  - 非 OK/异常路径统一释放 HTTP body;
+  - `vision_analyze` 多图改为 allSettled,单图失败不再丢弃全部结果。
+- **图片生命周期**:
+  - `session-images.json` 所有写盘(含 cleanup 整体读改写)串行化;
+  - GC 增加 `lstat` 复核,降低符号链接 TOCTOU;
+  - `onSessionDisposed` 改用显式 shutdown 标志,批量删除不再被误判为关机。
+- **测试稳定性**:固定 sleep 改为轮询等待;新增 15 项回归测试;总测试 157 项。
+
 ## 0.1.7(2026-08-16)— compress_text 场景化压缩与质量加固
 
 - **场景感知**:自动识别代码/日志/文档/通用,支持 `mode` 软提示与 `preserve` 结构化保留规则;混合内容走增强版通用模式。

@@ -108,13 +108,22 @@ export async function handleAuxCommand(service, agent, rawInput) {
 /** Handle the /aux model subcommand: read or write one task's route. */
 export async function handleModelCommand(service, args) {
   const task = args[0] ?? "";
-  if (!AUX_TASKS.includes(task)) {
+  const isBuiltin = AUX_TASKS.includes(task);
+  const custom = isBuiltin ? void 0 : service._customTasks?.get(task);
+  if (!isBuiltin && custom === void 0) {
     return {
       kind: "error",
       text: `用法: /aux model <task> [provider/model] — task ∈ {${AUX_TASKS.join(", ")}}`
     };
   }
-  const definition = { task, ...(service._merged[task] ?? {}) };
+  // Custom tasks are view-only through /aux model; their route is fixed by
+  // the registering plugin, not user-configurable.
+  if (!isBuiltin && args.length >= 2) {
+    return { kind: "error", text: "custom tasks are not configurable via /aux model" };
+  }
+  const definition = isBuiltin
+    ? { task, ...(service._merged[task] ?? {}) }
+    : { task, ...custom };
   const primary = resolvePrimaryRoute(definition, service.taskDefaults);
   if (args.length < 2) {
     const current = primary

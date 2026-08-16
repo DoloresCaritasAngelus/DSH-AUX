@@ -29,21 +29,35 @@ export async function loadSessionImages() {
   }
 }
 
-/** Persist the ownership map atomically (tmp + rename). */
+/**
+ * Serialize a session-images.json write on the service's per-service promise
+ * queue. Repeated writers (debounced saves, cleanup persistence, concurrent
+ * multi-image turns) chain through one queue so the read-modify-write of the
+ * shared file never interleaves.
+ */
+function enqueueSessionImagesWrite(service, write) {
+  if (!service._sessionImagesWriteQueue) service._sessionImagesWriteQueue = Promise.resolve();
+  service._sessionImagesWriteQueue = service._sessionImagesWriteQueue
+    .then(() => write())
+    .catch(() => { /* best-effort: ownership recording must never break vision calls */ });
+  return service._sessionImagesWriteQueue;
+}
+
+/** Persist the ownership map atomically (tmp + rename), serialized. */
 export async function saveSessionImages(service) {
-  const path = sessionImagesPath();
-  if (path === void 0) return;
-  const obj = {};
-  for (const [sid, ids] of service._sessionImages) {
-    obj[sid] = [...ids];
-  }
-  try {
-    const tmp = path + ".tmp";
-    await writeFileText(tmp, JSON.stringify(obj));
-    await renameFile(tmp, path);
-  } catch {
-    /* best-effort: ownership recording must never break vision calls */
-  }
+  return enqueueSessionImagesWrite(service, async () => {
+    const path = sessionImagesPath();
+    if (path === void 0) return;
+    const obj = {};
+    for (const [sid, ids] of service._sessionImages) {
+      obj[sid] = [...ids];
+    }
+    try {
+      const tmp = path + ".tmp";
+      await writeFileText(tmp, JSON.stringify(obj));
+      await renameFile(tmp, path);
+    } catch { /* best-effort: ownership recording must never break vision calls */ }
+  });
 }
 
 /**
@@ -129,72 +143,88 @@ export async function reconcileSessionImages(service) {
 }
 
 /**
+ * Arm an explicit shutdown hook on the service (idempotent). Once installed,
+ * the next process exit signal flips `service._shuttingDown` so that
+ * `onSessionDisposed` can tell a real process shutdown (which disposes every
+ * session at once) apart from an ordinary user delete.
+ */
+export function installShutdownHook(service) {
+  if (service._shutdownHookInstalled) return;
+  service._shutdownHookInstalled = true;
+  const markShuttingDown = () => {
+    service._shuttingDown = true;
+  };
+  process.once("beforeExit", markShuttingDown);
+  process.once("SIGTERM", markShuttingDown);
+  process.once("SIGINT", markShuttingDown);
+}
+
+/**
  * Delete-triggered attachment GC. Runs when a session is disposed; removes
- * images that session owned and that no other session references. A burst
- * of simultaneous disposals (process shutdown) is skipped wholesale.
+ * images that session owned and that no other session references. When the
+ * process is shutting down every session disposes at once — not a user
+ * delete — so that wholesale burst is skipped.
  */
 export function onSessionDisposed(service, session) {
   const sid = session?.id ?? session?.sessionId;
   if (sid === void 0) return;
   // Process shutdown disposes every session at once — not a user delete.
-  if (service._disposalBurst) {
-    service._disposalBurst.add(sid);
-    return;
-  }
-  service._disposalBurst = new Set([sid]);
-  setTimeout(() => {
-    const burst = service._disposalBurst;
-    service._disposalBurst = void 0;
-    if (burst !== void 0 && burst.size > 1) return; // shutdown: skip
-    cleanupSessionImages(service, sid);
-  }, 0);
+  if (service._shuttingDown === true) return;
+  installShutdownHook(service);
+  cleanupSessionImages(service, sid);
 }
 
 /** Delete one disposed session's unreferenced images and update the map. */
 export async function cleanupSessionImages(service, sessionId) {
-  const home = process.env.DSH_HOME || (process.env.HOME ? process.env.HOME + "/.dsh" : void 0);
-  if (home === void 0) return;
-  const objectsRoot = home + "/attachments/v1/objects";
-  const map = await loadSessionImages();
-  const mine = map.get(sessionId);
-  if (mine === void 0 || mine.size === 0) return;
-  // Which other sessions reference each id?
-  let removed = 0;
-  for (const attachmentId of mine) {
-    const referencedElsewhere = [...map.entries()].some(([sid, ids]) =>
-      sid !== sessionId && ids.has(attachmentId)
-    );
-    if (referencedElsewhere) continue;
-    const match = /^sha256:([a-f0-9]{64})$/.exec(String(attachmentId));
-    if (match === null) continue;
-    const hash = match[1];
-    const real = objectsRoot + "/" + hash.slice(0, 2) + "/" + hash;
-    try {
-      await unlinkFile(real);
-    } catch { /* already gone */ }
-    // Companion .ext hardlink from the image bridge, if present.
-    const extensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
-    for (const ext of extensions) {
+  // Serialize the WHOLE read-modify-write+delete operation through the shared
+  // queue, not just the final write. Otherwise two concurrent cleanups can
+  // both read the same disk map, delete different files, and then write back
+  // maps that resurrect each other's deletions.
+  return enqueueSessionImagesWrite(service, async () => {
+    const home = process.env.DSH_HOME || (process.env.HOME ? process.env.HOME + "/.dsh" : void 0);
+    if (home === void 0) return;
+    const objectsRoot = home + "/attachments/v1/objects";
+    const map = await loadSessionImages();
+    const mine = map.get(sessionId);
+    if (mine === void 0 || mine.size === 0) return;
+    // Which other sessions reference each id?
+    let removed = 0;
+    for (const attachmentId of mine) {
+      const referencedElsewhere = [...map.entries()].some(([sid, ids]) =>
+        sid !== sessionId && ids.has(attachmentId)
+      );
+      if (referencedElsewhere) continue;
+      const match = /^sha256:([a-f0-9]{64})$/.exec(String(attachmentId));
+      if (match === null) continue;
+      const hash = match[1];
+      const real = objectsRoot + "/" + hash.slice(0, 2) + "/" + hash;
       try {
-        await unlinkFile(real + ext);
-      } catch { /* absent */ }
-    }
-    removed += 1;
-  }
-  if (removed > 0) {
-    map.delete(sessionId);
-    // Keep the in-memory cache consistent: a later debounced save must not
-    // resurrect the deleted session's entries from the stale cache.
-    service._sessionImages.delete(sessionId);
-    const obj = {};
-    for (const [sid, ids] of map) obj[sid] = [...ids];
-    try {
-      const path = sessionImagesPath();
-      if (path !== void 0) {
-        const tmp = path + ".tmp";
-        await writeFileText(tmp, JSON.stringify(obj));
-        await renameFile(tmp, path);
+        await unlinkFile(real);
+      } catch { /* already gone */ }
+      // Companion .ext hardlink from the image bridge, if present.
+      const extensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+      for (const ext of extensions) {
+        try {
+          await unlinkFile(real + ext);
+        } catch { /* absent */ }
       }
-    } catch { /* best-effort */ }
-  }
+      removed += 1;
+    }
+    if (removed > 0) {
+      map.delete(sessionId);
+      // Keep the in-memory cache consistent: a later debounced save must not
+      // resurrect the deleted session's entries from the stale cache.
+      service._sessionImages.delete(sessionId);
+      const obj = {};
+      for (const [sid, ids] of map) obj[sid] = [...ids];
+      try {
+        const path = sessionImagesPath();
+        if (path !== void 0) {
+          const tmp = path + ".tmp";
+          await writeFileText(tmp, JSON.stringify(obj));
+          await renameFile(tmp, path);
+        }
+      } catch { /* best-effort */ }
+    }
+  });
 }

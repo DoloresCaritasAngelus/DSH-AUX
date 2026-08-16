@@ -14,7 +14,7 @@
 > **不建立子智能体、不做会话协同**——辅助任务(视觉、网页提取、文本压缩)由独立辅助 LLM 完成。
 
 [![版本](https://img.shields.io/badge/version-0.1.7-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
-[![测试](https://img.shields.io/badge/tests-137-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+[![测试](https://img.shields.io/badge/tests-157-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 [![许可证](https://img.shields.io/badge/license-MIT-green)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 
 ## 目录
@@ -179,10 +179,7 @@ const result = await ctx.auxLlm.call("compress", {
 ## 测试
 
 ```sh
-node --test tests/aux.test.js        # 102 项,零依赖
-node --test tests/compression.test.js # 30 项,压缩引擎回归
-node --test tests/memory-race.test.js # 1 项,并发写回归
-node --test tests/bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自动跳过)
+node --test tests/*.test.js            # 157 项,零依赖
 ```
 
 ## 源码结构

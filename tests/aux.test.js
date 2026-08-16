@@ -93,6 +93,16 @@ function settle() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+/** 轮询等待条件成立(替代固定 setTimeout 等待),超时抛错。 */
+async function pollUntil(condition, { timeoutMs = 2000, intervalMs = 10 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (await condition()) return;
+    if (Date.now() >= deadline) throw new Error('pollUntil: timed out waiting for condition');
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
 // ── route.js 纯逻辑 ──────────────────────────────────────────────────────
 
 test('resolveConfig: 空配置合法,未知键抛错', () => {
@@ -1668,7 +1678,13 @@ test('归属缓存: 重启后(内存空)新增归属不覆盖磁盘旧记录', a
   try {
     // 新进程:内存缓存为空,新增一个归属(触发 debounce 写盘)
     await recordAttachmentOwnership(ctx.auxLlm, 'sess-new', 'att-image/png');
-    await new Promise((r) => setTimeout(r, 50)); // 等 debounce
+    // 轮询直到新记录落盘(替代固定 sleep)
+    await pollUntil(async () => {
+      try {
+        const map = JSON.parse(await fsPromises.readFile(tmp + '/attachments/v1/session-images.json', 'utf8'));
+        return Array.isArray(map['sess-new']);
+      } catch { return false; }
+    });
     const map = JSON.parse(await fsPromises.readFile(tmp + '/attachments/v1/session-images.json', 'utf8'));
     assert.ok(Array.isArray(map['sess-old']), '磁盘旧记录必须保留: ' + JSON.stringify(map));
     assert.ok(Array.isArray(map['sess-new']), '新记录应写入: ' + JSON.stringify(map));
@@ -1697,7 +1713,13 @@ test('归属缓存: 清理会话后内存缓存同步删除,写盘不复活', as
     await cleanupSessionImages(ctx.auxLlm, 'sess-1');
     // 再触发一次写盘(内存缓存若残留 sess-1 会复活)
     await recordAttachmentOwnership(ctx.auxLlm, 'sess-2', 'att-image/png');
-    await new Promise((r) => setTimeout(r, 50));
+    // 轮询直到 sess-2 落盘且清理后的 sess-1 未复活(替代固定 sleep)
+    await pollUntil(async () => {
+      try {
+        const map = JSON.parse(await fsPromises.readFile(tmp + '/attachments/v1/session-images.json', 'utf8'));
+        return Array.isArray(map['sess-2']) && map['sess-1'] === void 0;
+      } catch { return false; }
+    });
     const map = JSON.parse(await fsPromises.readFile(tmp + '/attachments/v1/session-images.json', 'utf8'));
     assert.equal(map['sess-1'], void 0, '清理后写盘不得复活 sess-1: ' + JSON.stringify(map));
     assert.ok(Array.isArray(map['sess-2']));

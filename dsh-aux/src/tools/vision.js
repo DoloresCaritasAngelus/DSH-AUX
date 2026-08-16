@@ -9,14 +9,20 @@ import { resolveImageRef } from "../images/resolve.js";
 import { recordAttachmentOwnership } from "../images/ownership.js";
 import { recordImageMemory } from "../images/memory.js";
 
-/** Run async work over an array with a bounded number of concurrent workers. */
+/** Run async work over an array with a bounded number of concurrent workers.
+ * Returns per-item allSettled-style results in input order so a single
+ * failure does not drop the other items. */
 async function mapWithConcurrency(items, limit, fn) {
   const results = new Array(items.length);
   let index = 0;
   const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
     while (index < items.length) {
       const i = index++;
-      results[i] = await fn(items[i]);
+      try {
+        results[i] = { status: "fulfilled", value: await fn(items[i]) };
+      } catch (error) {
+        results[i] = { status: "rejected", reason: error };
+      }
     }
   });
   await Promise.all(workers);
@@ -59,12 +65,26 @@ export async function runVision(service, args, exec) {
   const items = images.length > 0
     ? images
     : [{ attachmentId: args.attachmentId, imagePath: args.imagePath, imageUrl: args.imageUrl }];
-  const results = await mapWithConcurrency(items, Math.min(maxImages, 4), (item) => analyzeOne(service, item, question, exec));
-  if (images.length === 0) return results[0]; // classic single-image shape
+  const settled = await mapWithConcurrency(items, Math.min(maxImages, 4), (item) => analyzeOne(service, item, question, exec));
+  if (images.length === 0) {
+    // Classic single-image shape: preserve the old throw-on-failure contract.
+    if (settled[0].status === "rejected") throw settled[0].reason;
+    return settled[0].value;
+  }
+  const results = settled.map((entry) =>
+    entry.status === "fulfilled"
+      ? entry.value
+      : {
+          analysis: `vision_analyze: image failed: ${entry.reason?.message ?? String(entry.reason)}`,
+          provider: "",
+          model: ""
+        }
+  );
+  const firstOk = results.find((r) => r.provider !== "");
   return {
     analyses: results,
-    provider: results[0].provider,
-    model: results[0].model
+    provider: firstOk?.provider ?? "",
+    model: firstOk?.model ?? ""
   };
 }
 
