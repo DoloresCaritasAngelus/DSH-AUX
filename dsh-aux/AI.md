@@ -61,7 +61,7 @@ node patch-settings-allowlist.mjs    # 设置页可写 aux(可选但推荐)
 
 检查输出无 error;成功后跳到 §3。
 
-### 方式 B:手动(命令不可用、profile 无 pnpm 环境、或源码目录时)
+### 方式 C:手动(命令不可用、profile 无 pnpm 环境、或源码目录时)
 
 ```sh
 DSH_ROOT=<第 1 步找到的部署根,含 node_modules>
@@ -101,6 +101,8 @@ dsh --profile web --dump-config 2>/dev/null | grep -A1 "id: aux" | head -4
 #   - /aux status 显示 image-bridge 状态(已集成/缺失)
 #   - /aux status 显示 compaction-bridge 状态;配置 `/aux model compaction ...`
 #     后原生自动/手动压缩会走 AUX 辅助模型
+#   - 若会话使用「极简」或「Anchored Standard」预设:首轮不会出现 vision_analyze,
+#     首个 tool/call 后才会开放——这是预期行为,不要把它当安装失败
 ```
 
 ## 4. 常见问题(故障排查)
