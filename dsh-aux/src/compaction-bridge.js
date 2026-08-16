@@ -163,8 +163,15 @@ export async function summarizeViaAux(aux, input, agent, signal, maxTokens) {
     content: [{ type: "text", text: COMPACTION_INSTRUCTION }],
     source: { kind: "plugin", plugin: "dsh-aux" }
   });
+  // Let the AUX service degrade unusable image blocks (missing attachment
+  // objects, or no image-capable compaction route) to text placeholders so a
+  // text-only summarizer can still produce a checkpoint summary. A fake/stub
+  // `aux` without the preparation hook keeps using the original messages.
+  const messages = typeof aux._prepareCompactionMessages === "function"
+    ? await aux._prepareCompactionMessages(input.messages, agent, signal)
+    : input.messages;
   const result = await aux.call("compaction", {
-    messages: [...input.messages, instructionMessage],
+    messages: [...messages, instructionMessage],
     ...(input.system === void 0 ? {} : { system: input.system }),
     ...(input.tools === void 0 ? {} : { tools: [...input.tools] }),
     ...(maxTokens === void 0 ? {} : { maxTokens }),

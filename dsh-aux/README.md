@@ -100,6 +100,10 @@ const result = await ctx.auxLlm.call("compress", {
 > 对超大输入（实测 shadowed 449K tokens 可单次成功）请调大
 > `compaction.timeoutMs`（例如 `300000`），默认 60s 在超大输入时容易超时失败。
 
+> 含图会话压缩时，AUX 会先检查图片附件与路由能力：附件可读且路由支持图片则
+> 保留图像信息；附件已被 GC/清理或路由为纯文本时，自动把图片降级为文本占位，
+> 避免 `/compact` / 自动压缩因一张不可用的图片整体失败。
+
 ## 集成组件与配套
 
 - **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行)。让**纯文本

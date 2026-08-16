@@ -555,6 +555,87 @@ test('compaction bridge: AUX 失败时抛出真实错误，不再 fallback 原�
   assert.match(warned, /AUX_REAL_ERROR/);
 });
 
+test('compaction bridge: 附件缺失的图片降级为文本占位,压缩仍可走 AUX', async () => {
+  const { ctx } = await makeHarness({
+    tasks: { compaction: { provider: 'volcengine-ark', model: 'glm-5.2' } }
+  });
+  // 模拟图片对象已被 GC/清理:读附件报 "Attachment object is missing."
+  const attachments = ctx.auxLlm._imageCtx?.get('attachments') ?? ctx.get('attachments');
+  const originalRead = attachments.readImage;
+  attachments.readImage = async () => {
+    const error = new Error('Attachment object is missing.');
+    error.code = 'ATTACHMENT_NOT_FOUND';
+    throw error;
+  };
+  let seen;
+  ctx.auxLlm.call = async (task, request) => {
+    seen = request;
+    assert.equal(task, 'compaction');
+    return { text: 'CHECKPOINT', provider: 'volcengine-ark', model: 'glm-5.2' };
+  };
+  const input = {
+    system: 'sys',
+    tools: [],
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: 'before' },
+        { type: 'image', attachment: { attachmentId: 'sha256:dead', mediaType: 'image/png', width: 10, height: 10, name: 'pic.png' } }
+      ],
+      id: 'm1',
+      source: { kind: 'plugin', plugin: 'test' }
+    }]
+  };
+  const agent = { session: { id: 'sess-1', requestHeader() { return { config: { provider: 'opencode-go', model: 'deepseek-v4-flash' } }; } } };
+  const result = await summarizeViaAux(ctx.auxLlm, input, agent, void 0, 8192);
+  assert.equal(result.provider, 'volcengine-ark');
+  assert.ok(seen, '应调用 AUX call');
+  assert.equal(seen.messages[0].content.some((b) => b.type === 'image'), false, '缺失图片不应再以 image block 发送');
+  const placeholder = seen.messages[0].content.find((b) => b.type === 'text' && b.text.includes('图片'));
+  assert.ok(placeholder, '缺失图片应替换为文本占位');
+  assert.match(placeholder.text, /pic\.png/);
+  // 还原,避免影响后续测试
+  attachments.readImage = originalRead;
+});
+
+test('compaction bridge: 候选路由均不支持图像时图片全部降级为文本', async () => {
+  const { ctx } = await makeHarness({
+    tasks: { compaction: { provider: 'opencode-go', model: 'deepseek-v4-flash' } }
+  });
+  let readCalled = false;
+  const attachments = ctx.auxLlm._imageCtx?.get('attachments') ?? ctx.get('attachments');
+  const originalRead = attachments.readImage;
+  attachments.readImage = async (ref) => {
+    readCalled = true;
+    return { ref, data: new Uint8Array(1) };
+  };
+  let seen;
+  ctx.auxLlm.call = async (task, request) => {
+    seen = request;
+    return { text: 'CHECKPOINT', provider: 'opencode-go', model: 'deepseek-v4-flash' };
+  };
+  const input = {
+    system: 'sys',
+    tools: [],
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', attachment: { attachmentId: 'sha256:dead', mediaType: 'image/png', width: 10, height: 10, name: 'pic.png' } },
+        { type: 'text', text: 'after' }
+      ],
+      id: 'm1',
+      source: { kind: 'plugin', plugin: 'test' }
+    }]
+  };
+  const agent = { session: { id: 'sess-1', requestHeader() { return { config: { provider: 'opencode-go', model: 'deepseek-v4-flash' } }; } } };
+  const result = await summarizeViaAux(ctx.auxLlm, input, agent, void 0, 8192);
+  assert.equal(result.provider, 'opencode-go');
+  assert.equal(readCalled, false, '候选不支持图像时不应尝试读附件');
+  assert.equal(seen.messages[0].content.some((b) => b.type === 'image'), false, '所有图片应降级为文本');
+  assert.ok(seen.messages[0].content.some((b) => b.type === 'text' && b.text.includes('图片')));
+  attachments.readImage = originalRead;
+});
+
 test('call: 未知任务抛错', async () => {
   const { ctx } = await makeHarness();
   await assert.rejects(() => ctx.auxLlm.call('nope', { messages: [] }), /unknown task "nope"/);

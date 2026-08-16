@@ -573,6 +573,93 @@ export class AuxLlmService extends Service {
   }
 
   /**
+   * Prepare messages for a compaction-style AUX call.
+   *
+   * Compaction replays derived session messages, which may carry image blocks
+   * with only durable attachment references. The summarizer can use them only
+   * when a compaction candidate route accepts images AND the attachment bytes
+   * still exist (they may be missing after attachment GC, or after images were
+   * handled by subagents rather than by this plugin). To keep `/compact` and
+   * automatic compression resilient:
+   *  - if no candidate route accepts images, replace every image block with a
+   *    short text placeholder so a text-only auxiliary/main model can still
+   *    produce the checkpoint summary;
+   *  - otherwise keep image blocks that are still readable, and replace only
+   *    missing/corrupt/unreadable ones with the same placeholder.
+   */
+  async _prepareCompactionMessages(messages, agent, signal) {
+    const hasImage = messages.some(
+      (message) => Array.isArray(message?.content) && message.content.some((block) => block?.type === "image")
+    );
+    if (!hasImage) return messages;
+
+    const definition = this._taskDefinition("compaction");
+    const primary = resolvePrimaryRoute(definition, this.taskDefaults);
+    const mainRoute = await this._mainRoute({ session: agent?.session, agent });
+    const candidates = [];
+    if (primary !== void 0) candidates.push(primary);
+    if (this.fallbackToMain && mainRoute !== void 0) candidates.push(mainRoute);
+    let imageCapable = candidates.length === 0;
+    for (const candidate of candidates) {
+      const capability = await this._resolveImageCapability(candidate, signal);
+      if (capability !== false) {
+        imageCapable = true;
+        break;
+      }
+    }
+    if (!imageCapable) {
+      return messages.map((message) =>
+        Array.isArray(message?.content) && message.content.some((block) => block?.type === "image")
+          ? {
+              ...message,
+              content: message.content.map((block) =>
+                block?.type === "image" ? compactionImagePlaceholder(block.attachment) : block
+              )
+            }
+          : message
+      );
+    }
+
+    let attachments;
+    try {
+      attachments = this._imageCtx?.get("attachments") ?? this.ctx.get("attachments");
+    } catch {
+      attachments = void 0;
+    }
+    const out = [];
+    for (const message of messages) {
+      if (!Array.isArray(message?.content) || !message.content.some((block) => block?.type === "image")) {
+        out.push(message);
+        continue;
+      }
+      const content = [];
+      let changed = false;
+      for (const block of message.content) {
+        if (block?.type !== "image") {
+          content.push(block);
+          continue;
+        }
+        const ref = block.attachment;
+        if (attachments !== void 0 && ref !== void 0) {
+          try {
+            // Verify the object is present; the LLM stream path would otherwise
+            // fail with "Attachment object is missing." for GC'd attachments.
+            await attachments.readImage(ref, signal);
+            content.push(block);
+            continue;
+          } catch {
+            /* missing/corrupt/unreadable: replace with placeholder */
+          }
+        }
+        changed = true;
+        content.push(compactionImagePlaceholder(ref));
+      }
+      out.push(changed ? { ...message, content } : message);
+    }
+    return out;
+  }
+
+  /**
    * Whether the deployed dsh-session supports marking custom events
    * ignorable (the bridge/patch-session-ignorable.mjs patch). Without it,
    * appending "aux/llm-call" would write events the persistence read path
@@ -1616,6 +1703,16 @@ export function registerAuxTask(ctx, definition) {
   const service = ctx.get("auxLlm");
   if (service === void 0) throw new Error("registerAuxTask: auxLlm service is not mounted");
   service.registerTask(definition);
+}
+
+/** Build a text placeholder replacing an unusable compaction image block. */
+function compactionImagePlaceholder(ref) {
+  const name = ref?.name ?? "";
+  const media = ref?.mediaType ?? "image";
+  const size =
+    ref?.width !== void 0 && ref?.height !== void 0 ? `, ${ref.width}×${ref.height}` : "";
+  const label = name.length > 0 ? name : "未命名";
+  return { type: "text", text: `[图片: ${label} (${media}${size}) — 未纳入压缩摘要]` };
 }
 
 /** Media type from a local path extension. */
