@@ -150,6 +150,16 @@ node --test tests/memory-race.test.js # 1 test, concurrent-write regression
 node --test tests/bridge.test.js     # 4 tests, zero dependencies (auto-skipped without an agent-loop environment)
 ```
 
+## Source Layout
+
+`src/index.js` intentionally keeps only **Service assembly and routing dispatch**; the rest lives in focused modules:
+
+- `config.js` / `route.js` / `prompt.js` / `url-policy.js` — config, routing, prompts, SSRF policy
+- `events.js` / `projection.js` / `bootstrap.js` / `commands.js` / `fetch.js` — events, projection, Bootstrap guidance, commands, fetching
+- `tools/` — the three tool implementations and registration
+- `images/` — attachment ownership, cleanup, image memory, image reference resolution
+- `image-bridge.js` / `compaction-bridge.js` / `compaction-messages.js` — bridges and compaction message degradation
+
 ## Compatibility & Dependencies
 
 - **Platform**: DSH ≥ 0.1.0-rc.6; Node ≥ 20.

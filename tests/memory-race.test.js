@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fsPromises from 'node:fs/promises';
 import { Context } from '@deepseek-ai/cordis';
 import AuxLlmService from '../dsh-aux/src/index.js';
+import { recordImageMemory } from '../dsh-aux/src/images/memory.js';
 
 function settle() { return new Promise((resolve) => setImmediate(resolve)); }
 
@@ -35,13 +36,12 @@ test('image-memory 并发写不丢条目(多图并行场景)', async () => {
   try {
     const N = 5;
     await Promise.all(Array.from({ length: N }, (_, i) =>
-      ctx.auxLlm._recordImageMemory('sess', 'sha256:' + ('0' + i).repeat(64).slice(0, 64), 'q' + i, 's' + i)
+      recordImageMemory(ctx.auxLlm, 'sess', 'sha256:' + ('0' + i).repeat(64).slice(0, 64), 'q' + i, 's' + i)
     ));
     // 等全部落盘
     await new Promise((r) => setTimeout(r, 200));
     const raw = await fsPromises.readFile(tmp + '/attachments/v1/image-memory.json', 'utf8');
     const parsed = JSON.parse(raw);
-    console.log('最终条目数:', parsed.entries.length, '(期望 5)');
     assert.equal(parsed.entries.length, N, '并发写不应丢条目,实际 ' + parsed.entries.length);
   } finally {
     process.env.DSH_HOME = prevHome;

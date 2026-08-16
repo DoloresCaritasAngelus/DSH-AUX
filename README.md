@@ -132,6 +132,16 @@ const result = await ctx.auxLlm.call("compress", {
 - **图片能力门**:调用前查模型输入能力,明确不支持的模型直接跳过换路;未声明能力的模型放行由服务端决定。
 - **压缩协同**:`dsh-compaction-basic` 的摘要调用可通过 `ctx.auxLlm` 的 `compaction` 任务执行,复用 AUX 的超时/并发/冷却/降级/事件记录。
 
+## 源码结构
+
+`dsh-aux/src/index.js` 只保留 **Service 装配与路由调度**,其余按领域拆分,方便社区贡献者定位:
+
+- `config.js` / `route.js` / `prompt.js` / `url-policy.js` — 配置、路由、提示词、SSRF 策略
+- `events.js` / `projection.js` / `bootstrap.js` / `commands.js` / `fetch.js` — 事件、投影、Bootstrap 引导、命令、抓取
+- `tools/` — `vision_analyze` / `web_extract` / `compress_text` 工具实现与注册
+- `images/` — 附件归属、清理、图片记忆、图片引用解析
+- `image-bridge.js` / `compaction-bridge.js` / `compaction-messages.js` — 桥接与压缩消息降级
+
 ## 兼容性与依赖
 
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。

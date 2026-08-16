@@ -53,6 +53,25 @@ import {
   isPrivateIpv4,
   isPrivateIpv6
 } from '../dsh-aux/src/url-policy.js';
+import { syncAuxStatusProjection } from '../dsh-aux/src/projection.js';
+import {
+  auxPreStepReminderText,
+  auxToolsGuide,
+  isAuxGuidePromoted,
+  shouldUsePreStepAuxGuide
+} from '../dsh-aux/src/bootstrap.js';
+import {
+  cleanupSessionImages,
+  ensureSessionImagesLoaded,
+  reconcileSessionImages,
+  recordAttachmentOwnership
+} from '../dsh-aux/src/images/ownership.js';
+import { runWebExtract } from '../dsh-aux/src/tools/web-extract.js';
+import { fetchWithSsrf } from '../dsh-aux/src/fetch.js';
+import { resolveImageRef } from '../dsh-aux/src/images/resolve.js';
+import { imageBridgeStatus } from '../dsh-aux/src/image-bridge.js';
+import { recordAuxEvent, sessionEventsSupported } from '../dsh-aux/src/events.js';
+import { recordImageMemory } from '../dsh-aux/src/images/memory.js';
 import {
   clampTargetRatio,
   compressSystemPrompt,
@@ -489,28 +508,28 @@ test('Bootstrap 预设引导: Anchored Standard / minimal 首轮不注入,晋升
   };
 
   // systemPrompt section 对 Bootstrap 预设返回空串(complete persona 下本来也会被丢弃)
-  assert.equal(service._auxToolsGuide({ agent: anchored }), '');
-  assert.equal(service._auxToolsGuide({ agent: minimal }), '');
-  assert.ok(service._auxToolsGuide({ agent: standard }).includes('vision_analyze'));
+  assert.equal(auxToolsGuide(service, { agent: anchored }), '');
+  assert.equal(auxToolsGuide(service, { agent: minimal }), '');
+  assert.ok(auxToolsGuide(service, { agent: standard }).includes('vision_analyze'));
 
   // 首轮(无 tool/call)不注入;极简和 Anchored Standard 都走 pre-step 通道
-  assert.equal(service._shouldUsePreStepAuxGuide(anchored), true);
-  assert.equal(service._isAuxGuidePromoted(anchored), false);
-  assert.equal(service._shouldUsePreStepAuxGuide(minimal), true, '极简模式晋升后也注入 AUX 提醒');
-  assert.equal(service._shouldUsePreStepAuxGuide(standard), false);
+  assert.equal(shouldUsePreStepAuxGuide(service, anchored), true);
+  assert.equal(isAuxGuidePromoted(anchored), false);
+  assert.equal(shouldUsePreStepAuxGuide(service, minimal), true, '极简模式晋升后也注入 AUX 提醒');
+  assert.equal(shouldUsePreStepAuxGuide(service, standard), false);
 
   // 晋升后注入一次,文案包含直接使用 vision_analyze
   anchored.session.events.push({ type: 'tool/call', data: { name: 'bash' } });
   minimal.session.events.push({ type: 'tool/call', data: { name: 'bash' } });
-  assert.equal(service._isAuxGuidePromoted(anchored), true);
-  assert.match(service._auxPreStepReminderText(anchored), /Anchored Standard/);
-  assert.match(service._auxPreStepReminderText(anchored), /vision_analyze/);
-  assert.match(service._auxPreStepReminderText(minimal), /极简模式/);
+  assert.equal(isAuxGuidePromoted(anchored), true);
+  assert.match(auxPreStepReminderText(anchored), /Anchored Standard/);
+  assert.match(auxPreStepReminderText(anchored), /vision_analyze/);
+  assert.match(auxPreStepReminderText(minimal), /极简模式/);
 
   // 自定义 guideText 时不走 pre-step 通道
   const { ctx: customCtx } = await makeHarness({ guideText: '自定义引导' });
   const customService = customCtx.auxLlm;
-  assert.equal(customService._shouldUsePreStepAuxGuide(anchored), false);
+  assert.equal(shouldUsePreStepAuxGuide(customService, anchored), false);
 });
 
 test('Bootstrap 预设引导: minimal 目录过滤掉 AUX 工具,Anchored Standard 不过滤', async () => {
@@ -639,12 +658,12 @@ test('隐私: showStatusChip=false 时注销 aux-status 投影,重新开启后�
 
   // 关闭状态芯片 → 注销投影
   ctx.auxLlm.showStatusChip = false;
-  ctx.auxLlm._syncAuxStatusProjection();
+  syncAuxStatusProjection(ctx.auxLlm);
   assert.equal(projections.length, 0, '关闭后不应暴露 aux-status 投影');
 
   // 重新开启 → 重新注册
   ctx.auxLlm.showStatusChip = true;
-  ctx.auxLlm._syncAuxStatusProjection();
+  syncAuxStatusProjection(ctx.auxLlm);
   assert.equal(projections.length, 1, '重新开启后应恢复 aux-status 投影');
 });
 
@@ -1216,7 +1235,7 @@ test('会话删除清理: 删除无引用附件,保留共享附件', async () =>
   process.env.DSH_HOME = tmp;
   try {
     // 直接调用清理逻辑:删除会话 1 → A 无引用应删,B 被会话 2 引用应保留
-    await ctx.auxLlm._cleanupSessionImages('sess-1');
+    await cleanupSessionImages(ctx.auxLlm, 'sess-1');
     const remaining = await fsPromises.readdir(objects);
     assert.ok(!remaining.includes(hashA), '无引用的 A 应被删除');
     assert.ok(remaining.includes(hashB), '共享的 B 应保留');
@@ -1225,7 +1244,7 @@ test('会话删除清理: 删除无引用附件,保留共享附件', async () =>
     assert.equal(map['sess-1'], void 0);
     assert.ok(Array.isArray(map['sess-2']));
     // 再删除会话 2 → B 也应删
-    await ctx.auxLlm._cleanupSessionImages('sess-2');
+    await cleanupSessionImages(ctx.auxLlm, 'sess-2');
     const after = await fsPromises.readdir(objects);
     assert.ok(!after.includes(hashB), '最后引用的 B 应被删除');
   } finally {
@@ -1314,7 +1333,7 @@ test('web_extract 工具: 无 web provider 时回退全局 fetch 并清洗 HTML'
     const svc = ctx.auxLlm;
     svc._dnsLookup = async () => ({ address: '93.184.216.34' });
     const exec = { signal: new AbortController().signal, agent: { session: makeSession(), options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
-    const value = await svc._runWebExtract({ url: 'https://example.com/fallback', maxChars: 8000 }, exec);
+    const value = await runWebExtract(svc, { url: 'https://example.com/fallback', maxChars: 8000 }, exec);
     assert.equal(value.url, 'https://example.com/fallback');
     assert.ok(value.summary.includes('SUMMARY'));
     assert.equal(value.provider, 'opencode-go');
@@ -1370,7 +1389,7 @@ test('SSRF: 手动重定向到内网地址时在请求前拒绝', async () => {
   try {
     const signal = new AbortController().signal;
     await assert.rejects(
-      () => ctx.auxLlm._fetchWithSsrf('https://public.example/redirect', 'web_extract', signal),
+      () => fetchWithSsrf(ctx.auxLlm, 'https://public.example/redirect', 'web_extract', signal),
       /blocked by default/
     );
     assert.equal(internalFetched, false, '重定向到内网地址时不应发出实际请求');
@@ -1383,7 +1402,7 @@ test('vision_analyze imageUrl: 默认拒绝内网 URL(SSRF)', async () => {
   const { ctx } = await makeHarness();
   const exec = { signal: new AbortController().signal, agent: { session: makeSession(), options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
   await assert.rejects(
-    () => ctx.auxLlm._resolveImageRef({ imageUrl: 'http://127.0.0.1:3080/secret.png' }, exec),
+    () => resolveImageRef(ctx.auxLlm, { imageUrl: 'http://127.0.0.1:3080/secret.png' }, exec),
     /blocked by default/
   );
 });
@@ -1567,7 +1586,7 @@ test('对账: 已不存在的会话(冷删除)图片被清理,现存会话保留
     ctx.provide('sessionPersistence', {
       async listSnapshots() { return [{ header: { id: 'sess-live' } }]; }
     });
-    await ctx.auxLlm._reconcileSessionImages();
+    await reconcileSessionImages(ctx.auxLlm);
     const remaining = await fsPromises.readdir(objects);
     assert.ok(!remaining.includes(hashX), '已删除会话的图片应被清理');
     assert.ok(remaining.includes(hashY), '现存会话的图片应保留');
@@ -1588,7 +1607,7 @@ test('对账: 空映射快速返回,不触碰文件系统', async () => {
   try {
     const { ctx } = await makeHarness();
     // 无 session-images.json → 空映射
-    await ctx.auxLlm._reconcileSessionImages(); // 不应抛错
+    await reconcileSessionImages(ctx.auxLlm); // 不应抛错
     const map = JSON.parse(await fsPromises.readFile(tmp + '/attachments/v1/session-images.json').catch(() => '{}'));
     assert.ok(map);
   } finally {
@@ -1613,7 +1632,7 @@ test('对账: 归档会话不误删(仍在持久化列表)', async () => {
     ctx.provide('sessionPersistence', {
       async listSnapshots() { return [{ header: { id: 'sess-archived' } }]; }
     });
-    await ctx.auxLlm._reconcileSessionImages();
+    await reconcileSessionImages(ctx.auxLlm);
     const remaining = await fsPromises.readdir(objects);
     assert.ok(remaining.includes(hashA), '归档(持久化)会话的图片应保留');
   } finally {
@@ -1635,7 +1654,7 @@ test('归属缓存: 重启后(内存空)新增归属不覆盖磁盘旧记录', a
   process.env.DSH_HOME = tmp;
   try {
     // 新进程:内存缓存为空,新增一个归属(触发 debounce 写盘)
-    await ctx.auxLlm._recordAttachmentOwnership('sess-new', 'att-image/png');
+    await recordAttachmentOwnership(ctx.auxLlm, 'sess-new', 'att-image/png');
     await new Promise((r) => setTimeout(r, 50)); // 等 debounce
     const map = JSON.parse(await fsPromises.readFile(tmp + '/attachments/v1/session-images.json', 'utf8'));
     assert.ok(Array.isArray(map['sess-old']), '磁盘旧记录必须保留: ' + JSON.stringify(map));
@@ -1660,11 +1679,11 @@ test('归属缓存: 清理会话后内存缓存同步删除,写盘不复活', as
   process.env.DSH_HOME = tmp;
   try {
     // 先让内存缓存种入磁盘记录
-    await ctx.auxLlm._ensureSessionImagesLoaded();
+    await ensureSessionImagesLoaded(ctx.auxLlm);
     // 模拟删除会话触发的清理
-    await ctx.auxLlm._cleanupSessionImages('sess-1');
+    await cleanupSessionImages(ctx.auxLlm, 'sess-1');
     // 再触发一次写盘(内存缓存若残留 sess-1 会复活)
-    await ctx.auxLlm._recordAttachmentOwnership('sess-2', 'att-image/png');
+    await recordAttachmentOwnership(ctx.auxLlm, 'sess-2', 'att-image/png');
     await new Promise((r) => setTimeout(r, 50));
     const map = JSON.parse(await fsPromises.readFile(tmp + '/attachments/v1/session-images.json', 'utf8'));
     assert.equal(map['sess-1'], void 0, '清理后写盘不得复活 sess-1: ' + JSON.stringify(map));
@@ -1713,7 +1732,7 @@ test('/aux gc-images: 跳过符号链接,绝不跟随到外部目录', async () 
 test('image-bridge 状态: 源码树运行(无核心包)时返回 unknown', async () => {
   const { ctx } = await makeHarness();
   // 测试环境从源码树加载,../dsh-host-apiproxy 不存在 → unknown
-  const status = await ctx.auxLlm._imageBridgeStatus();
+  const status = await imageBridgeStatus();
   assert.equal(status, 'unknown');
 });
 
@@ -1805,12 +1824,12 @@ test('事件记录: dsh-session 无 ignorable 补丁时降级不写事件(防会
   ctx.auxLlm._sessionEventsSupportedCache = false;
   const appended = [];
   const session = { id: 'sess-cap2', events: [], append(...args) { appended.push(args); } };
-  await ctx.auxLlm._recordEvent(session, { task: 'vision', ok: true });
+  await recordAuxEvent(ctx.auxLlm, session, { task: 'vision', ok: true });
   assert.equal(appended.length, 0, '未打补丁时不应写入事件');
   assert.equal(ctx.auxLlm._sessionEventsWarned, true, '应记录一次警告');
   // 恢复缓存后写入
   ctx.auxLlm._sessionEventsSupportedCache = true;
-  await ctx.auxLlm._recordEvent(session, { task: 'vision', ok: true });
+  await recordAuxEvent(ctx.auxLlm, session, { task: 'vision', ok: true });
   assert.equal(appended.length, 1, '补丁存在时应写入事件');
   const [, , , ignorableOpts] = appended[0];
   assert.equal(ignorableOpts?.ignorable, true);
@@ -1882,7 +1901,7 @@ test('事件记录: 检测函数在候选全部缺失时安全返回 false 不�
     } catch { /* expected */ }
   }
   assert.equal(allMissing, true, '隔离布局下所有候选都应不存在');
-  const supported = await ctx.auxLlm._sessionEventsSupported();
+  const supported = await sessionEventsSupported(ctx.auxLlm);
   assert.equal(typeof supported, 'boolean', '检测应返回布尔值且不抛错');
 });
 

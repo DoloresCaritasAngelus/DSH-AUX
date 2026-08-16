@@ -183,6 +183,16 @@ node --test tests/memory-race.test.js # 1 项,并发写回归
 node --test tests/bridge.test.js     # 4 项,零依赖(无 agent-loop 环境自动跳过)
 ```
 
+## 源码结构
+
+`src/index.js` 只保留 **Service 装配与路由调度**;其余按领域拆分:
+
+- `config.js` / `route.js` / `prompt.js` / `url-policy.js` — 配置、路由、提示词、SSRF 策略
+- `events.js` / `projection.js` / `bootstrap.js` / `commands.js` / `fetch.js` — 事件、投影、Bootstrap 引导、命令、抓取
+- `tools/` — 三工具实现与注册
+- `images/` — 附件归属、清理、图片记忆、图片引用解析
+- `image-bridge.js` / `compaction-bridge.js` / `compaction-messages.js` — 桥接与压缩消息降级
+
 ## 兼容性与依赖
 
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。

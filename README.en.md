@@ -132,6 +132,16 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **Image capability gate**: checks model input capabilities before calling; explicitly unsupported models are skipped. Unknown capabilities pass through to the provider.
 - **Compaction synergy**: `dsh-compaction-basic` summarization can run through `ctx.auxLlm`'s `compaction` task, reusing AUX timeout/concurrency/cooldown/fallback/event tracing.
 
+## Source Layout
+
+`dsh-aux/src/index.js` intentionally keeps only **Service assembly and routing dispatch**; everything else lives in focused modules so contributors can find the right file quickly:
+
+- `config.js` / `route.js` / `prompt.js` / `url-policy.js` — config, routing, prompts, SSRF policy
+- `events.js` / `projection.js` / `bootstrap.js` / `commands.js` / `fetch.js` — events, projection, Bootstrap guidance, commands, fetching
+- `tools/` — `vision_analyze` / `web_extract` / `compress_text` implementations and registration
+- `images/` — attachment ownership, cleanup, image memory, image reference resolution
+- `image-bridge.js` / `compaction-bridge.js` / `compaction-messages.js` — bridges and compaction message degradation
+
 ## Compatibility & Dependencies
 
 - **Platform**: DSH ≥ 0.1.0-rc.6; Node ≥ 20.

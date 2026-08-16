@@ -151,10 +151,18 @@ export declare const AUX_CALL_EVENT: 'aux/llm-call';
 export declare const AUX_STATUS_KEY: 'aux-status';
 
 /**
- * Validate the plugin config shape. Unknown keys fail at load rather than
- * being ignored.
+ * One auxiliary call outcome.
  */
-export declare function resolveConfig(config: unknown): AuxConfig;
+export declare class AuxCallError extends Error {
+    constructor(task: string, attempts: Array<{ provider: string; model: string; kind: string; error?: Error }>);
+    task: string;
+    attempts: Array<{ provider: string; model: string; kind: string; error?: Error }>;
+}
+
+/**
+ * Candidate URLs for the patched dsh-session bundle.
+ */
+export declare function sessionPatchCandidates(baseUrl: string | URL): URL[];
 
 /**
  * `ctx.auxLlm`: the unified auxiliary-model router. Owns task definitions,
@@ -163,7 +171,7 @@ export declare function resolveConfig(config: unknown): AuxConfig;
  * the `aux-status` projection.
  */
 export declare class AuxLlmService extends Service {
-    static inject: readonly ['llm', 'tools', 'settings', 'web'];
+    static inject: readonly ['llm', 'tools', 'settings', 'web', 'fs', 'systemPrompt'];
     static Config: unknown;
     /** Default auxiliary routes per task (explicit-config-independent). */
     readonly taskDefaults: Record<string, AuxRoute>;
