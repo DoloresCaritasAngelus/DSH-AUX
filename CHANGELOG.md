@@ -16,7 +16,11 @@
   - `session-images.json` 所有写盘(含 cleanup 整体读改写)串行化;
   - GC 增加 `lstat` 复核,降低符号链接 TOCTOU;
   - `onSessionDisposed` 改用显式 shutdown 标志,批量删除不再被误判为关机。
-- **测试稳定性**:固定 sleep 改为轮询等待;新增 15 项回归测试;总测试 157 项。
+- **测试稳定性**:固定 sleep 改为轮询等待;新增 15 项回归测试;总测试 161 项。
+- **安装器与补丁加固**:
+  - 新增 `bridge/target.js`,统一校验补丁目标必须位于 `node_modules/@deepseek-ai/.../lib/index.js`,防止相对路径逃逸写入任意文件;
+  - `install.sh` 增加 profile 名与包名白名单校验,补丁写入改为位置参数传递,消除 heredoc 注入;
+  - `imagePath` 明确依赖宿主 `fs` 服务的路径沙箱,插件层不重复实现/绕过该边界。
 
 ## 0.1.7(2026-08-16)— compress_text 场景化压缩与质量加固
 

@@ -22,28 +22,18 @@
  *   node patch-session-ignorable.mjs --rollback # roll back
  */
 import { readFile, writeFile, copyFile, readdir, access } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { deployedFile, guardTarget } from "./target.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-// 不写死用户绝对路径:按部署形态相对解析(symlink 部署 / 源码树部署)。
-function deployedFile(symlinkRel, sourceRel) {
-  const candidates = [
-    join(HERE, symlinkRel),
-    join(HERE, sourceRel)
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return candidates[0];
-}
-const TARGET = deployedFile(
+// 不写死用户绝对路径:按部署形态相对解析(symlink / 源码树),并在读写前校验。
+const TARGET = guardTarget(deployedFile(
   "../../../@deepseek-ai/dsh-session/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-session/lib/index.js"
-);
+), "dsh-session-ignorable");
 const MARK = "dsh-aux ignorable (local patch)";
 
 async function block(name) {

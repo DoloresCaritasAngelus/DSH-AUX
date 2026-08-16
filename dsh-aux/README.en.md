@@ -14,7 +14,7 @@
 > **No sub-agents, no session collaboration** — auxiliary tasks (vision, web extraction, text compression) are handled by an independent auxiliary LLM.
 
 [![version](https://img.shields.io/badge/version-0.1.7-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
-[![tests](https://img.shields.io/badge/tests-157-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+[![tests](https://img.shields.io/badge/tests-161-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 [![license](https://img.shields.io/badge/license-MIT-green)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 
 ## Table of Contents
@@ -146,7 +146,7 @@ The `compaction` task: once provider/model is configured, the session compaction
 ## Tests
 
 ```sh
-node --test tests/*.test.js            # 157 tests, zero dependencies
+node --test tests/*.test.js            # 161 tests, zero dependencies
 ```
 
 ## Source Layout
