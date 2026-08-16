@@ -8,7 +8,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-v0.1.6-blue)
+![Version](https://img.shields.io/badge/version-v0.1.7-blue)
 ![Tests](https://img.shields.io/badge/tests-137-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)

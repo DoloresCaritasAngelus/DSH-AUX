@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.7(未发布)— compress_text 场景化压缩
+## 0.1.7(2026-08-16)— compress_text 场景化压缩与质量加固
 
 - **场景感知**:自动识别代码/日志/文档/通用,支持 `mode` 软提示与 `preserve` 结构化保留规则;混合内容走增强版通用模式。
 - **输出预算**:新增 `maxOutputChars` 参数,优先于 `targetRatio` 控制输出大小。
