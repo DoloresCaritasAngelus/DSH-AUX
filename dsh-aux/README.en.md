@@ -60,10 +60,12 @@ git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
 cd DSH-AUX && ./install.sh     # plugin wiring + image-bridge patch + settings allowlist (idempotent, re-runnable)
 ```
 
-### Method 2: Plugin only (integration components need to be added separately)
+### Method 2: Plugin only (until npm is published, install from a local source tree)
 
 ```sh
-dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+cd DSH-AUX/dsh-aux
+dsh plugin --profile web add "file:$(pwd)"
 # Add image-bridge (required for sending images with a text-only main model):
 cd <repo>/bridge && node apply-patch.mjs
 # Add the settings allowlist (so aux config is writable from the settings page):

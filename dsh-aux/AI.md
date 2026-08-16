@@ -45,10 +45,10 @@ grep -rn "dsh-aux" ~/.dsh/profiles/*/cordis.patch.yml 2>/dev/null
 ### 方式 B:dsh plugin 命令(仅插件本体)
 
 ```sh
-dsh plugin --profile web add <NAME>                 # 从 npm
-# 或本地/远程源码目录:
-dsh plugin --profile web add file:/path/to/dsh-aux
-dsh plugin --profile web add git+https://github.com/<user>/dsh-aux.git
+# 仅当插件已发布到 npm 时可用(当前 DSH-AUX 尚未发布 npm,请用下面的 file: 方式)
+# dsh plugin --profile web add <NAME>
+# 本地源码目录(推荐):
+dsh plugin --profile web add "file:/path/to/dsh-aux"
 ```
 
 方式 B 之后,请**补装集成组件**(纯文本主模型发图必需;有仓库时):

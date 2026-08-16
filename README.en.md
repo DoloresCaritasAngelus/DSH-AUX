@@ -75,8 +75,10 @@ Conversation models are getting stronger, but "look at this image", "read this p
 git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
 cd DSH-AUX && ./install.sh
 
-# Option 2: plugin only
-dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+# Option 2: install the plugin package from a local source tree (use this until npm is published)
+git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+cd DSH-AUX/dsh-aux
+dsh plugin --profile web add "file:$(pwd)"
 ```
 
 After restarting DSH:

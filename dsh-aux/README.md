@@ -64,10 +64,12 @@ git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
 cd DSH-AUX && ./install.sh     # 插件接线 + image-bridge 补丁 + 设置白名单(幂等可重跑)
 ```
 
-### 方式二:仅插件本体(之后需单独补集成组件)
+### 方式二:仅插件本体(未发布 npm 时,从本地源码安装)
 
 ```sh
-dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+cd DSH-AUX/dsh-aux
+dsh plugin --profile web add "file:$(pwd)"
 # 补 image-bridge(纯文本主模型发图必需):
 cd <仓库>/bridge && node apply-patch.mjs
 # 补 settings 白名单(设置页可写 aux):

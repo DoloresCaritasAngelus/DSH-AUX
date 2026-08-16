@@ -75,8 +75,10 @@
 git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
 cd DSH-AUX && ./install.sh
 
-# 方式二:仅装插件本体
-dsh plugin --profile web add git+https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+# 方式二:本地源码安装插件本体(未发布 npm 时使用)
+git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
+cd DSH-AUX/dsh-aux
+dsh plugin --profile web add "file:$(pwd)"
 ```
 
 重启 DSH 后:
