@@ -39,7 +39,7 @@ function deployedFile(symlinkRel, sourceRel) {
   return candidates[0];
 }
 const TARGET = deployedFile(
-  "../../dsh-host-apiproxy/lib/index.js",
+  "../../../@deepseek-ai/dsh-host-apiproxy/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js"
 );
 const MARK_V2 = "dsh-aux settings dynamic expose (local patch)";

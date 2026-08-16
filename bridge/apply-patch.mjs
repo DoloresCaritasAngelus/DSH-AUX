@@ -29,7 +29,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // ── 目标文件 ────────────────────────────────────────────────────────────────
 // 不写死任何用户绝对路径:按部署形态相对解析。
 // - symlink 部署:本仓库位于 node_modules/@dolorescaritasangelus/dsh-aux/bridge,
-//   目标在 ../../dsh-host-apiproxy/...
+//   目标在 ../../../@deepseek-ai/dsh-host-apiproxy/...
 // - 源码树部署:本仓库位于 <DSH_ROOT>/dsh work/aux/bridge,
 //   目标在 ../../../node_modules/@deepseek-ai/dsh-host-apiproxy/...
 function deployedFile(symlinkRel, sourceRel) {
@@ -44,11 +44,11 @@ function deployedFile(symlinkRel, sourceRel) {
 }
 
 const API_PROXY_FILE = deployedFile(
-  "../../dsh-host-apiproxy/lib/index.js",
+  "../../../@deepseek-ai/dsh-host-apiproxy/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js"
 );
 const AGENT_LOOP_FILE = deployedFile(
-  "../../dsh-agent-loop/lib/index.js",
+  "../../../@deepseek-ai/dsh-agent-loop/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js"
 );
 

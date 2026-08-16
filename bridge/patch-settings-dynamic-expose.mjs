@@ -34,7 +34,7 @@ function deployedFile(symlinkRel, sourceRel) {
   return candidates[0];
 }
 const TARGET = deployedFile(
-  "../../dsh-settings/lib/index.js",
+  "../../../@deepseek-ai/dsh-settings/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-settings/lib/index.js"
 );
 const MARK = "dsh-aux dynamic expose (local patch)";

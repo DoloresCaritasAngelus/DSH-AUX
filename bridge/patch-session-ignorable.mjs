@@ -41,7 +41,7 @@ function deployedFile(symlinkRel, sourceRel) {
   return candidates[0];
 }
 const TARGET = deployedFile(
-  "../../dsh-session/lib/index.js",
+  "../../../@deepseek-ai/dsh-session/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-session/lib/index.js"
 );
 const MARK = "dsh-aux ignorable (local patch)";

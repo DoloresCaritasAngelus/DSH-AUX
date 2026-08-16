@@ -1659,13 +1659,13 @@ test('事件记录: sessionPatchCandidates 覆盖 symlink 与 realpath 两种部
   // realpath 布局:源码树 dsh work/aux/dsh-aux/src/index.js(dsh work 是单一段)
   const realpath = sessionPatchCandidates('file:///x/dsh work/aux/dsh-aux/src/index.js');
   assert.equal(
-    realpath[3].href,
-    'file:///x/node_modules/@deepseek-ai/dsh-session/lib/index.js',
-    '第四候选必须命中 realpath 源码树下方的 node_modules 部署'
-  );
-  // 中间候选的形状:第三候选落在 <root>/dsh work/node_modules(不存在,会被跳过)
-  assert.equal(
     realpath[2].href,
+    'file:///x/node_modules/@deepseek-ai/dsh-session/lib/index.js',
+    '第三候选必须命中 realpath 源码树下方的 node_modules 部署'
+  );
+  // 中间候选的形状:第二候选落在 <root>/dsh work/node_modules(不存在,会被跳过)
+  assert.equal(
+    realpath[1].href,
     'file:///x/dsh%20work/node_modules/@deepseek-ai/dsh-session/lib/index.js'
   );
 });

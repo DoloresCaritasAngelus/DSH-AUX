@@ -1115,21 +1115,45 @@ export class AuxLlmService extends Service {
    *   standard deployment layout, e.g. running from the source tree).
    */
   async _imageBridgeStatus() {
-    const base = new URL("../", import.meta.url);
+    // 兼容两种部署形态:
+    // - symlink: node_modules/@dolorescaritasangelus/dsh-aux/src -> ../../../@deepseek-ai/...
+    // - 源码树: <DSH_ROOT>/dsh work/aux/dsh-aux/src -> ../../../node_modules/@deepseek-ai/...
     const targets = [
-      ["dsh-host-apiproxy/lib/index.js", "dsh-image bridge v2 (local patch)", "dsh-vision bridge (local patch)"],
-      ["dsh-agent-loop/lib/index.js", "image-bridge v2 (local patch)", void 0]
+      {
+        rels: [
+          "../../../@deepseek-ai/dsh-host-apiproxy/lib/index.js",
+          "../../../node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js"
+        ],
+        v2Mark: "dsh-image bridge v2 (local patch)",
+        v1Mark: "dsh-vision bridge (local patch)"
+      },
+      {
+        rels: [
+          "../../../@deepseek-ai/dsh-agent-loop/lib/index.js",
+          "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js"
+        ],
+        v2Mark: "image-bridge v2 (local patch)",
+        v1Mark: void 0
+      }
     ];
     const states = [];
-    for (const [rel, v2Mark, v1Mark] of targets) {
-      try {
-        const src = await readFileText(new URL(rel, base));
-        if (src.includes(v2Mark)) states.push("v2");
-        else if (v1Mark !== void 0 && src.includes(v1Mark)) states.push("v1");
-        else states.push("missing");
-      } catch {
-        states.push("unknown");
+    for (const target of targets) {
+      let src;
+      for (const rel of target.rels) {
+        try {
+          src = await readFileText(new URL(rel, import.meta.url));
+          break;
+        } catch {
+          /* try next candidate */
+        }
       }
+      if (src === void 0) {
+        states.push("unknown");
+        continue;
+      }
+      if (src.includes(target.v2Mark)) states.push("v2");
+      else if (target.v1Mark !== void 0 && src.includes(target.v1Mark)) states.push("v1");
+      else states.push("missing");
     }
     if (states.some((state) => state === "unknown")) return "unknown";
     if (states.every((state) => state === "v2")) return "v2";
@@ -1776,10 +1800,9 @@ ${value.analysis}` };
  */
 export function sessionPatchCandidates(baseUrl) {
   return [
-    // symlink deploy: node_modules/@dolorescaritasangelus/dsh-aux/src -> ../../dsh-session
-    new URL("../../dsh-session/lib/index.js", baseUrl),
-    // one-level fallback (dsh-aux/dsh-session layout)
-    new URL("../dsh-session/lib/index.js", baseUrl),
+    // symlink deploy: node_modules/@dolorescaritasangelus/dsh-aux/src
+    // -> ../../../@deepseek-ai/dsh-session
+    new URL("../../../@deepseek-ai/dsh-session/lib/index.js", baseUrl),
     // realpath'd source tree: <root>/dsh work/aux/dsh-aux/src -> <root>/node_modules
     new URL("../../../node_modules/@deepseek-ai/dsh-session/lib/index.js", baseUrl),
     // DSH home layout fallback
