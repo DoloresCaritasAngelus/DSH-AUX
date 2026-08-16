@@ -20,7 +20,7 @@
 - **安装器与补丁加固**:
   - 新增 `bridge/target.js`,统一校验补丁目标必须位于 `node_modules/@deepseek-ai/.../lib/index.js`,防止相对路径逃逸写入任意文件;
   - `install.sh` 增加 profile 名与包名白名单校验,补丁写入改为位置参数传递,消除 heredoc 注入;
-  - `imagePath` 明确依赖宿主 `fs` 服务的路径沙箱,插件层不重复实现/绕过该边界。
+  - `imagePath` 明确依赖宿主 `fs` 服务的路径沙箱,插件层不重复实现/绕过该边界;新增 2 项边界测试,验证插件始终使用 `fs.resolve` 的结果且不绕过宿主拒绝。
 
 ## 0.1.7(2026-08-16)— compress_text 场景化压缩与质量加固
 
