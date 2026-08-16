@@ -315,6 +315,8 @@ test('url-policy: 默认拒绝内网/环回/元数据地址', () => {
     'http://172.16.0.1/',
     'http://169.254.169.254/latest/meta-data/',
     'http://[::ffff:127.0.0.1]/',
+    'http://[::ffff:0:7f00:1]/',
+    'http://[64:ff9b::7f00:1]/',
     'http://[::127.0.0.1]/',
     'http://foo.local/'
   ]) {
@@ -359,6 +361,9 @@ test('url-policy: 私有 IP 判断覆盖常见范围', () => {
   assert.equal(isPrivateIp('8.8.8.8'), false);
   assert.equal(isPrivateIp('::1'), true);
   assert.equal(isPrivateIp('::7f00:1'), true);
+  assert.equal(isPrivateIp('::ffff:0:7f00:1'), true);
+  assert.equal(isPrivateIp('64:ff9b::7f00:1'), true);
+  assert.equal(isPrivateIp('64:ff9b::127.0.0.1'), true);
   assert.equal(isPrivateIp('fe80::1'), true);
   assert.equal(isPrivateIp('fc00::1'), true);
   assert.equal(isPrivateIp('2001:4860:4860::8888'), false);

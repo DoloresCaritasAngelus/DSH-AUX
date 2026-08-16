@@ -381,18 +381,18 @@ async function callSegment(service, segment, instruction, profile, plan, round, 
  *   - on failure, if the segment is large, split it and compress the pieces;
  *   - if still failing, keep the original text and mark degraded.
  */
-async function compressSegmentWithRecovery(service, segment, instruction, profile, plan, exec) {
+async function compressSegmentWithRecovery(service, segment, instruction, profile, plan, exec, depth = 0) {
   const segmentOptions = { maxOutputChars: void 0 };
   try {
     const result = await callSegment(service, segment, instruction, profile, plan, 1, exec, segmentOptions);
     return { text: result.text, degraded: false, warnings: [], provider: result.provider, model: result.model };
   } catch (error) {
     const message = error?.message ?? String(error);
-    // Large segment: split once and compress the pieces.
-    if (segment.length > DEFAULT_SINGLE_CALL_MAX_CHARS) {
+    // Large segment: split once and compress the pieces (bounded to one level).
+    if (depth < 1 && segment.length > DEFAULT_SINGLE_CALL_MAX_CHARS) {
       const pieces = segmentText(segment, profile.primary, DEFAULT_SINGLE_CALL_MAX_CHARS, 2);
       const results = await Promise.all(pieces.map((piece) =>
-        compressSegmentWithRecovery(service, piece, instruction, profile, plan, exec)
+        compressSegmentWithRecovery(service, piece, instruction, profile, plan, exec, depth + 1)
       ));
       const text = results.map((r) => r.text).join("\n\n");
       const degraded = results.some((r) => r.degraded);
@@ -477,7 +477,7 @@ export async function compressWithPlan(service, args, exec = {}) {
   ));
   const compressedSegments = segmentResults.map((r) => r.text);
   warnings.push(...segmentResults.flatMap((r) => r.warnings));
-  const degraded = segmentResults.some((r) => r.degraded);
+  let degraded = segmentResults.some((r) => r.degraded);
   const lastOkSegment = [...segmentResults].reverse().find((r) => r.provider !== void 0);
 
   const merged = compressedSegments.join("\n\n");
@@ -519,9 +519,10 @@ export async function compressWithPlan(service, args, exec = {}) {
       degraded = true;
       warnings.push(`final merge round failed: ${error?.message ?? String(error)}`);
     }
-  } else {
+  } else if (canMerge) {
     finalText = compressedSegments[0];
   }
+  // When !canMerge, finalText remains `merged` (all segments preserved).
 
   // If every LLM round failed, we still return the merged originals rather
   // than throwing away the caller's text.

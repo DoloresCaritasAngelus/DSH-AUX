@@ -232,6 +232,21 @@ test('compressWithPlan: 超长文本先分段再汇总(两轮)', async () => {
   assert.equal(result.compressed.startsWith('SEG_'), true);
 });
 
+test('compressWithPlan: merged 超过安全上限时保留全部分段且不崩溃', async () => {
+  const service = {
+    async call(task, request) {
+      // 每个分段/合并都返回超大结果,迫使 merged 超过 500K 安全上限
+      return { text: 'x'.repeat(600000), provider: 'p', model: 'm' };
+    }
+  };
+  const longText = Array.from({ length: 3000 }, (_, i) => `line ${i} with some facts ${i}`).join('\n');
+  const result = await compressWithPlan(service, { text: longText, mode: 'log' }, {});
+  assert.equal(result.degraded, true, 'merged 超限应标记 degraded');
+  assert.ok(result.compressed.includes('x'.repeat(600000)), '应保留全部分段而不是只留第一段');
+  assert.ok(result.compressed.length > 600000, 'merged 应包含多个分段');
+  assert.ok(result.warnings.some((w) => /safety limit/.test(w)), '应有超限警告');
+});
+
 test('compressWithPlan: 超长文本自动启用分层压缩(三轮)', async () => {
   const calls = [];
   const service = {

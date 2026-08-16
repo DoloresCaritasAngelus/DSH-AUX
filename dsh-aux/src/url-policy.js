@@ -65,6 +65,16 @@ function normalizeIpv6(ip) {
   return ip.replace(/^\[|\]$/g, "").toLowerCase();
 }
 
+/** Extract an embedded IPv4 from the last two hextets of an IPv6 string. */
+function ipv4FromLastHextets(value) {
+  const parts = value.split(":").filter(Boolean);
+  if (parts.length < 2) return null;
+  const hi = parseInt(parts[parts.length - 2], 16);
+  const lo = parseInt(parts[parts.length - 1], 16);
+  if (!Number.isFinite(hi) || !Number.isFinite(lo)) return null;
+  return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+}
+
 /** Whether an IPv6 address is loopback / link-local / ULA / multicast / unspecified. */
 export function isPrivateIpv6(ip) {
   const value = normalizeIpv6(ip);
@@ -74,8 +84,13 @@ export function isPrivateIpv6(ip) {
   if (value.startsWith("fec") || value.startsWith("fed") || value.startsWith("fee") || value.startsWith("fef")) return true; // fec0::/10 site-local (deprecated)
   if (value.startsWith("ff")) return true; // multicast
   // IPv4-mapped IPv6 (::ffff:a.b.c.d or ::ffff:xxxx:xxxx) — check the embedded IPv4.
+  // Handle non-canonical spellings like ::ffff:0:7f00:1 too.
   const v4mapped = value.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (v4mapped !== null) return isPrivateIpv4(v4mapped[1]);
+  if (value.startsWith("::ffff")) {
+    const embedded = ipv4FromLastHextets(value);
+    if (embedded !== null) return isPrivateIpv4(embedded);
+  }
   const v4mappedHex = value.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
   if (v4mappedHex !== null) {
     const a = parseInt(v4mappedHex[1], 16) >> 8;
@@ -83,6 +98,12 @@ export function isPrivateIpv6(ip) {
     const c = parseInt(v4mappedHex[2], 16) >> 8;
     const d = parseInt(v4mappedHex[2], 16) & 0xff;
     return isPrivateIpv4(`${a}.${b}.${c}.${d}`);
+  }
+  // NAT64 well-known/local-use prefixes (64:ff9b::/96, 64:ff9b:1::/48).
+  if (value.startsWith("64:ff9b")) {
+    const embedded = ipv4FromLastHextets(value);
+    if (embedded !== null) return isPrivateIpv4(embedded);
+    return true; // conservative: block the NAT64 prefix itself
   }
   // Deprecated IPv4-compatible IPv6 (::a.b.c.d / ::xxxx:xxxx) can alias IPv4.
   const v4compatHex = value.match(/^::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
