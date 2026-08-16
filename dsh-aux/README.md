@@ -131,7 +131,8 @@ const result = await ctx.auxLlm.call("compress", {
   assembled 目录中过滤掉;首个 `tool/call` 后目录开放,AUX 工具出现,通过
   `agent/pre-step` 注入一次提示,引导模型直接使用 `vision_analyze`,避免为看图
   创建子代理。`vision_analyze` 是否常驻取决于 preset 的 resident 目录/
-  `dev_tool_search` 解锁策略。
+  `dev_tool_search` 解锁策略。Anchored Standard 的设计与实现见
+  [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main)。
 
 ## 测试
 
