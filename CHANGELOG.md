@@ -1,10 +1,10 @@
 # Changelog
 
-## 未发布 — 文档体验
+## 0.1.5(2026-08-16)— 命名空间脱敏、文档双语与隐私改进
 
-- 重写根 README 与插件包 README,提升可读性(特性表格、命令表格、TOC、FAQ、相关项目)
-- 新增英文版 `README.en.md` 与 `dsh-aux/README.en.md`,中英文顶部互链可切换
-- README 开头加入 AUX 可爱向自我介绍,并使用 SeekMaid 桌宠形象图
+- **包名去官方化**:从 `@deepseek-ai/dsh-aux` 改为 `@dolorescaritasangelus/dsh-aux`,避免冒充 DeepSeek 官方命名空间;同步更新 client 插件 id、文档、bridge 路径解析与测试
+- **Git 历史脱敏**:重写全部提交,移除 `/home/ehekatl/...` 本机绝对路径;GitHub 历史与 tag 已强制更新
+- **文档体验**:重写根 README 与插件包 README,新增英文版与中英文切换;加入 AUX 可爱向自我介绍与 SeekMaid 桌宠形象图;增加 TOC、FAQ、相关项目
 - 修正安装方式说明:未发布 npm 时使用 `file:` 本地源码安装,移除不可用的 `git+https://...` 直装命令
 - 修复 `bridge/` 脚本硬编码本地绝对路径,改为按部署形态相对解析;新增 `bridge/NOTICE`,为 DeepSeek Harness 原始代码摘录补充 MIT 声明
 - **隐私改进**:设置页新增「在对话界面显示辅助模型状态芯片」开关;关闭后注销 `aux-status` 投影,不再向 Web/第三方暴露。`aux-status` 投影数据最小化,仅保留 `task / ok / fallbackUsed / durationMs`,不再暴露 provider/model/errorCode/inputChars/outputChars
