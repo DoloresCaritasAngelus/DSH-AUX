@@ -13,12 +13,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-// 探测本机已安装的 dsh-agent-loop(标准部署或本仓库开发机);均不存在时测试自动跳过。
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+// 探测本机已安装的 dsh-agent-loop(源码树部署或环境变量覆盖);均不存在时测试自动跳过。
 const AGENT_LOOP_CANDIDATES = [
   process.env.DSH_AGENT_LOOP,
-  'node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js',
-  '/home/user/dsh/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js'
+  join(HERE, '../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js')
 ].filter(Boolean);
 const AGENT_LOOP = AGENT_LOOP_CANDIDATES.find((p) => existsSync(p));
 

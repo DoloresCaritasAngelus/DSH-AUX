@@ -15,12 +15,28 @@
  *   node patch-settings-dynamic-expose.mjs --rollback # roll back
  */
 import { readFile, writeFile, copyFile, readdir, access } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const TARGET = "/home/user/dsh/node_modules/@deepseek-ai/dsh-settings/lib/index.js";
+
+// 不写死用户绝对路径:按部署形态相对解析(symlink 部署 / 源码树部署)。
+function deployedFile(symlinkRel, sourceRel) {
+  const candidates = [
+    join(HERE, symlinkRel),
+    join(HERE, sourceRel)
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return candidates[0];
+}
+const TARGET = deployedFile(
+  "../../dsh-settings/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-settings/lib/index.js"
+);
 const MARK = "dsh-aux dynamic expose (local patch)";
 
 async function block(name) {

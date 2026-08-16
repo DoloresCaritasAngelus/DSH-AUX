@@ -27,10 +27,35 @@ import { execFileSync } from "node:child_process";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 // ── 目标文件 ────────────────────────────────────────────────────────────────
+// 不写死任何用户绝对路径:按部署形态相对解析。
+// - symlink 部署:本仓库位于 node_modules/@dolorescaritasangelus/dsh-aux/bridge,
+//   目标在 ../../dsh-host-apiproxy/...
+// - 源码树部署:本仓库位于 <DSH_ROOT>/dsh work/aux/bridge,
+//   目标在 ../../../node_modules/@deepseek-ai/dsh-host-apiproxy/...
+function deployedFile(symlinkRel, sourceRel) {
+  const candidates = [
+    join(HERE, symlinkRel),
+    join(HERE, sourceRel)
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return candidates[0];
+}
+
+const API_PROXY_FILE = deployedFile(
+  "../../dsh-host-apiproxy/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js"
+);
+const AGENT_LOOP_FILE = deployedFile(
+  "../../dsh-agent-loop/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js"
+);
+
 const TARGETS = [
   {
     label: "dsh-host-apiproxy",
-    file: "/home/user/dsh/node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js",
+    file: API_PROXY_FILE,
     mark: "dsh-image bridge v2 (local patch)",
     states: [
       { name: "v2", detect: (d) => d.includes("dsh-image bridge v2 (local patch)"), action: "skip" },
@@ -42,7 +67,7 @@ const TARGETS = [
   },
   {
     label: "dsh-agent-loop",
-    file: "/home/user/dsh/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js",
+    file: AGENT_LOOP_FILE,
     mark: "image-bridge v2 (local patch)",
     states: [
       { name: "patched", detect: (d) => d.includes("image-bridge v2 (local patch)") && d.includes("await this.bridgeImagesForModel(boundaryMessages"), action: "skip" },

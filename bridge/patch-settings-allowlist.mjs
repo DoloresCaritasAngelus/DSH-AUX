@@ -20,10 +20,28 @@
  *   node patch-settings-allowlist.mjs --rollback # roll back
  */
 import { readFile, writeFile, copyFile, readdir, access } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const TARGET = "/home/user/dsh/node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js";
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+// 不写死用户绝对路径:按部署形态相对解析(symlink 部署 / 源码树部署)。
+function deployedFile(symlinkRel, sourceRel) {
+  const candidates = [
+    join(HERE, symlinkRel),
+    join(HERE, sourceRel)
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return candidates[0];
+}
+const TARGET = deployedFile(
+  "../../dsh-host-apiproxy/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js"
+);
 const MARK_V2 = "dsh-aux settings dynamic expose (local patch)";
 
 // v1 补丁状态(白名单里带 aux)

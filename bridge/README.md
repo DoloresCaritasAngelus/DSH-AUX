@@ -87,3 +87,5 @@ node apply-patch.mjs --rollback
 
 - 修改的是 `node_modules` 内文件,**dsh 更新或重装后补丁会丢失**,需要重新 apply。
 - 若 DSH 升级导致代码块不匹配,脚本会跳过并提示,不会破坏新版本文件。
+- 本目录包含 DeepSeek Harness 的原始代码摘录(用于补丁匹配),DeepSeek Harness
+  以 MIT License 发布;声明与许可证全文见 [NOTICE](./NOTICE)。

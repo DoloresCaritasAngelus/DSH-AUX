@@ -6,6 +6,7 @@
 - 新增英文版 `README.en.md` 与 `dsh-aux/README.en.md`,中英文顶部互链可切换
 - README 开头加入 AUX 可爱向自我介绍,并使用 SeekMaid 桌宠形象图
 - 修正安装方式说明:未发布 npm 时使用 `file:` 本地源码安装,移除不可用的 `git+https://...` 直装命令
+- 修复 `bridge/` 脚本硬编码本地绝对路径,改为按部署形态相对解析;新增 `bridge/NOTICE`,为 DeepSeek Harness 原始代码摘录补充 MIT 声明
 
 ## 0.1.4(2026-08-16)— 压缩桥接图片降级与 Bootstrap 预设引导
 
