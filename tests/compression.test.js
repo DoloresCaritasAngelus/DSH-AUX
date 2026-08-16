@@ -122,6 +122,29 @@ test('resolveCompressionPlan: 短文本显式 hierarchical 不会误报多轮', 
   assert.equal(plan.roundLimit, 1);
 });
 
+test('resolveCompressionPlan: maxRounds<3 时禁用 hierarchical', () => {
+  // 超长文本会默认启用 hierarchical(3 轮);显式 maxRounds=2 应禁用并裁剪轮数
+  const longText = 'line\n'.repeat(50000); // > HIERARCHICAL_THRESHOLD_CHARS
+  const plan2 = resolveCompressionPlan({ text: longText, maxRounds: 2 });
+  assert.equal(plan2.hierarchical, false);
+  assert.equal(plan2.roundLimit, 2);
+
+  const plan1 = resolveCompressionPlan({ text: longText, maxRounds: 1 });
+  assert.equal(plan1.hierarchical, false);
+  assert.equal(plan1.roundLimit, 1);
+});
+
+test('resolveCompressionPlan: 未提供 maxRounds 或 >=3 时 hierarchical 保持三轮', () => {
+  const longText = 'line\n'.repeat(50000);
+  const auto = resolveCompressionPlan({ text: longText });
+  assert.equal(auto.hierarchical, true);
+  assert.equal(auto.roundLimit, 3);
+
+  const plan3 = resolveCompressionPlan({ text: longText, maxRounds: 3 });
+  assert.equal(plan3.hierarchical, true);
+  assert.equal(plan3.roundLimit, 3);
+});
+
 test('segmentText: 短文本不分段', () => {
   assert.deepEqual(segmentText('hello world', 'general', 100), ['hello world']);
 });
@@ -134,10 +157,19 @@ test('segmentText: 长文本按行分段且内容不丢失', () => {
   assert.equal(segments.join('\n'), text);
 });
 
-test('segmentText: 超长单行硬切不丢内容', () => {
+test('segmentText: 超长单行保持为单个分段且可原样拼回', () => {
   const line = 'x'.repeat(500);
   const segments = segmentText(line, 'general', 100, 10);
-  assert.equal(segments.join(''), line);
+  assert.equal(segments.length, 1, '超长单行不应被硬切为多个分段');
+  assert.equal(segments.join('\n'), line);
+});
+
+test('segmentText: 混合超长单行+周边行的往返不变式', () => {
+  const longLine = 'y'.repeat(500);
+  const text = `first line\n${longLine}\nlast line`;
+  const segments = segmentText(text, 'general', 100, 10);
+  assert.ok(segments.length > 1, '混合场景应有多个分段');
+  assert.equal(segments.join('\n'), text);
 });
 
 test('segmentText: maxSegments<=0 时安全降级为 1 段', () => {
@@ -325,5 +357,45 @@ test('compressWithPlan: 超过安全上限拒绝', async () => {
   await assert.rejects(
     () => compressWithPlan(service, { text: 'x'.repeat(MAX_COMPRESS_INPUT_CHARS + 1) }, {}),
     /safety limit/
+  );
+});
+
+test('compressWithPlan: 转发 singleCallMaxChars/maxSegments 并保持一致', async () => {
+  const service = {
+    async call(task, request) {
+      return { text: 'SEG', provider: 'p', model: 'm' };
+    }
+  };
+  const text = Array.from({ length: 2000 }, (_, i) => `line ${i} some facts ${i}`).join('\n');
+  // 默认 singleCallMaxChars(30k)下为多轮
+  const dflt = await compressWithPlan(service, { text, mode: 'log' }, {});
+  assert.ok(dflt.segments > 1, '默认 30k 阈值下应多轮');
+
+  // 显式更大的 singleCallMaxChars 应被转发,使文本落到单轮
+  const wide = await compressWithPlan(service, { text, mode: 'log', singleCallMaxChars: 200000 }, {});
+  assert.equal(wide.segments, 1);
+  assert.equal(wide.rounds, 1);
+
+  // maxSegments 应被转发并限制分段数
+  const capped = await compressWithPlan(service, { text, mode: 'log', maxSegments: 2 }, {});
+  assert.ok(capped.segments <= 2, 'maxSegments 生效');
+  assert.ok(capped.segments > 1);
+});
+
+test('compressWithPlan: maxOutputChars 非正整数时抛错', async () => {
+  const service = {
+    async call() { throw new Error('should not be called'); }
+  };
+  await assert.rejects(
+    () => compressWithPlan(service, { text: 'hello world', maxOutputChars: 0 }, {}),
+    /maxOutputChars must be a positive integer/
+  );
+  await assert.rejects(
+    () => compressWithPlan(service, { text: 'hello world', maxOutputChars: 100.5 }, {}),
+    /maxOutputChars must be a positive integer/
+  );
+  await assert.rejects(
+    () => compressWithPlan(service, { text: 'hello world', maxOutputChars: -3 }, {}),
+    /maxOutputChars must be a positive integer/
   );
 });

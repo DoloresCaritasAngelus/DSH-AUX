@@ -23,34 +23,21 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { deployedFile, guardTarget } from "./target.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 // ── 目标文件 ────────────────────────────────────────────────────────────────
-// 不写死任何用户绝对路径:按部署形态相对解析。
-// - symlink 部署:本仓库位于 node_modules/@dolorescaritasangelus/dsh-aux/bridge,
-//   目标在 ../../../@deepseek-ai/dsh-host-apiproxy/...
-// - 源码树部署:本仓库位于 <DSH_ROOT>/dsh work/aux/bridge,
-//   目标在 ../../../node_modules/@deepseek-ai/dsh-host-apiproxy/...
-function deployedFile(symlinkRel, sourceRel) {
-  const candidates = [
-    join(HERE, symlinkRel),
-    join(HERE, sourceRel)
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return candidates[0];
-}
-
-const API_PROXY_FILE = deployedFile(
+// 不写死任何用户绝对路径:按部署形态相对解析(symlink / 源码树),并在读写前
+// 校验目标必须位于 node_modules/@deepseek-ai/.../lib/index.js。
+const API_PROXY_FILE = guardTarget(deployedFile(
   "../../../@deepseek-ai/dsh-host-apiproxy/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js"
-);
-const AGENT_LOOP_FILE = deployedFile(
+), "dsh-image-bridge");
+const AGENT_LOOP_FILE = guardTarget(deployedFile(
   "../../../@deepseek-ai/dsh-agent-loop/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js"
-);
+), "dsh-image-bridge");
 
 const TARGETS = [
   {

@@ -183,8 +183,13 @@ export function resolveCompressionPlan(options = {}) {
     : 1;
   const multiRound = segments > 1;
   // Hierarchical compression only makes sense when we already have segments.
-  const hierarchical = multiRound && (options.hierarchical === true || text.length > HIERARCHICAL_THRESHOLD_CHARS);
-  const roundLimit = hierarchical ? 3 : (multiRound ? Math.min(options.maxRounds ?? DEFAULT_MAX_ROUNDS, DEFAULT_MAX_ROUNDS) : 1);
+  // A caller-provided maxRounds < 3 cannot support skeleton + refine, so
+  // hierarchical is disabled and the round count degrades to 1 or 2.
+  let hierarchical = multiRound && (options.hierarchical === true || text.length > HIERARCHICAL_THRESHOLD_CHARS);
+  if (hierarchical && typeof options.maxRounds === "number" && options.maxRounds < 3) {
+    hierarchical = false;
+  }
+  const roundLimit = hierarchical ? 3 : (multiRound ? Math.max(1, Math.min(options.maxRounds ?? DEFAULT_MAX_ROUNDS, DEFAULT_MAX_ROUNDS)) : 1);
   const preserve = normalizePreserve(options.preserve);
 
   return {
@@ -192,6 +197,7 @@ export function resolveCompressionPlan(options = {}) {
     ratio,
     multiRound,
     segments,
+    singleCallMaxChars,
     roundLimit,
     maxOutputChars,
     hierarchical,
@@ -233,9 +239,10 @@ export function segmentText(text, type = "general", maxChars = DEFAULT_SINGLE_CA
       flush();
     }
     if (lineLen > target && current.length === 0) {
-      for (let i = 0; i < line.length; i += target) {
-        segments.push(line.slice(i, i + target));
-      }
+      // Keep an over-long single line as one whole segment: hard-splitting it
+      // into several array entries would break the newline-join round-trip
+      // invariant (segments.join('\n') === original).
+      segments.push(line);
       continue;
     }
     current.push(line);
@@ -394,8 +401,8 @@ async function compressSegmentWithRecovery(service, segment, instruction, profil
   } catch (error) {
     const message = error?.message ?? String(error);
     // Large segment: split once and compress the pieces (bounded to one level).
-    if (depth < 1 && segment.length > DEFAULT_SINGLE_CALL_MAX_CHARS) {
-      const pieces = segmentText(segment, profile.primary, DEFAULT_SINGLE_CALL_MAX_CHARS, 2);
+    if (depth < 1 && segment.length > plan.singleCallMaxChars) {
+      const pieces = segmentText(segment, profile.primary, plan.singleCallMaxChars, 2);
       const results = await Promise.all(pieces.map((piece) =>
         compressSegmentWithRecovery(service, piece, instruction, profile, plan, exec, depth + 1)
       ));
@@ -445,6 +452,10 @@ export async function compressWithPlan(service, args, exec = {}) {
   if (text.length > MAX_COMPRESS_INPUT_CHARS) {
     throw new Error(`compress_text: input is ${text.length} chars, exceeding the ${MAX_COMPRESS_INPUT_CHARS}-char safety limit`);
   }
+  if (args.maxOutputChars !== undefined &&
+      !(Number.isInteger(args.maxOutputChars) && args.maxOutputChars > 0)) {
+    throw new Error("compress_text: maxOutputChars must be a positive integer when provided");
+  }
 
   const plan = resolveCompressionPlan({
     text,
@@ -452,7 +463,10 @@ export async function compressWithPlan(service, args, exec = {}) {
     targetRatio: args.targetRatio,
     maxOutputChars: args.maxOutputChars,
     preserve: args.preserve,
-    hierarchical: args.hierarchical
+    hierarchical: args.hierarchical,
+    singleCallMaxChars: args.singleCallMaxChars,
+    maxRounds: args.maxRounds,
+    maxSegments: args.maxSegments
   });
   const instruction = args.instruction ?? "";
   const warnings = [...plan.preserveWarnings, ...plan.modeWarnings];
@@ -476,7 +490,7 @@ export async function compressWithPlan(service, args, exec = {}) {
     };
   }
 
-  const segments = segmentText(text, profile.primary, DEFAULT_SINGLE_CALL_MAX_CHARS, plan.segments);
+  const segments = segmentText(text, profile.primary, plan.singleCallMaxChars, plan.segments);
   const segmentResults = await Promise.all(segments.map((segment) =>
     compressSegmentWithRecovery(service, segment, instruction, profile, plan, exec)
   ));

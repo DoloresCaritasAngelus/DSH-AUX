@@ -3,7 +3,7 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/images/gc
  */
-import { readdir, stat as statFile, unlink as unlinkFile } from "node:fs/promises";
+import { lstat as lstatFile, readdir, stat as statFile, unlink as unlinkFile } from "node:fs/promises";
 
 /**
  * Garbage-collect pasted-image attachments older than `days` days.
@@ -38,6 +38,14 @@ export async function gcImages(days) {
     for (const bucketEnt of buckets) {
       if (!bucketEnt.isDirectory()) continue;
       const bucketPath = objectsRoot + "/" + bucketEnt.name;
+      // Re-verify with lstat: the dirent can race with a symlink swap, so
+      // refuse to descend into anything that is not a real directory.
+      try {
+        const bucketSt = await lstatFile(bucketPath);
+        if (!bucketSt.isDirectory() || bucketSt.isSymbolicLink()) continue;
+      } catch {
+        continue;
+      }
       const entries = await readdir(bucketPath, { withFileTypes: true }).catch(() => []);
       for (const entry of entries) {
         if (!entry.isFile()) continue;
@@ -45,11 +53,14 @@ export async function gcImages(days) {
         scanned += 1;
         try {
           const st = await statFile(filePath);
-          if (st.isFile() && st.mtimeMs < cutoff) {
-            await unlinkFile(filePath);
-            removed += 1;
-            removedBytes += st.size;
-          }
+          if (!st.isFile() || st.mtimeMs >= cutoff) continue;
+          // Re-verify with lstat before unlink: the file could have been
+          // swapped for a symlink since stat, and we must never follow it.
+          const fileSt = await lstatFile(filePath);
+          if (!fileSt.isFile() || fileSt.isSymbolicLink()) continue;
+          await unlinkFile(filePath);
+          removed += 1;
+          removedBytes += st.size;
         } catch {
           failed += 1;
         }

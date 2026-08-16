@@ -7,6 +7,16 @@ import { recordImageMemory } from '../dsh-aux/src/images/memory.js';
 
 function settle() { return new Promise((resolve) => setImmediate(resolve)); }
 
+/** 轮询等待条件成立(替代固定 setTimeout 等待),超时抛错。 */
+async function pollUntil(condition, { timeoutMs = 2000, intervalMs = 10 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (await condition()) return;
+    if (Date.now() >= deadline) throw new Error('pollUntil: timed out waiting for condition');
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
 async function makeHarness() {
   const ctx = new Context();
   await ctx.plugin({
@@ -38,8 +48,13 @@ test('image-memory 并发写不丢条目(多图并行场景)', async () => {
     await Promise.all(Array.from({ length: N }, (_, i) =>
       recordImageMemory(ctx.auxLlm, 'sess', 'sha256:' + ('0' + i).repeat(64).slice(0, 64), 'q' + i, 's' + i)
     ));
-    // 等全部落盘
-    await new Promise((r) => setTimeout(r, 200));
+    // 轮询直到 journal 条目数达到 N(替代固定 200ms 等待)
+    await pollUntil(async () => {
+      try {
+        const raw = await fsPromises.readFile(tmp + '/attachments/v1/image-memory.json', 'utf8');
+        return JSON.parse(raw).entries.length === N;
+      } catch { return false; }
+    });
     const raw = await fsPromises.readFile(tmp + '/attachments/v1/image-memory.json', 'utf8');
     const parsed = JSON.parse(raw);
     assert.equal(parsed.entries.length, N, '并发写不应丢条目,实际 ' + parsed.entries.length);

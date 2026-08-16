@@ -70,6 +70,9 @@ export async function resolveImageRef(service, args, exec) {
     throw new Error(`vision_analyze: attachment "${args.attachmentId}" not found in this session's messages`);
   }
   if (args.imagePath !== void 0 && args.imagePath.length > 0) {
+    // Path confinement/symlink safety is intentionally delegated to the host
+    // `fs` service: it owns the workspace sandbox and cwd resolution. The
+    // plugin must not re-implement or bypass that boundary.
     let fs;
     try {
       fs = service.ctx.get("fs");

@@ -8,8 +8,8 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-v0.1.7-blue)
-![Tests](https://img.shields.io/badge/tests-137-brightgreen)
+![Version](https://img.shields.io/badge/version-v0.1.8-blue)
+![Tests](https://img.shields.io/badge/tests-163-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)
 
@@ -146,7 +146,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 - **Platform**: DSH ≥ 0.1.0-rc.6; Node ≥ 20.
 - **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages; no `dependencies`.
-- **Zero-dependency tests**: `node --test tests/aux.test.js` (102) + `node --test tests/compression.test.js` (30) + `node --test tests/memory-race.test.js` (1) + `node --test tests/bridge.test.js` (4).
+- **Zero-dependency tests**: `node --test tests/*.test.js` (163 total: aux 102 / compression 35 / core-review 4 / fetch-vision 4 / images-review 7 / fs-boundary 2 / bridge-target 4 / memory 1 / bridge 4).
 
 ### Integrated Components
 

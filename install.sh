@@ -25,6 +25,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# 只允许安全 profile 名,防止路径穿越写入 ~/.dsh/profiles/..
+case "$PROFILE" in
+  *[!A-Za-z0-9_-]*) echo "错误: --profile 只允许字母/数字/下划线/连字符" >&2; exit 1 ;;
+esac
+
 # 1. 探测部署根(含 node_modules/@deepseek-ai 的目录)
 if [ -z "$DSH_ROOT" ]; then
   for candidate in "$HOME/dsh" "$HOME/.local/share/dsh" "/opt/dsh"; do
@@ -37,6 +42,11 @@ if [ -z "$DSH_ROOT" ] || [ ! -d "$DSH_ROOT/node_modules" ]; then
 fi
 
 PACKAGE_NAME="$(node -p "require('$HERE/dsh-aux/package.json').name")"
+# 包名必须符合 npm scoped 包格式,防止注入到 profile 补丁。
+case "$PACKAGE_NAME" in
+  @[A-Za-z0-9_-]+/[A-Za-z0-9_-]+) ;;
+  *) echo "错误: 包名格式不合法: $PACKAGE_NAME" >&2; exit 1 ;;
+esac
 NODE_MODULES="$DSH_ROOT/node_modules"
 PROFILE_DIR="$HOME/.dsh/profiles/$PROFILE"
 PATCH_FILE="$PROFILE_DIR/cordis.patch.yml"
@@ -65,13 +75,14 @@ mkdir -p "$PROFILE_DIR"
 if grep -q "id: aux" "$PATCH_FILE" 2>/dev/null; then
   echo "  补丁层已注册 aux(跳过)"
 else
-  run bash -c "cat >> "$PATCH_FILE" <<'EOF'
+  # 用位置参数传递 PATCH_FILE/PACKAGE_NAME,避免外层 shell 拼接注入。
+  run bash -c 'cat >> "$1" <<EOF
 
 # dsh-aux: auxiliary model system (host plane row)
 - insert:
     - id: aux
-      name: '$PACKAGE_NAME'
-EOF"
+      name: "$2"
+EOF' _ "$PATCH_FILE" "$PACKAGE_NAME"
 fi
 
 # 4. image-bridge 补丁(集成组件,幂等,v1 自动升级 v2)
