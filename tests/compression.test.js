@@ -108,6 +108,13 @@ test('resolveCompressionPlan: mode 是软提示,仍保留检测信号', () => {
   assert.equal(typeof plan.profile.signals.code, 'boolean');
 });
 
+test('resolveCompressionPlan: 短文本显式 hierarchical 不会误报多轮', () => {
+  const plan = resolveCompressionPlan({ text: 'short text', hierarchical: true });
+  assert.equal(plan.multiRound, false);
+  assert.equal(plan.hierarchical, false);
+  assert.equal(plan.roundLimit, 1);
+});
+
 test('segmentText: 短文本不分段', () => {
   assert.deepEqual(segmentText('hello world', 'general', 100), ['hello world']);
 });
@@ -124,6 +131,13 @@ test('segmentText: 超长单行硬切不丢内容', () => {
   const line = 'x'.repeat(500);
   const segments = segmentText(line, 'general', 100, 10);
   assert.equal(segments.join(''), line);
+});
+
+test('segmentText: maxSegments<=0 时安全降级为 1 段', () => {
+  const text = Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n');
+  const segments = segmentText(text, 'log', 10, 0);
+  assert.equal(segments.length, 1);
+  assert.equal(segments[0], text);
 });
 
 test('buildCompressSystemPrompt: 场景规则与预算生效', () => {

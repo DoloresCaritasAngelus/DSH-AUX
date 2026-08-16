@@ -178,7 +178,8 @@ export function resolveCompressionPlan(options = {}) {
     ? Math.min(maxSegments, Math.ceil(text.length / singleCallMaxChars))
     : 1;
   const multiRound = segments > 1;
-  const hierarchical = options.hierarchical === true || (multiRound && text.length > HIERARCHICAL_THRESHOLD_CHARS);
+  // Hierarchical compression only makes sense when we already have segments.
+  const hierarchical = multiRound && (options.hierarchical === true || text.length > HIERARCHICAL_THRESHOLD_CHARS);
   const roundLimit = hierarchical ? 3 : (multiRound ? Math.min(options.maxRounds ?? DEFAULT_MAX_ROUNDS, DEFAULT_MAX_ROUNDS) : 1);
   const preserve = normalizePreserve(options.preserve);
 
@@ -202,11 +203,12 @@ export function resolveCompressionPlan(options = {}) {
  * "\n" should reproduce the original for line-based inputs.
  */
 export function segmentText(text, type = "general", maxChars = DEFAULT_SINGLE_CALL_MAX_CHARS, maxSegments = DEFAULT_MAX_SEGMENTS) {
+  const cap = Math.max(1, maxSegments);
   if (text.length <= maxChars) return [text];
   // When the caller caps the number of segments, target an even chunk size so
   // no single segment becomes a giant outlier (which would defeat the purpose
   // of multi-round window protection).
-  const target = Math.max(maxChars, Math.ceil(text.length / Math.max(1, maxSegments)));
+  const target = Math.max(maxChars, Math.ceil(text.length / cap));
   const lines = text.split("\n");
   const segments = [];
   let current = [];
@@ -244,7 +246,7 @@ export function segmentText(text, type = "general", maxChars = DEFAULT_SINGLE_CA
 
   // If we still exceed the cap, merge the smallest adjacent pair repeatedly.
   // This keeps segment sizes balanced instead of growing one giant chunk.
-  while (segments.length > maxSegments) {
+  while (segments.length > cap) {
     let bestIdx = 0;
     let bestSize = Infinity;
     for (let i = 0; i < segments.length - 1; i++) {
