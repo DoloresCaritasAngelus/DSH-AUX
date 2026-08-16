@@ -12,6 +12,14 @@
   (AUX 调用内部已包含主模型 fallback,二次 fallback 只会掩盖根因)
 - 文档注明原生 `dsh-compaction-basic` 为单次全量摘要;超大输入请调大
   `compaction.timeoutMs`(实测 shadowed 449K tokens 可单次成功)
+- **会话事件白名单冲突**: 持久化读链(KNOWN_SESSION_EVENT_TYPES)拒绝
+  白名单外的插件自定义事件(含 `aux/llm-call`),带该类事件的会话历史整体
+  加载失败。`bridge/patch-session-ignorable.mjs` 补齐 dsh-session `append`
+  的 `ignorable` 写入入口(官方 SessionEvent envelope 预留通道)+ 白名单
+  放行旧日志;dsh-aux 的事件均以 `ignorable: true` 标记写入
+- **传播性保护**: 未打 dsh-session ignorable 补丁的部署(GitHub 直接装插件)
+  自动检测并在缺补丁时**降级不写事件**(+ 一次警告),防止无标记插件事件
+  污染会话日志导致历史不可读;`/aux status` 显示「会话事件记录」状态
 - **修复事件记录检测失效**: `_sessionEventsSupported()` 的候选路径原为
   `../dsh-session`(从 src/index.js 只到 dsh-aux/ 目录,永远解析失败),
   导致重启后所有 `aux/llm-call` 事件写入被永久降级禁用。现改为
