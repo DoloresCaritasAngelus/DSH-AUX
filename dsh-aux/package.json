@@ -1,7 +1,7 @@
 {
   "name": "@dolorescaritasangelus/dsh-aux",
   "description": "Auxiliary model system for DSH: unified aux-LLM routing (per-task model, timeout, concurrency, failure cooldown, main-model fallback) plus vision_analyze / web_extract / compress_text tools, settings page, and session status projection",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/<owner>/<repo>.git"

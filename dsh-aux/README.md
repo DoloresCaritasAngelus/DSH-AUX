@@ -13,7 +13,7 @@
 > 统一辅助 LLM 路由服务 + 三个辅助任务工具,给主 agent 使用。
 > **不建立子智能体、不做会话协同**——辅助任务(视觉、网页提取、文本压缩)由独立辅助 LLM 完成。
 
-[![版本](https://img.shields.io/badge/version-0.1.5-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+[![版本](https://img.shields.io/badge/version-0.1.6-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 [![测试](https://img.shields.io/badge/tests-100-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 [![许可证](https://img.shields.io/badge/license-MIT-green)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 

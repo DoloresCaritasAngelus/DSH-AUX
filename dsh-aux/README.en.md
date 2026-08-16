@@ -13,7 +13,7 @@
 > a unified auxiliary LLM routing service + three auxiliary task tools for the main agent.
 > **No sub-agents, no session collaboration** — auxiliary tasks (vision, web extraction, text compression) are handled by an independent auxiliary LLM.
 
-[![version](https://img.shields.io/badge/version-0.1.5-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
+[![version](https://img.shields.io/badge/version-0.1.6-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 [![tests](https://img.shields.io/badge/tests-100-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 [![license](https://img.shields.io/badge/license-MIT-green)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
 
