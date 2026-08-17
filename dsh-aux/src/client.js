@@ -114,6 +114,14 @@ window.__ModuleLoader__.load({
 					if (draft.fallbackToMain) ops.push({ op: "set", path: ["fallbackToMain"], value: true });
 					else ops.push({ op: "unset", path: ["fallbackToMain"] });
 				}
+				if (draft?.forceAuxVision !== void 0) {
+					if (draft.forceAuxVision) ops.push({ op: "set", path: ["forceAuxVision"], value: true });
+					else ops.push({ op: "unset", path: ["forceAuxVision"] });
+				}
+				if (draft?.visionFallbackToMain !== void 0) {
+					if (draft.visionFallbackToMain) ops.push({ op: "set", path: ["visionFallbackToMain"], value: true });
+					else ops.push({ op: "unset", path: ["visionFallbackToMain"] });
+				}
 				if (draft?.showStatusChip !== void 0) {
 					if (draft.showStatusChip === false) ops.push({ op: "set", path: ["showStatusChip"], value: false });
 					else ops.push({ op: "unset", path: ["showStatusChip"] });
@@ -162,6 +170,14 @@ window.__ModuleLoader__.load({
 				react.createElement("label", { className: "ax-switch" },
 					react.createElement("input", { type: "checkbox", checked: draft?.fallbackToMain !== false, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.fallbackToMain = e.target.checked; return next; }); } }),
 					"失败时降级到主模型 (fallbackToMain)"
+				),
+				react.createElement("label", { className: "ax-switch" },
+					react.createElement("input", { type: "checkbox", checked: draft?.forceAuxVision === true, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.forceAuxVision = e.target.checked; return next; }); } }),
+					"强制原生图片也走 AUX 视觉 (forceAuxVision)"
+				),
+				react.createElement("label", { className: "ax-switch" },
+					react.createElement("input", { type: "checkbox", checked: draft?.visionFallbackToMain !== false, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.visionFallbackToMain = e.target.checked; return next; }); } }),
+					"视觉辅助失败时降级到主模型 (visionFallbackToMain)"
 				),
 				react.createElement("label", { className: "ax-switch" },
 					react.createElement("input", { type: "checkbox", checked: draft?.showStatusChip !== false, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.showStatusChip = e.target.checked; return next; }); } }),
