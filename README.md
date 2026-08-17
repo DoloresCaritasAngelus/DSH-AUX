@@ -155,7 +155,7 @@ const result = await ctx.auxLlm.call("compress", {
 - **会话事件注册通道**:`aux/llm-call` 以 `ignorable: true` 标记写入;未装补丁时自动降级不写事件,保护会话日志。
 - **会话删除协同**:配合社区插件 dsh-plugin-session-delete,删除会话时自动清理无引用图片。
 - **compaction-bridge**:配置 `compaction` 任务后,原生压缩改走 AUX;含图会话图片不可用时自动降级为文本占位。
-- **subagent-bridge**:透明接管原生 `subagent`,按 native / manual / vision-aware 模式路由到 AUX 辅助模型;给子代理注入 `vision_analyze` 作兜底,零系统提示词改动。
+- **subagent-bridge**:透明接管原生 `subagent`,按 native / manual / vision-aware 模式路由到 AUX 辅助模型;给子代理注入 `vision_analyze` 作兜底,零系统提示词改动。`workflow` 的 `agent()` 并行子代理也可走同一路由(includeWorkflow)。
 
 ### 极简 / Anchored Standard 兼容
 

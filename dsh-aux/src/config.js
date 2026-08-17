@@ -60,6 +60,7 @@ export const AUX_SETTINGS_SCHEMA = z.object({
   }),
   subagent: z.object({
     mode: z.union([z.const("native"), z.const("manual"), z.const("vision-aware")]).default("native"),
+    includeWorkflow: z.boolean().default(true),
     general: z.object({
       provider: z.string(),
       model: z.string()
@@ -96,6 +97,7 @@ export function projectSettings(settings) {
   const rawSub = settings?.subagent ?? {};
   const subagent = {
     mode: rawSub.mode ?? "native",
+    includeWorkflow: rawSub.includeWorkflow !== false,
     ...(rawSub.general !== void 0 && (rawSub.general.provider !== void 0 || rawSub.general.model !== void 0)
       ? { general: { ...rawSub.general } }
       : {}),

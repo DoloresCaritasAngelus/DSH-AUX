@@ -130,3 +130,9 @@ test('返回对象带 needsVision 字段(命中为 true)', () => {
   const r = resolveSubagentRoute(visionAwareSettings, { prompt: '描述图片', requiresVision: 'auto' })
   assert.equal(r.needsVision, true)
 })
+
+test('includeWorkflow 不进入纯函数(仅 workflow 调用点门控,保护 subagent 工具路径)', () => {
+  const r = resolveSubagentRoute({ ...manualSettings, includeWorkflow: false }, { prompt: 'x' })
+  assert.equal(r.settled, true)
+  assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'glm-5.2' })
+})

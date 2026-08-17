@@ -1,0 +1,33 @@
+			const includeWorkflow = (() => {
+				try {
+					const aux = this.ctx?.get?.("auxLlm");
+					return aux?.subagentIncludeWorkflow !== false;
+				} catch { return true; }
+			})();
+			const explicit = request.provider !== void 0 || request.model !== void 0;
+			const auxRoute = (!explicit && includeWorkflow) ? (() => {
+				try {
+					const aux = this.ctx?.get?.("auxLlm");
+					return aux?.subagentRoute ? aux.subagentRoute({
+						prompt: request.prompt,
+						requiresVision: request.requires_vision
+					}) : {};
+				} catch { return {}; }
+			})() : {};
+			const agentOptions = explicit
+				? {
+					...(request.provider !== void 0 ? { provider: request.provider } : {}),
+					...(request.model !== void 0 ? { model: request.model } : {})
+				}
+				: auxRoute.agentOptions;
+			run = await this.subagents.start(this.provider, {
+				prompt: [{
+					type: "text",
+					text: request.prompt
+				}],
+				parent: this.parent,
+				signal: this.controller.signal,
+				...request.schema !== void 0 ? { outputSchema: request.schema } : {},
+				...(agentOptions !== void 0 ? { agentOptions } : {}),
+				...(auxRoute.toolFilter !== void 0 ? { toolFilter: auxRoute.toolFilter } : {})
+			});

@@ -126,6 +126,8 @@ window.__ModuleLoader__.load({
 				const sub = draft?.subagent ?? {};
 				if (sub.mode !== void 0 && sub.mode !== "native") ops.push({ op: "set", path: ["subagent", "mode"], value: sub.mode });
 				else ops.push({ op: "unset", path: ["subagent", "mode"] });
+				if (sub.includeWorkflow === false) ops.push({ op: "set", path: ["subagent", "includeWorkflow"], value: false });
+				else ops.push({ op: "unset", path: ["subagent", "includeWorkflow"] });
 				for (const group of ["general", "vision"]) {
 					const g = sub?.[group] ?? {};
 					const gbase = ["subagent", group];
@@ -233,6 +235,10 @@ window.__ModuleLoader__.load({
 					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "视觉关键词 (逗号分隔)"), react.createElement("input", {
 						type: "text", value: Array.isArray(sub.visionKeywords) ? sub.visionKeywords.join(",") : "", placeholder: "图片,image,截图", disabled: !state.writable, onChange: (e) => setSub({ visionKeywords: e.target.value === "" ? [] : e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
 					})),
+					react.createElement("label", { className: "ax-switch" },
+						react.createElement("input", { type: "checkbox", checked: sub.includeWorkflow !== false, disabled: !state.writable, onChange: (e) => setSub({ includeWorkflow: e.target.checked }) }),
+						"workflow 并行子代理也走此路由 (includeWorkflow)"
+					),
 					react.createElement("label", { className: "ax-switch" },
 						react.createElement("input", { type: "checkbox", checked: sub.prepareTools !== false, disabled: !state.writable, onChange: (e) => setSub({ prepareTools: e.target.checked }) }),
 						"给子代理注入 AUX 工具作兜底 (prepareTools)"

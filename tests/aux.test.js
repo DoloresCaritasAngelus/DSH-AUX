@@ -71,6 +71,7 @@ import { runWebExtract } from '../dsh-aux/src/tools/web-extract.js';
 import { fetchWithSsrf } from '../dsh-aux/src/fetch.js';
 import { resolveImageRef } from '../dsh-aux/src/images/resolve.js';
 import { imageBridgeStatus } from '../dsh-aux/src/image-bridge.js';
+import { workflowBridgeStatus } from '../dsh-aux/src/subagent-bridge.js';
 import { recordAuxEvent, sessionEventsSupported } from '../dsh-aux/src/events.js';
 import { recordImageMemory } from '../dsh-aux/src/images/memory.js';
 import {
@@ -1089,6 +1090,7 @@ test('projectSettings: 暴露 forceAuxVision / visionFallbackToMain 默认值', 
   assert.equal(projected.forceAuxVision, false);
   assert.equal(projected.visionFallbackToMain, true);
   assert.equal(projected.subagent.mode, 'native');
+  assert.equal(projected.subagent.includeWorkflow, true);
   const custom = projectSettings({ forceAuxVision: true, visionFallbackToMain: false });
   assert.equal(custom.forceAuxVision, true);
   assert.equal(custom.visionFallbackToMain, false);
@@ -1098,6 +1100,7 @@ test('projectSettings: subagent 段透传', () => {
   const projected = projectSettings({
     subagent: {
       mode: 'vision-aware',
+      includeWorkflow: false,
       general: { provider: 'opencode-go', model: 'glm-5.2' },
       vision: { provider: 'opencode-go', model: 'kimi-k2.7-code' },
       prepareTools: false,
@@ -1106,6 +1109,7 @@ test('projectSettings: subagent 段透传', () => {
     }
   });
   assert.equal(projected.subagent.mode, 'vision-aware');
+  assert.equal(projected.subagent.includeWorkflow, false);
   assert.deepEqual(projected.subagent.general, { provider: 'opencode-go', model: 'glm-5.2' });
   assert.deepEqual(projected.subagent.vision, { provider: 'opencode-go', model: 'kimi-k2.7-code' });
   assert.equal(projected.subagent.prepareTools, false);
@@ -1144,18 +1148,23 @@ test('subagentRoute: native / manual / vision-aware 服务方法', async () => {
   assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: '描述 imagePath=/tmp/a.png', requiresVision: 'auto' }).agentOptions, { provider: 'opencode-go', model: 'kimi-k2.7-code' });
 });
 
-test('settings source 接线: forceAuxVision / visionFallbackToMain / subagentMode 联动', async () => {
+test('settings source 接线: forceAuxVision / visionFallbackToMain / subagent 联动', async () => {
   const { ctx } = await makeHarness();
   ctx.auxLlm._source = () => ({
     forceAuxVision: true,
     visionFallbackToMain: false,
-    subagent: { mode: 'manual', general: { provider: 'opencode-go', model: 'glm-5.2' } }
+    subagent: { mode: 'manual', includeWorkflow: false, general: { provider: 'opencode-go', model: 'glm-5.2' } }
   });
   ctx.auxLlm._recomputeMerged();
   assert.equal(ctx.auxLlm.forceAuxVision, true);
   assert.equal(ctx.auxLlm.visionFallbackToMain, false);
   assert.equal(ctx.auxLlm.subagentMode, 'manual');
+  assert.equal(ctx.auxLlm.subagentIncludeWorkflow, false);
   assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: 'x' }).agentOptions, { provider: 'opencode-go', model: 'glm-5.2' });
+  // includeWorkflow 缺省 → true
+  ctx.auxLlm._source = () => ({ subagent: { mode: 'native' } });
+  ctx.auxLlm._recomputeMerged();
+  assert.equal(ctx.auxLlm.subagentIncludeWorkflow, true);
 });
 
 test('visionFallbackToMain=false 且未配置 vision 主路线 → 主模型仍作为唯一路线可用', async () => {
@@ -1882,6 +1891,11 @@ test('image-bridge 状态: 源码树运行(无核心包)时返回 unknown', asyn
   const { ctx } = await makeHarness();
   // 测试环境从源码树加载,../dsh-host-apiproxy 不存在 → unknown
   const status = await imageBridgeStatus();
+  assert.equal(status, 'unknown');
+});
+
+test('workflow-bridge 状态: 源码树运行(无核心包)时返回 unknown', async () => {
+  const status = await workflowBridgeStatus();
   assert.equal(status, 'unknown');
 });
 

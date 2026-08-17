@@ -15,14 +15,20 @@
   `vision_analyze` 等 AUX 工具(无 allow 则保持目录开放,避免过滤掉
   bash/read 破坏 Anchored/Standard bootstrap);子代理模型自己看图失败后可
   调用 `vision_analyze` → AUX 视觉辅助模型兜底。
-- **设置页**:新增「子代理辅助模型」区块(mode / general / vision /
-  prepareTools / visionKeywords)。
+- **设置页**:新增「子代理辅助模型」区块(mode / includeWorkflow / general /
+  vision / prepareTools / visionKeywords)。
+- **workflow 子代理桥接**:`dsh-workflow-worker-thread` 的 `startChild()`
+  也读取 `ctx.auxLlm.subagentRoute()`(经 `subagentIncludeWorkflow` 门控),
+  让 `workflow` 里 `agent()` 批量扇出的并行子代理同样走
+  native / manual / vision-aware;显式 `agent(prompt,{provider,model})`
+  优先于 AUX 路由。`/aux status` 新增独立 `workflow-bridge` 状态。
 - `retryVisionWithAux` 作为保留配置(schema 已留,暂未暴露到设置页,功能后续实现)。
 - **零系统提示词改动**:不注入系统提示词,兼容极简 / Anchored Standard。
-- `/aux status` 显示 `subagent-bridge` 模式与补丁状态。
+- `/aux status` 显示 `subagent-bridge` 与 `workflow-bridge` 模式与补丁状态。
 - 新增 `src/subagent-route.js`(纯函数)、`src/subagent-bridge.js`(补丁检测)、
   `tests/subagent-route.test.js`;`bridge/apply-patch.mjs` 新增
-  `dsh-tool-subagent` 两个补丁目标(schema + request)。测试 118 项全绿。
+  `dsh-tool-subagent` 两个补丁目标(schema + request)与
+  `dsh-workflow-worker-thread` 一个补丁目标(startChild)。
 
 ## 0.2.0(2026-08-17)— 视觉路由策略开关
 

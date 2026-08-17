@@ -1,0 +1,13 @@
+			run = await this.subagents.start(this.provider, {
+				prompt: [{
+					type: "text",
+					text: request.prompt
+				}],
+				parent: this.parent,
+				signal: this.controller.signal,
+				...request.schema !== void 0 ? { outputSchema: request.schema } : {},
+				...request.provider !== void 0 || request.model !== void 0 ? { agentOptions: {
+					...request.provider !== void 0 ? { provider: request.provider } : {},
+					...request.model !== void 0 ? { model: request.model } : {}
+				} } : {}
+			});

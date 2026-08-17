@@ -20,11 +20,13 @@
  *     可选的 `requires_vision` 参数(native 透明接管用)。
  *  5) @deepseek-ai/dsh-tool-subagent(request):executed 时读取
  *     `ctx.auxLlm.subagentRoute()` 注入 agentOptions/toolFilter。
+ *  6) @deepseek-ai/dsh-workflow-worker-thread(startChild):让 workflow
+ *     `agent()` 扇出的子代理同样走 AUX 子代理路由(includeWorkflow 门控)。
  *
  * 用法:
  *   node apply-patch.mjs            # 应用/升级补丁(自动定位、备份、替换、校验)
  *   node apply-patch.mjs --dry-run  # 只检查,不修改
- *   node apply-patch.mjs --rollback # 回滚到最近一次备份(五个目标各自回滚)
+ *   node apply-patch.mjs --rollback # 回滚到最近一次备份(六个目标各自回滚)
  */
 import { readFile, writeFile, copyFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -50,6 +52,10 @@ const SUBAGENT_TOOL_FILE = guardTarget(deployedFile(
   "../../../@deepseek-ai/dsh-tool-subagent/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js"
 ), "dsh-subagent-bridge");
+const WORKFLOW_ENGINE_FILE = guardTarget(deployedFile(
+  "../../../@deepseek-ai/dsh-workflow-worker-thread/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-workflow-worker-thread/lib/index.js"
+), "dsh-workflow-bridge");
 
 const TARGETS = [
   {
@@ -108,6 +114,17 @@ const TARGETS = [
       { name: "original", detect: (d) => d.includes("...config.agentOptions !== void 0 ? { agentOptions: config.agentOptions } : {}"), block: await readFile(join(HERE, "orig-subagent-request-block.txt"), "utf8"), action: "replace" }
     ],
     patched: await readFile(join(HERE, "patched-subagent-request-block.txt"), "utf8"),
+    backupPrefix: "index.js.bak-"
+  },
+  {
+    label: "dsh-workflow-worker-thread",
+    file: WORKFLOW_ENGINE_FILE,
+    mark: "subagentIncludeWorkflow",
+    states: [
+      { name: "patched", detect: (d) => d.includes("subagentIncludeWorkflow") && d.includes("subagentRoute"), action: "skip" },
+      { name: "original", detect: (d) => d.includes("run = await this.subagents.start(this.provider, {"), block: await readFile(join(HERE, "orig-workflow-startchild-block.txt"), "utf8"), action: "replace" }
+    ],
+    patched: await readFile(join(HERE, "patched-workflow-startchild-block.txt"), "utf8"),
     backupPrefix: "index.js.bak-"
   }
 ];

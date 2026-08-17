@@ -135,6 +135,7 @@ rm "$DSH_ROOT/node_modules/<NAME>"
 - **subagent-bridge(集成组件,默认安装)**:透明接管原生 `subagent` 工具,按
   native / manual / vision-aware 模式让子代理走 AUX 辅助模型;给子代理注入
   `vision_analyze` 作兜底。零系统提示词改动,兼容极简 / Anchored Standard。
+  `workflow` 的 `agent()` 并行子代理也可走同一路由(includeWorkflow)。
   设置:设置页「子代理辅助模型」或 `aux.subagent`。补丁随 install.sh 应用,
   也可单独 `cd <repo>/bridge && node apply-patch.mjs`;`/aux status` 报告状态。
 - **会话事件注册通道(必装)**:dsh-aux 向会话写 `aux/llm-call` 事件;DSH

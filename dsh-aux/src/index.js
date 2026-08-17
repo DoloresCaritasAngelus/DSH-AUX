@@ -277,6 +277,7 @@ export class AuxLlmService extends Service {
     this._subagentSettings = settings.subagent ?? {};
     this.subagentMode = this._subagentSettings.mode ?? "native";
     this.subagentPrepareTools = this._subagentSettings.prepareTools !== false;
+    this.subagentIncludeWorkflow = this._subagentSettings.includeWorkflow !== false;
     this.fallbackToMain = settings.fallbackToMain ?? true;
     this.forceAuxVision = settings.forceAuxVision ?? false;
     this.visionFallbackToMain = settings.visionFallbackToMain ?? true;
