@@ -15,7 +15,8 @@
   子代理工具集,子代理模型自己看图失败后可调用 `vision_analyze` → AUX 视觉
   辅助模型兜底。
 - **设置页**:新增「子代理辅助模型」区块(mode / general / vision /
-  prepareTools / retryVisionWithAux / visionKeywords)。
+  prepareTools / visionKeywords)。
+- `retryVisionWithAux` 作为保留配置(schema 已留,暂未暴露到设置页,功能后续实现)。
 - **零系统提示词改动**:不注入系统提示词,兼容极简 / Anchored Standard。
 - `/aux status` 显示 `subagent-bridge` 模式与补丁状态。
 - 新增 `src/subagent-route.js`(纯函数)、`src/subagent-bridge.js`(补丁检测)、

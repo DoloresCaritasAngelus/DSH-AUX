@@ -92,6 +92,9 @@ resolveSubagentRoute(settings, { requiresVision, prompt, existingAllow })
 `retryVisionWithAux: true` 时,若子代理整体以视觉相关失败结束,父层把同一
 任务重新派发到 AUX 视觉路线(一个小型视觉子代理)。默认关闭,避免多一跳。
 
+> 当前版本 `retryVisionWithAux` 仅作为保留配置字段(schema 已留),**尚未
+> 接线、未暴露到设置页**,在后续版本实现。
+
 ## 5. 桥接实现 (native subagent 透明接管)
 
 补丁目标:`@deepseek-ai/dsh-tool-subagent`,分两处:

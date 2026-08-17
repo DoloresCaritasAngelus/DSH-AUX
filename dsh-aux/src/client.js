@@ -220,10 +220,6 @@ window.__ModuleLoader__.load({
 					react.createElement("label", { className: "ax-switch" },
 						react.createElement("input", { type: "checkbox", checked: sub.prepareTools !== false, disabled: !state.writable, onChange: (e) => setSub({ prepareTools: e.target.checked }) }),
 						"给子代理注入 AUX 工具作兜底 (prepareTools)"
-					),
-					react.createElement("label", { className: "ax-switch" },
-						react.createElement("input", { type: "checkbox", checked: sub.retryVisionWithAux === true, disabled: !state.writable, onChange: (e) => setSub({ retryVisionWithAux: e.target.checked }) }),
-						"视觉失败二次派发到 AUX (retryVisionWithAux,实验性)"
 					)
 				),
 				react.createElement("label", { className: "ax-switch" },
