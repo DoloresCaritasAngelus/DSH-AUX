@@ -102,12 +102,22 @@ After restarting DSH:
 
 ### Settings
 
-Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. You can also disable "Show auxiliary model status chip in conversation UI" — when disabled, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
+Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. `web_extract` also exposes **`maxChars`** (the page character budget, default 8000; used as the total budget during a crawl). You can also disable "Show auxiliary model status chip in conversation UI" — when disabled, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
+
+### web_extract
+
+- **Capability boundary**: `web_extract` is a **static-HTML summary proxy** — it fetches static HTML only and does not execute JavaScript (SPA/dynamic sites may come back as empty shells); it cannot click, paginate, or fill forms. Use a dedicated headless/rendering provider or the future `web_crawl` capability for browser-level behavior.
+- **Parameters**:
+  - `url` (required), `question` (optional follow-up), `maxChars` (page code-point budget; config default, then 8000);
+  - `followLinks: "off" | "same-origin"`: default `off` → single page; `same-origin` → BFS over same-origin document links;
+  - `maxPages` (crawl cap, default 3), `maxDepth` (link depth cap, default 1; `0` = root only).
+- **Output metadata**: single pages return `chars` (code points sent to the model) and `truncated`; crawls return `pages: [{url, chars, truncated}]`, `totalChars`, and an overall `truncated` flag so oversized documents are visible.
+- **Crawl semantics**: every page and every hop runs the per-hop SSRF check; only same-origin document links are followed (image/archive/media extensions are skipped); accumulated text is bounded by the shared `maxChars` budget; one auxiliary call produces the overall summary.
 
 ### Security boundaries
 
-- **SSRF protection (on by default)**: `web_extract` and `vision_analyze`'s `imageUrl` reject internal/loopback/cloud-metadata addresses (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.169.254`, `*.local`, etc.) by default and only allow `http/https`; every redirect hop is validated before the request is sent. To fetch local/intranet services, explicitly set `allowInternalUrls: true` in the plugin config.
-- **Prompt-injection mitigation**: auxiliary prompts treat page content, text-to-compress, and text inside images as **untrusted data** and explicitly forbid executing embedded instructions; `guideText` is trusted plugin config — only copy it from trusted sources.
+- **SSRF protection (on by default)**: `web_extract` and `vision_analyze`'s `imageUrl` reject internal/loopback/cloud-metadata addresses (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.169.254`, `*.local`, Teredo/6to4-embedded private addresses, etc.) by default and only allow `http/https`; the fallback fetch path validates **every redirect hop before the request is sent** (per-hop DNS + address check), and the provider-seam path requires a final URL, re-validates it, and hands any 3xx back to the per-hop follower. To fetch local/intranet services, explicitly set `allowInternalUrls: true` in the plugin config.
+- **Prompt-injection mitigation**: auxiliary prompts treat page content, text-to-compress, and text inside images as **untrusted data** and explicitly forbid executing embedded instructions; page bodies are wrapped in nonce-bearing `<<<UNTRUSTED PAGE DATA …>>>` … `<<<END UNTRUSTED PAGE DATA …>>>` data blocks, physically separated from the `Question` instruction; `guideText` is trusted plugin config — only copy it from trusted sources.
 - **Concurrency hard cap**: even if a task's `maxConcurrency` is configured higher, the effective value is capped at **10**, preventing misconfiguration from flooding the auxiliary model.
 
 ### Programmatic API (for plugin developers)

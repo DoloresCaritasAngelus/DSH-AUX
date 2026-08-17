@@ -15,8 +15,8 @@ export const DEFAULT_TASK_TIMEOUT_MS = 60_000;
 export const DEFAULT_TASK_CONCURRENCY = 2;
 /** Hard upper bound for any per-task concurrency cap. */
 export const MAX_TASK_CONCURRENCY = 10;
-/** Default input size cap (chars) for text tasks. */
-export const DEFAULT_MAX_INPUT_CHARS = 120_000;
+/** Default input size cap (code points) for web_extract page text. */
+export const DEFAULT_MAX_CHARS = 8000;
 /** Failures in a row that put a route into cooldown. */
 export const COOLDOWN_FAILURE_THRESHOLD = 3;
 /** Cooldown TTL after the threshold is reached (ms). */
@@ -52,9 +52,12 @@ export function resolveConfig(config) {
       throw new Error(`AuxConfig tasks.${task} must be an object`);
     }
     const entry = {};
-    const unknownKeys = Object.keys(raw).filter(
-      (key) => !["provider", "model", "timeoutMs", "maxConcurrency"].includes(key)
-    );
+    const allowedKeys = ["provider", "model", "timeoutMs", "maxConcurrency"];
+    // maxChars (deployment-level page-text cap) is meaningful for web_extract;
+    // kept task-scoped so a stray vision.maxChars is refused rather than
+    // silently ignored.
+    if (task === "web_extract") allowedKeys.push("maxChars");
+    const unknownKeys = Object.keys(raw).filter((key) => !allowedKeys.includes(key));
     if (unknownKeys.length > 0) {
       throw new Error(`AuxConfig tasks.${task} has unknown key(s) ${unknownKeys.join(", ")}`);
     }
@@ -85,6 +88,12 @@ export function resolveConfig(config) {
       }
       entry.maxConcurrency = raw.maxConcurrency;
     }
+    if (raw.maxChars !== void 0) {
+      if (!Number.isInteger(raw.maxChars) || raw.maxChars <= 0) {
+        throw new Error(`AuxConfig tasks.${task}.maxChars must be a positive integer`);
+      }
+      entry.maxChars = raw.maxChars;
+    }
     tasks[task] = entry;
   }
   if (source.guideText !== void 0 && typeof source.guideText !== "string") {
@@ -106,7 +115,8 @@ export function mergeTaskConfig(pluginEntry, settingsEntry) {
     provider: settingsEntry.provider ?? pluginEntry.provider,
     model: settingsEntry.model ?? pluginEntry.model,
     timeoutMs: settingsEntry.timeoutMs ?? pluginEntry.timeoutMs,
-    maxConcurrency: settingsEntry.maxConcurrency ?? pluginEntry.maxConcurrency
+    maxConcurrency: settingsEntry.maxConcurrency ?? pluginEntry.maxConcurrency,
+    maxChars: settingsEntry.maxChars ?? pluginEntry.maxChars
   };
 }
 
@@ -118,6 +128,11 @@ export function taskTimeoutMs(merged) {
 /** Effective concurrency cap for a task: config value (hard-capped), else default. */
 export function taskConcurrency(merged) {
   return Math.min(merged.maxConcurrency ?? DEFAULT_TASK_CONCURRENCY, MAX_TASK_CONCURRENCY);
+}
+
+/** Effective page-text cap for web_extract: config value, else default. */
+export function taskMaxChars(merged) {
+  return merged.maxChars ?? DEFAULT_MAX_CHARS;
 }
 
 /**

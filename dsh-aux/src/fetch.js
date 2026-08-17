@@ -21,9 +21,12 @@ export async function assertSafeFetchUrlForService(service, rawUrl, label = "web
  * target is rejected BEFORE the request is sent.
  */
 export async function fetchWithSsrf(service, rawUrl, label, signal) {
+  // At most MAX_REDIRECTS redirects are followed; one more redirect means
+  // "too many redirects". Earlier the loop bound was `< MAX_REDIRECTS`, which
+  // silently allowed only MAX_REDIRECTS - 1 hops (off-by-one).
   const MAX_REDIRECTS = 5;
   let currentUrl = rawUrl;
-  for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     await assertSafeFetchUrlForService(service, currentUrl, label);
     const response = await fetch(currentUrl, { signal, redirect: "manual" });
     if (response.status >= 300 && response.status < 400) {

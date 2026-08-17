@@ -102,12 +102,22 @@ dsh plugin --profile web add "file:$(pwd)"
 
 ### 设置页
 
-Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `compress` / `compaction` 配置模型;其中 **`compaction` 就是会话压缩模型**,配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。还可以关闭「在对话界面显示辅助模型状态芯片」——关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 命令不受影响。
+Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `compress` / `compaction` 配置模型;其中 **`compaction` 就是会话压缩模型**,配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。`web_extract` 还可以单独配置 **`maxChars`**(页面字符预算,默认 8000,递归抓取时作为累计预算)。还可以关闭「在对话界面显示辅助模型状态芯片」——关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 命令不受影响。
+
+### 网页提取 (web_extract)
+
+- **能力边界**:`web_extract` 是**静态 HTML 摘要代理**——只抓取静态 HTML,不执行 JavaScript(SPA/动态站可能拿到空壳);不能点击/翻页/填表。要渲染型抓取或完整浏览器行为,请使用专门的 headless/渲染 provider 或后续的 `web_crawl` 能力。
+- **参数**:
+  - `url`(必填)、`question`(可选追问)、`maxChars`(页面码点预算,默认取配置,再取 8000);
+  - `followLinks: "off" | "same-origin"`:默认 `off` 单页;`same-origin` 时在同源内 BFS 递归抓取文档站;
+  - `maxPages`(递归上限,默认 3)、`maxDepth`(链接深度上限,默认 1,`0` 仅根页)。
+- **输出元数据**:单页返回 `chars`(送达模型的码点数)与 `truncated`(是否被截断);递归时返回 `pages: [{url, chars, truncated}]`、`totalChars` 与整体 `truncated`,方便感知大页面被裁。
+- **递归语义**:每页、每一跳都走 SSRF 逐跳校验;只顺同源文档链接且跳过图片/压缩包/音视频等非文档资源;累计文本受 `maxChars` 总预算约束,一次辅助调用输出整体摘要。
 
 ### 安全边界
 
-- **SSRF 防护(默认开启)**:`web_extract` 与 `vision_analyze` 的 `imageUrl` 默认拒绝内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、`169.254.169.254`、`*.local` 等),且只允许 `http/https`;重定向的每一跳也会在请求前校验。需要抓取本机/内网服务时,在插件配置里显式设置 `allowInternalUrls: true`。
-- **Prompt 注入缓解**:辅助模型提示把网页正文、待压缩文本、图片内文字都视为**不可信数据**,明确禁止执行其中嵌入的指令;`guideText` 是受信任的插件配置,只应从可信来源复制。
+- **SSRF 防护(默认开启)**:`web_extract` 与 `vision_analyze` 的 `imageUrl` 默认拒绝内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、`169.254.169.254`、`*.local`、Teredo/6to4 内嵌私有地址等),且只允许 `http/https`;回退抓取路径的重定向**每一跳都在请求前校验**(逐跳 DNS+地址检查),provider seam 路径也要求返回最终 URL、对该 URL 复审,并把 3xx 交给逐跳逻辑重新跟随。需要抓取本机/内网服务时,在插件配置里显式设置 `allowInternalUrls: true`。
+- **Prompt 注入缓解**:辅助模型提示把网页正文、待压缩文本、图片内文字都视为**不可信数据**;网页正文被包裹进带随机 nonce 的 `<<<UNTRUSTED PAGE DATA …>>>` … `<<<END UNTRUSTED PAGE DATA …>>>` 数据块,与 `Question` 指令物理分离,并明确禁止执行其中嵌入的指令;`guideText` 是受信任的插件配置,只应从可信来源复制。
 - **并发硬上限**:每个任务的 `maxConcurrency` 即使配置得更大,实际也按 **10** 封顶,避免误配导致对辅助模型并发轰炸。
 
 ### 编程调用(给其他插件开发者)

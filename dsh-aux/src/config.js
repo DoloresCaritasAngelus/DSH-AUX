@@ -43,7 +43,8 @@ export const AUX_SETTINGS_SCHEMA = z.object({
       provider: z.string(),
       model: z.string(),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-      maxConcurrency: z.number().step(1).min(1)
+      maxConcurrency: z.number().step(1).min(1),
+      maxChars: z.number().step(1).min(1)
     }),
     compress: z.object({
       provider: z.string(),
@@ -91,7 +92,8 @@ export function projectSettings(settings) {
       ...(raw.provider !== void 0 ? { provider: raw.provider } : {}),
       ...(raw.model !== void 0 ? { model: raw.model } : {}),
       ...(raw.timeoutMs !== void 0 ? { timeoutMs: raw.timeoutMs } : {}),
-      ...(raw.maxConcurrency !== void 0 ? { maxConcurrency: raw.maxConcurrency } : {})
+      ...(raw.maxConcurrency !== void 0 ? { maxConcurrency: raw.maxConcurrency } : {}),
+      ...(task === "web_extract" && raw.maxChars !== void 0 ? { maxChars: raw.maxChars } : {})
     };
   }
   const rawSub = settings?.subagent ?? {};

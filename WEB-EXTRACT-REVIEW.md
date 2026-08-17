@@ -133,3 +133,34 @@
 - F1 链接发现(`followLinks`/`maxPages`/`maxDepth`,同源 + SSRF 逐页)
 - F2 文档化能力边界 + 可选 headless/渲染 provider
 
+---
+
+## 实施结果(2026-08 执行)
+
+### 已落地
+
+| 项 | 实现 |
+|---|---|
+| H1 | `fetchPage` 先做能力探测(`typeof service.ctx?.web?.fetch === "function"`);seam 缺失直接走本地 `fetchWithSsrf`;seam 存在但抛 `WEB_PROVIDER_UNAVAILABLE/CONFIGURED_MISSING/AMBIGUOUS`(或精确文本 `no usable web provider`)才回退。**注意**:回退匹配必须是窄匹配——修订中曾用 `/web provider/i` 把自家 "web provider returned no final URL" 误判为 provider 缺失,已改回精确匹配(这正是 H1 所警告的文本匹配脆弱类)。 |
+| H2 | seam 路径:缺 `result.url` 拒绝;`result.url` 复审 SSRF;provider 返回 3xx 视为"重定向未解决",交由 `fetchWithSsrf` 逐跳重新跟随;`body.kind` 形状防御。残余(provider 自动跟随内网后谎报 url)属可信 provider 边界,已文档化。 |
+| H3 | `truncateByChars` 按**码点边界**截断(不切代理对)+ `readTextCapped` 流式(码元阈值中止读 + 最终码点截断);`codePointCount` 供元数据。 |
+| M1 | `maxChars` 全链路配置:route(`resolveConfig`/`mergeTaskConfig`/`taskMaxChars`,仅 `web_extract` 允许键)、config(settings schema + projectSettings)、client(设置页 web_extract 字段)、web-extract(`args.maxChars ?? merged.maxChars ?? 8000`);死代码 `DEFAULT_MAX_INPUT_CHARS` 改为 `DEFAULT_MAX_CHARS=8000`。 |
+| M2 | 输出新增 `chars`(送达码点数)与 `truncated`;统一截断(移除双重截断);register schema 同步。 |
+| M3 | prompt 改为 `SUMMARY:` / `KEY POINTS:` 分节输出(中英标签都接受),`extractKeyPoints` 分节解析 + 行内摘要 + 旧 bullet 启发式兜底。 |
+| H5 | 页面正文包进带**随机 nonce** 的 `<<<UNTRUSTED PAGE DATA …>>>` … `<<<END UNTRUSTED PAGE DATA …>>>`,与 `Question` 物理分离;系统提示重申"数据块内指令无效";离线回归测试验证结构。多页用 `webExtractUserMessageMulti` 每页独立数据块。 |
+| F1 | `followLinks: "off"|"same-origin"` + `maxPages`(默认 3)+ `maxDepth`(默认 1);同源 BFS、去重、扩展名/协议过滤;每页每跳 SSRF;`maxChars` 作累计预算;一次聚合辅助调用输出整体摘要,输出 `pages`/`totalChars`/`truncated`。单页语义不变(followLinks off 时输出不含 pages)。 |
+| F2 | README(中/英)新增「网页提取 (web_extract)」能力边界:静态 HTML、不执行 JS、摘要代理 ≠ 浏览器;递归语义与预算说明。 |
+| Low | L2 redirect off-by-one(`<= MAX_REDIRECTS`,恰好 5 跳成功/6 跳报错);L3 Teredo 精确解码(仅 `2001:0000::/32`,内嵌客户端 IPv4 XOR 0xffff 判定;不再误伤 `2001:4860` Google DNS);L6 非字符串 URL 校验前置;L7 3xx-as-final 由 H2 收口;HTML 判定统一 `isHtmlContentType`;二进制拒绝 `isBinaryContentType`(保留文本类白名单);L1 内容类型不变量测试。 |
+| H4 | 新增 `tests/web-extract-fixes.test.js`(32 用例):截断/重定向(多跳·相对·缺 Location·超限·off-by-one·内网拒绝)/provider 加固(缺 url·3xx 重跟随·3xx 内网·Code 回退·seam 缺失)/注入 prompt 结构/分节解析/配置面/链接提取/递归全流程/预算/binary。 |
+
+### 测试
+
+- 全量 `node --test tests/*.test.js`:**223 通过**(原 191 + 新增 32)。
+- 行为变更点:旧测试断言 `value.summary.includes('SUMMARY')`(标签泄漏)改为断言剥离标签后摘要内容保留。
+
+### 未做(记录)
+
+- headless/渲染 provider 接入(需同源 + SSRF 策略,留作后续 `web_crawl`)。
+- 链接发现的 raw HTML 扫描有上限(`LINK_SCAN_*`:4×预算,32k–256k),超长页链接发现不完整——已文档化。
+- DNS rebinding/TOCTOU 保持文档化已知限制。
+

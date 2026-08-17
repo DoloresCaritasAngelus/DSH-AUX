@@ -47,11 +47,14 @@ export function registerAuxTools(service) {
   });
   ctx.tools.register(defineTool({
     name: "web_extract",
-    description: "Fetch a web page and summarize it with the auxiliary model: returns a factual summary plus key points. Use when you need the essence of a page without carrying its full text.",
+    description: "Fetch a web page (or a same-origin set of pages via followLinks) and summarize it with the auxiliary model: returns a factual summary plus key points. Fetches static HTML only — no JavaScript rendering. Use when you need the essence of a page (or doc set) without carrying its full text.",
     parameters: {
       url: { type: "string", required: true, description: "The HTTP(S) URL to fetch and summarize." },
       question: { type: "string", description: "Optional question to answer from the page." },
-      maxChars: { type: "integer", description: "Max page characters sent to the model (default 8000)." }
+      maxChars: { type: "integer", description: "Max page code points sent to the model (per call; for a crawl, the shared total budget). Default from config, else 8000." },
+      followLinks: { type: "string", description: "'off' (default): single page. 'same-origin': follow same-origin links, crawling up to maxPages pages within maxDepth and the shared maxChars budget." },
+      maxPages: { type: "integer", description: "Max pages to fetch when followLinks is same-origin (default 3)." },
+      maxDepth: { type: "integer", description: "Max link depth to follow when followLinks is same-origin; 0 = root only (default 1)." }
     },
     output: {
       schema: {
@@ -62,11 +65,15 @@ export function registerAuxTools(service) {
           summary: { type: "string", required: true },
           keyPoints: { type: "array", items: { type: "string" }, required: true },
           provider: { type: "string", required: true },
-          model: { type: "string", required: true }
+          model: { type: "string", required: true },
+          chars: { type: "integer", description: "Code points of page text sent to the model (single-page calls)." },
+          truncated: { type: "boolean", description: "True when page text was cut to fit maxChars." },
+          pages: { type: "array", description: "Per-page crawl metadata (present when followLinks is same-origin).", items: { type: "object", additionalProperties: false, properties: { url: { type: "string", required: true }, chars: { type: "integer", required: true }, truncated: { type: "boolean", required: true } } } },
+          totalChars: { type: "integer", description: "Total code points sent to the model across a crawl." }
         }
       },
       render: (args, value) => [
-        { type: "text", text: value.summary + (value.keyPoints.length > 0 ? "\n\n要点:\n- " + value.keyPoints.join("\n- ") : "") }
+        { type: "text", text: value.summary + (value.keyPoints.length > 0 ? "\n\n要点:\n- " + value.keyPoints.join("\n- ") : "") + (Array.isArray(value.pages) ? "\n\n已抓取 " + value.pages.length + " 页: " + value.pages.map((p) => p.url).join(" · ") : "") }
       ]
     },
     timeoutMs: 90_000,

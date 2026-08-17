@@ -122,6 +122,12 @@ window.__ModuleLoader__.load({
 						if (val !== void 0 && val !== "") ops.push({ op: "set", path, value: Number(val) });
 						else ops.push({ op: "unset", path });
 					}
+					if (task === "web_extract") {
+						const val = entry.maxChars;
+						const path = [...base, "maxChars"];
+						if (val !== void 0 && val !== "") ops.push({ op: "set", path, value: Number(val) });
+						else ops.push({ op: "unset", path });
+					}
 				}
 				const sub = draft?.subagent ?? {};
 				if (sub.mode !== void 0 && sub.mode !== "native") ops.push({ op: "set", path: ["subagent", "mode"], value: sub.mode });
@@ -217,7 +223,10 @@ window.__ModuleLoader__.load({
 				})),
 				react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "并发上限"), react.createElement("input", {
 					type: "number", value: field(task, "maxConcurrency") ?? "", placeholder: "2", disabled: !state.writable, onChange: (e) => setField(task, "maxConcurrency", e.target.value)
-				}))
+				})),
+				task === "web_extract" ? react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "maxChars (页面字符上限)"), react.createElement("input", {
+					type: "number", min: "1", value: field(task, "maxChars") ?? "", placeholder: "8000", disabled: !state.writable, onChange: (e) => setField(task, "maxChars", e.target.value)
+				})) : null
 			)),
 				react.createElement("div", { key: "subagent", className: "ax-task ax-subagent" },
 					react.createElement("h3", null, "子代理辅助模型 (subagent)"),

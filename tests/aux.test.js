@@ -387,6 +387,10 @@ test('url-policy: 私有 IP 判断覆盖常见范围', () => {
   assert.equal(isPrivateIp('fe80::1'), true);
   assert.equal(isPrivateIp('fc00::1'), true);
   assert.equal(isPrivateIp('2001:4860:4860::8888'), false);
+  // Teredo (2001:0000::/32) embeds the client IPv4 in the last 32 bits (XOR 0xffff).
+  // 192.0.2.45 = TEST-NET-1 (blocked); 8.8.8.8 = public (allowed).
+  assert.equal(isPrivateIp('2001:0000:4136:e378:8000:63bf:3fff:fdd2'), true);
+  assert.equal(isPrivateIp('2001:0:4136:e378:8000:63bf:f7f7:f7f7'), false);
   assert.equal(isPrivateHostname('localhost'), true);
   assert.equal(isPrivateHostname('foo.local'), true);
   assert.equal(isPrivateHostname('foo.internal'), true);
@@ -1481,7 +1485,9 @@ test('web_extract 工具: 无 web provider 时回退全局 fetch 并清洗 HTML'
     const exec = { signal: new AbortController().signal, agent: { session: makeSession(), options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
     const value = await runWebExtract(svc, { url: 'https://example.com/fallback', maxChars: 8000 }, exec);
     assert.equal(value.url, 'https://example.com/fallback');
-    assert.ok(value.summary.includes('SUMMARY'));
+    // 分节解析:SUMMARY: 标签本身被剥离,摘要内容保留
+    assert.ok(value.summary.includes('页面要点 42'));
+    assert.ok(!value.summary.toUpperCase().includes('SUMMARY'));
     assert.equal(value.provider, 'opencode-go');
     assert.equal(value.model, 'deepseek-v4-flash');
     // 送进 LLM 的文本必须经 htmlToText 清洗

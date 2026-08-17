@@ -114,7 +114,10 @@ export function isPrivateIpv6(ip) {
     const d = parseInt(v4compatHex[2], 16) & 0xff;
     return isPrivateIpv4(`${a}.${b}.${c}.${d}`);
   }
-  // 6to4 / Teredo can embed private IPv4; block the well-known prefixes too.
+  // 6to4 (2002::/16) and Teredo (2001:0000::/32) can tunnel to an embedded
+  // private IPv4. Only the Teredo client endpoint embeds a reachable IPv4, so
+  // the broad 2001::/32 (which also covers ordinary public global unicast,
+  // e.g. 2001:4860::/32 Google DNS) must NOT be blocked wholesale.
   if (value.startsWith("2002:")) {
     // 2002:V4::
     const hex = value.slice(5, 9);
@@ -124,7 +127,30 @@ export function isPrivateIpv6(ip) {
       return isPrivateIpv4(`${a}.${b}.0.0`);
     }
   }
+  if (value.startsWith("2001:0")) {
+    // Teredo: the client IPv4 is the LAST 32 bits, bitwise-XOR with 0xffff.
+    // Only the 2001:0000::/32 prefix (second hextet 0000) is Teredo.
+    const expanded = expandIpv6(value).split(":");
+    if (expanded.length === 8 && parseInt(expanded[1], 16) === 0) {
+      const hi = parseInt(expanded[6], 16) ^ 0xffff;
+      const lo = parseInt(expanded[7], 16) ^ 0xffff;
+      return isPrivateIpv4(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
+    }
+  }
   return false;
+}
+
+/** Expand an IPv6 string (lower-cased, unbracketed) into 8 full hextets ('' for the :: gap). */
+function expandIpv6(ip) {
+  const doubleColon = ip.indexOf("::");
+  if (doubleColon !== -1) {
+    const head = ip.slice(0, doubleColon).split(":").filter(Boolean);
+    const tail = ip.slice(doubleColon + 2).split(":").filter(Boolean);
+    const missing = Math.max(0, 8 - head.length - tail.length);
+    return [...head, ...Array(missing).fill("0"), ...tail].join(":");
+  }
+  const parts = ip.split(":");
+  return parts.length === 8 ? ip : [...parts, ...Array(Math.max(0, 8 - parts.length)).fill("0")].join(":");
 }
 
 /** Whether an IP string (v4 or v6) is private / special-purpose. */

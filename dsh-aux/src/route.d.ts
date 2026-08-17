@@ -14,8 +14,8 @@ export declare const DEFAULT_TASK_TIMEOUT_MS: number;
 export declare const DEFAULT_TASK_CONCURRENCY: number;
 /** Hard upper bound for any per-task concurrency cap. */
 export declare const MAX_TASK_CONCURRENCY: number;
-/** Default input size cap (chars) for text tasks. */
-export declare const DEFAULT_MAX_INPUT_CHARS: number;
+/** Default page-text cap (code points) for web_extract. */
+export declare const DEFAULT_MAX_CHARS: number;
 /** Failures in a row that put a route into cooldown. */
 export declare const COOLDOWN_FAILURE_THRESHOLD: number;
 /** Cooldown TTL after the threshold is reached (ms). */
@@ -35,6 +35,9 @@ export declare function taskTimeoutMs(merged: AuxTaskConfigEntry): number;
 
 /** Effective concurrency cap for a task: config value, else default. */
 export declare function taskConcurrency(merged: AuxTaskConfigEntry): number;
+
+/** Effective page-text cap for web_extract: config value, else default. */
+export declare function taskMaxChars(merged: AuxTaskConfigEntry): number;
 
 /**
  * Resolve the primary route for a task: explicit config, then task default,

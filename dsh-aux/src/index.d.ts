@@ -54,6 +54,8 @@ export interface AuxTaskConfigEntry {
     model?: string;
     timeoutMs?: number;
     maxConcurrency?: number;
+    /** web_extract page-text cap (code points); positive integer. */
+    maxChars?: number;
 }
 
 /** Plugin config: optional per-task overrides. */
