@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import fsPromises from 'node:fs/promises';
 import { Context } from '@deepseek-ai/cordis';
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic';
+import { projectSettings } from '../dsh-aux/src/config.js';
 import AuxLlmService, {
   AUX_CALL_EVENT,
   AUX_SETTINGS_NAMESPACE,
@@ -1062,6 +1063,34 @@ test('能力门: 支持图像的模型直接通过', async () => {
   const result = await ctx.auxLlm.call('vision', { messages: imageMessage(), session: makeSession() });
   assert.equal(result.model, 'kimi-k2.7-code');
   assert.equal(streams.length, 1);
+});
+
+test('visionFallbackToMain=false: 视觉辅助失败后直接失败,不回退主模型', async () => {
+  const { ctx, streams } = await makeHarness({
+    tasks: { vision: { provider: 'opencode-go', model: 'deepseek-v4-flash' } }
+  });
+  // 关闭视觉任务的主模型回退;deepseek-v4-flash 声明 text-only,主模型同样
+  // text-only → 只尝试 primary(content 失败),不会再去碰主模型。
+  ctx.auxLlm.visionFallbackToMain = false;
+  await assert.rejects(
+    () => ctx.auxLlm.call('vision', { messages: imageMessage(), session: makeSession() }),
+    (error) => {
+      assert.ok(error instanceof AuxCallError);
+      assert.equal(error.attempts.length, 1);
+      assert.equal(error.attempts[0].kind, 'content');
+      return true;
+    }
+  );
+  assert.equal(streams.length, 0);
+});
+
+test('projectSettings: 暴露 forceAuxVision / visionFallbackToMain 默认值', () => {
+  const projected = projectSettings({});
+  assert.equal(projected.forceAuxVision, false);
+  assert.equal(projected.visionFallbackToMain, true);
+  const custom = projectSettings({ forceAuxVision: true, visionFallbackToMain: false });
+  assert.equal(custom.forceAuxVision, true);
+  assert.equal(custom.visionFallbackToMain, false);
 });
 
 test('能力门: 未知能力(无 resolveModelInfo 答案)放行', async () => {

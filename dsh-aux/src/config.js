@@ -29,6 +29,8 @@ export const SESSION_IMAGE_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 /** Settings schema: global fallback switch plus one section per task. */
 export const AUX_SETTINGS_SCHEMA = z.object({
   fallbackToMain: z.boolean().default(true),
+  forceAuxVision: z.boolean().default(false),
+  visionFallbackToMain: z.boolean().default(true),
   showStatusChip: z.boolean().default(true),
   tasks: z.object({
     vision: z.object({
@@ -64,6 +66,8 @@ export const AUX_SETTINGS_SCHEMA = z.object({
  */
 export function projectSettings(settings) {
   const fallbackToMain = settings?.fallbackToMain ?? true;
+  const forceAuxVision = settings?.forceAuxVision ?? false;
+  const visionFallbackToMain = settings?.visionFallbackToMain ?? true;
   const showStatusChip = settings?.showStatusChip ?? true;
   const tasks = {};
   for (const task of AUX_TASKS) {
@@ -75,7 +79,7 @@ export function projectSettings(settings) {
       ...(raw.maxConcurrency !== void 0 ? { maxConcurrency: raw.maxConcurrency } : {})
     };
   }
-  return { fallbackToMain, showStatusChip, tasks };
+  return { fallbackToMain, forceAuxVision, visionFallbackToMain, showStatusChip, tasks };
 }
 
 /**

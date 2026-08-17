@@ -1,9 +1,12 @@
 	/**
-	* image-bridge v2 (local patch): at the model-input boundary, rewrite
+	* image-bridge v2+v3 (local patch): at the model-input boundary, rewrite
 	* image blocks to local-path text for text-only models (the UI still
 	* renders the original image because the session log keeps the blocks).
 	* Multimodal models — resolveModelInfo declares "image" input — keep
-	* their native image blocks. See aux/bridge README for the design.
+	* their native image blocks UNLESS dsh-aux's forceAuxVision is enabled,
+	* in which case even image-capable main models are routed through
+	* vision_analyze (the cheaper/configured auxiliary vision model).
+	* See aux/bridge README for the design.
 	*/
 	async bridgeImagesForModel(messages, provider, model, llm, signal) {
 		const hasImage = Array.isArray(messages) && messages.some((m) => Array.isArray(m?.content) && m.content.some((b) => b?.type === "image"));
@@ -13,8 +16,14 @@
 			const info = await llm.resolveModelInfo(provider, model, signal);
 			modalities = info?.inputModalities;
 		} catch { modalities = void 0; }
-		// Non-empty and image-capable: the model sees images natively.
-		if (Array.isArray(modalities) && modalities.includes("image")) return messages;
+		// Non-empty and image-capable: the model sees images natively, unless
+		// dsh-aux asks us to force every image through vision_analyze.
+		let forceAuxVision = false;
+		try {
+			const aux = this.loopCtx?.get?.("auxLlm");
+			forceAuxVision = aux?.forceAuxVision === true;
+		} catch { /* auxLlm may be absent during early boot */ }
+		if (!forceAuxVision && Array.isArray(modalities) && modalities.includes("image")) return messages;
 		const { link } = await import("node:fs/promises");
 		const home = process.env.DSH_HOME || (typeof process !== "undefined" && process.env.HOME ? `${process.env.HOME}/.dsh` : void 0);
 		const extOf = (mediaType) => mediaType === "image/jpeg" ? "jpg" : mediaType === "image/png" ? "png" : mediaType === "image/webp" ? "webp" : mediaType === "image/gif" ? "gif" : "png";

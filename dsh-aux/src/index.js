@@ -262,7 +262,7 @@ export class AuxLlmService extends Service {
 
   /** Recomputed merged task config from the live settings source. */
   _recomputeMerged() {
-    const settings = this._source?.() ?? { fallbackToMain: true, showStatusChip: true, tasks: {} };
+    const settings = this._source?.() ?? { fallbackToMain: true, forceAuxVision: false, visionFallbackToMain: true, showStatusChip: true, tasks: {} };
     const merged = {};
     for (const task of AUX_TASKS) {
       merged[task] = mergeTaskConfig(
@@ -272,6 +272,8 @@ export class AuxLlmService extends Service {
     }
     this._merged = merged;
     this.fallbackToMain = settings.fallbackToMain ?? true;
+    this.forceAuxVision = settings.forceAuxVision ?? false;
+    this.visionFallbackToMain = settings.visionFallbackToMain ?? true;
     this.showStatusChip = settings.showStatusChip ?? true;
   }
 
@@ -305,8 +307,11 @@ export class AuxLlmService extends Service {
       const primary = resolvePrimaryRoute(definition, this.taskDefaults);
       const candidates = [];
       if (primary !== void 0) candidates.push(primary);
-      if (
+      const allowMainFallback =
         this.fallbackToMain &&
+        (task !== "vision" || this.visionFallbackToMain);
+      if (
+        allowMainFallback &&
         mainRoute !== void 0 &&
         !(primary !== void 0 && primary.provider === mainRoute.provider && primary.model === mainRoute.model)
       ) {

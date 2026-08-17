@@ -9,9 +9,9 @@ import { readFile as readFileText } from "node:fs/promises";
  * Detect whether the image-bridge patches are applied to the core DSH
  * packages that live NEXT to this plugin in the deployment node_modules
  * (dsh-host-apiproxy admit + dsh-agent-loop buildRequest +
- * dsh-host-apiproxy selectModel). The bridge is an integrated part of the
- * install (see the repo's install.sh), so the status command reports it and
- * the AI guide treats it as a default step.
+ * dsh-host-apiproxy selectModel + dsh-agent-loop forceAuxVision). The bridge
+ * is an integrated part of the install (see the repo's install.sh), so the
+ * status command reports it and the AI guide treats it as a default step.
  * @returns "v3" | "v2" | "v1" | "partial" | "missing" | "unknown" (not in a
  *   standard deployment layout, e.g. running from the source tree).
  */
@@ -43,6 +43,14 @@ export async function imageBridgeStatus() {
       ],
       v2Mark: "dsh-image bridge v3 (local patch)",
       v1Mark: void 0
+    },
+    {
+      rels: [
+        "../../../@deepseek-ai/dsh-agent-loop/lib/index.js",
+        "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js"
+      ],
+      v2Mark: "forceAuxVision",
+      v1Mark: void 0
     }
   ];
   const states = [];
@@ -67,7 +75,8 @@ export async function imageBridgeStatus() {
   if (states.some((state) => state === "unknown")) return "unknown";
   if (states.every((state) => state === "v2")) return "v3";
   if (states.every((state) => state === "missing")) return "missing";
-  // 旧版 v2(前两个目标已打、selectModel 未打)也算可工作,只是切换模型仍受限。
-  if (states[0] === "v2" && states[1] === "v2" && states[2] === "missing") return "v2";
+  // 旧版 v2(前两个目标已打、selectModel/forceAuxVision 未打)也算可工作,
+  // 只是切换模型仍受限、且不支持强制原生视觉走 AUX。
+  if (states[0] === "v2" && states[1] === "v2" && states[2] === "missing" && states[3] === "missing") return "v2";
   return "partial";
 }

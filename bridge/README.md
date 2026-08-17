@@ -5,7 +5,8 @@
 
 让纯文本对话模型(deepseek-v4-flash 等)也能**直接粘贴图片发送**的 DSH 本地补丁,
 同时**用户在 UI 里能看到自己发的图片缩略图**(v2 关键改进),并且在含图片的
-会话中**可以自由切换到纯文本模型**(v3 关键改进)。
+会话中**可以自由切换到纯文本模型**,支持**强制原生多模态主模型也走 AUX 视觉
+辅助模型**(v3 关键改进)。
 
 参考 [deepseek-harness discussion #733](https://github.com/deepseek-ai/deepseek-harness/discussions/733) 的
 dsh-image-bridge 方案,适配本环境的 **dsh-aux `vision_analyze`** 工具。
@@ -50,6 +51,19 @@ v3 修复**模型切换**:旧版 DSH 在 `selectModel` 里会检查"如果会话
 > 供应商返回 `429 invalid_request_error`。v3 直接把门控去掉,让桥接按真实
 > 模态工作。
 
+v3 还支持**强制原生视觉走 AUX**(设置页 `forceAuxVision` 开关):当主模型
+声明了 `image` 能力、但你想让它把图片都交给更便宜/更合适的 AUX 视觉辅助
+模型时,开启后 bridge 对**多模态主模型**也改写为 `vision_analyze`:
+
+```
+forceAuxVision = false(默认)
+  多模态主模型 → 原生看图
+  -------
+forceAuxVision = true
+  多模态主模型 → image block 也改写 → vision_analyze → AUX 视觉辅助模型
+  (纯文本主模型行为不变,始终走 vision_analyze)
+```
+
 ## 前置
 
 1. DSH 0.1.0-rc.6(`@deepseek-ai/dsh-host-apiproxy`、`@deepseek-ai/dsh-agent-loop` 同版本)
@@ -62,7 +76,7 @@ cd <本仓库路径>/bridge
 node apply-patch.mjs        # 自动识别状态:原始 → v2 + v3 / v1 → v2 + v3 / 已是 v2+v3 → 跳过
                             # 三个目标:
                             #   dsh-host-apiproxy(admit)
-                            #   dsh-agent-loop(buildRequest)
+                            #   dsh-agent-loop(buildRequest + forceAuxVision)
                             #   dsh-host-apiproxy(selectModel)
 # 重启 DSH 生效(改的是 node_modules 内文件,必须重启)
 ```
@@ -81,13 +95,15 @@ node apply-patch.mjs --rollback    # 回滚到最近一次备份(三个目标各
      补建带扩展名的硬链接;
   2. `dsh-agent-loop` buildRequest():`bridgeImagesForModel` 在模型输入边界按
      模型模态改写——`llm.resolveModelInfo(provider, model)` 的 `inputModalities`
-     非空且含 `image` 则不动;否则(含未声明/空)改写为路径文本;
+     非空且含 `image` 时默认不动;除非 dsh-aux `forceAuxVision` 开启,则
+     一律改写为路径文本;否则(含未声明/空)改写为路径文本;
   3. `dsh-host-apiproxy` selectModel():允许在含图片会话中切换到纯文本模型,
      移除旧的"图片会话必须选图像模型"门控。
 - **硬链接而非符号链接**:附件对象无扩展名,补丁在其旁创建 `<sha256>.png/.jpg/…`
   硬链接(符号链接会被视觉工具的 realpath() 穿透回无扩展名路径)。
-- **多模态模型不受影响**:配了 `defaultInput: [text, image]` 的模型(如
-  volcengine-ark/doubao-seed-2.0-lite)原生看图,不会降级为工具视觉。
+- **多模态模型默认不受影响**:配了 `defaultInput: [text, image]` 的模型(如
+  volcengine-ark/doubao-seed-2.0-lite)原生看图,不会降级为工具视觉;
+  仅当设置页 `forceAuxVision` 开启时才强制改为 AUX 视觉。
 - **旧消息兼容**:v1 时代已改写为文本的历史消息保持不变;新消息走 v2。
 - **只删门控不改链路**:非图片消息走原路径;图片消息保留 image block,
   `serializeImageAdmission` 流程不变。

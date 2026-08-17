@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0(2026-08-17)— 视觉路由策略开关
+
+- **forceAuxVision(设置页开关,默认关)**:开启后,即使主模型原生支持图片,
+  image-bridge 也会把图片改写为 `vision_analyze`,统一走 AUX 视觉辅助模型。
+  适合“主模型很贵、辅助视觉模型更便宜/更合适”的用法。
+- **visionFallbackToMain(设置页开关,默认开)**:关闭后,视觉辅助模型失败时
+  直接失败,不再回退到主模型(避免纯文本主模型回退后同样失败、或用户不想
+  用昂贵主模型跑视觉)。
+- **image-bridge v3 升级**:`apply-patch.mjs` 支持从旧 v2 自动升级到
+  `forceAuxVision` 版本;`/aux status` 的 `v3` 同时覆盖模型切换与强制视觉。
+- 新增 `forceAuxVision` / `visionFallbackToMain` 两个配置字段并同步到设置页。
+
 ## 0.1.9(2026-08-17)— image-bridge v3:含图会话可切换纯文本模型
 
 - **修复模型切换**:含图片的会话无法切换到纯文本模型(`selectModel` 拒绝

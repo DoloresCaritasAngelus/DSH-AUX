@@ -9,9 +9,10 @@
  *     会话消息(UI 渲染缩略图),仅为每个附件对象补建带扩展名的硬链接。
  *  2) @deepseek-ai/dsh-agent-loop(buildRequest):模型输入边界处,把
  *     image block 改写为"本地路径文本"(仅当模型非图像能力——
- *     resolveModelInfo 的 inputModalities 不含 image),模型用 dsh-aux
+ *     resolveModelInfo 的 inputModalities 不含 image;或 dsh-aux 开启了
+ *     forceAuxVision 强制原生视觉也走 AUX),模型用 dsh-aux
  *     的 vision_analyze 工具(imagePath 参数)把图片交给辅助视觉模型。
- *     多模态模型(如 volcengine-ark/doubao-seed-2.0-lite)保持原生图片。
+ *     多模态模型(如 volcengine-ark/doubao-seed-2.0-lite)默认保持原生图片。
  *  3) @deepseek-ai/dsh-host-apiproxy(selectModel):允许在含图片的会话中
  *     切换到纯文本模型。旧逻辑会因为"会话里有图片"而拒绝无图像能力的
  *     模型;有了上面的输入边界桥接后这个限制不再必要。
@@ -19,7 +20,7 @@
  * 用法:
  *   node apply-patch.mjs            # 应用/升级补丁(自动定位、备份、替换、校验)
  *   node apply-patch.mjs --dry-run  # 只检查,不修改
- *   node apply-patch.mjs --rollback # 回滚到最近一次备份(两个目标各自回滚)
+ *   node apply-patch.mjs --rollback # 回滚到最近一次备份(三个目标各自回滚)
  */
 import { readFile, writeFile, copyFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -60,7 +61,8 @@ const TARGETS = [
     file: AGENT_LOOP_FILE,
     mark: "image-bridge v2 (local patch)",
     states: [
-      { name: "patched", detect: (d) => d.includes("image-bridge v2 (local patch)") && d.includes("await this.bridgeImagesForModel(boundaryMessages"), action: "skip" },
+      { name: "v3", detect: (d) => d.includes("image-bridge v2 (local patch)") && d.includes("await this.bridgeImagesForModel(boundaryMessages") && d.includes("forceAuxVision"), action: "skip" },
+      { name: "v2", detect: (d) => d.includes("image-bridge v2 (local patch)") && d.includes("await this.bridgeImagesForModel(boundaryMessages") && !d.includes("forceAuxVision"), block: 'if (Array.isArray(modalities) && modalities.includes("image")) return messages;', replacement: 'let forceAuxVision = false;\n\t\t\ttry {\n\t\t\t\tconst aux = this.loopCtx?.get?.("auxLlm");\n\t\t\t\tforceAuxVision = aux?.forceAuxVision === true;\n\t\t\t} catch { /* auxLlm may be absent during early boot */ }\n\t\t\tif (!forceAuxVision && Array.isArray(modalities) && modalities.includes("image")) return messages;', action: "replace" },
       { name: "half", detect: (d) => d.includes("image-bridge v2 (local patch)"), block: "messages: boundaryMessages,", replacement: "messages: await this.bridgeImagesForModel(boundaryMessages, config.provider, config.model, this.loopCtx.llm, signal),", action: "replace" },
       { name: "original", detect: (d) => d.includes("Compose one frozen request and bind it to the adapter registration"), block: await readFile(join(HERE, "orig-agent-loop-block.txt"), "utf8"), action: "replace" }
     ],

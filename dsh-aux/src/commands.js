@@ -48,7 +48,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
     const bridge = await imageBridgeStatus();
     if (bridge !== "unknown") {
       const label = {
-        v3: "已集成(v3:UI 保留缩略图 + 含图会话可切换纯文本模型)",
+        v3: "已集成(v3:含图会话可切纯文本模型 + 可强制原生视觉走 AUX)",
         v2: "已集成(v2:UI 保留缩略图;含图会话切换纯文本模型仍受限)",
         v1: "旧版 v1(建议运行 bridge/apply-patch.mjs 升级)",
         partial: "部分安装(建议运行 bridge/apply-patch.mjs 补全)",
@@ -56,6 +56,8 @@ export async function handleAuxCommand(service, agent, rawInput) {
       }[bridge] ?? bridge;
       lines.push("  - image-bridge: " + label);
     }
+    lines.push(`  - forceAuxVision: ${service.forceAuxVision ? "开启(原生图片也走 AUX 视觉)" : "关闭"}`);
+    lines.push(`  - visionFallbackToMain: ${service.visionFallbackToMain ? "开启(失败回退主模型)" : "关闭(视觉失败直接失败)"}`);
     // Compaction bridge status: when dsh-compaction-basic is present and a
     // dedicated `compaction` AUX route is configured, native session
     // compaction is routed through AUX.
