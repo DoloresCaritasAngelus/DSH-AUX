@@ -150,8 +150,8 @@ const result = await ctx.auxLlm.call("compress", {
 
 - **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行)。让**纯文本
   主模型**也能直接粘贴图片发送,且用户消息保留图片缩略图(模型输入边界按模态
-  改写为路径文本,多模态模型原生看图)。修改 node_modules 核心包,`npm update`
-  后重跑 `bridge/apply-patch.mjs` 即可;`/aux status` 会报告其状态。
+  改写为路径文本,多模态模型原生看图;含图会话可切换到纯文本模型,v3)。修改
+  node_modules 核心包,`npm update` 后重跑 `bridge/apply-patch.mjs` 即可;`/aux status` 会报告其状态。
 - **compaction-bridge(会话压缩协同)**:运行时桥接,不修改 node_modules 文件。
   当 `compaction` 任务配置了专用模型时,`dsh-aux` 会覆写
   `BasicCompactionEngine.prototype.summarize`,让原生压缩的摘要调用走

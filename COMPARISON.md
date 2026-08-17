@@ -18,7 +18,7 @@
 | VLM 调用 | 自写 fetch → OpenAI 兼容 API | Python 上游进程 | 走 **DSH LlmRuntime**(ctx.llm.stream) |
 | Provider | 自带多 key 解析链 | 第三方默认 endpoint | **复用 settings.yaml 已配置 provider** |
 | 图片输入 | 路径/URL/data: URL | 路径 → 上游 Python | attachmentId/imagePath/imageUrl → 附件服务 + image block |
-| 粘贴图片 | 依赖 #733 补丁 | 自带 Web 路由 | 集成组件 image-bridge(v2,UI 保留缩略图) |
+| 粘贴图片 | 依赖 #733 补丁 | 自带 Web 路由 | 集成组件 image-bridge(v3,UI 保留缩略图 + 含图会话可切纯文本模型) |
 | 能力门 | 无 | 无 | **有**(resolveModelInfo,inputModalities 空=未知放行) |
 | 超时/并发/降级 | timeoutMs + fallback 链 | deadline + 信号量 + 缓存 | deadline + per-task 信号量 + 失败冷却 + 主模型降级 |
 | 可观测 | 进程日志 | 进程日志 | **事件溯源**(aux/llm-call + 投影) |
@@ -32,7 +32,7 @@
   对比等 10 工具),依赖第三方 Python 运行时;其**方法论**(focus-hint 意图感知、
   图内文字策略、输出约束)已吸收进 dsh-aux 的 vision_analyze,工具本体不照搬。
 - **粘贴图片**:toolkit 用自带 Web 路由(免补丁),我们选择集成组件
-  image-bridge v2(两段式:UI 保留图片 + 模型输入边界按模态改写),与插件一起安装。
+  image-bridge v3(UI 保留图片 + 模型输入边界按模态改写 + 含图会话可切纯文本模型),与插件一起安装。
 
 ## 3. 借鉴与落地(详见 CONTRIBUTIONS.md)
 

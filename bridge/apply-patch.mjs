@@ -12,6 +12,9 @@
  *     resolveModelInfo 的 inputModalities 不含 image),模型用 dsh-aux
  *     的 vision_analyze 工具(imagePath 参数)把图片交给辅助视觉模型。
  *     多模态模型(如 volcengine-ark/doubao-seed-2.0-lite)保持原生图片。
+ *  3) @deepseek-ai/dsh-host-apiproxy(selectModel):允许在含图片的会话中
+ *     切换到纯文本模型。旧逻辑会因为"会话里有图片"而拒绝无图像能力的
+ *     模型;有了上面的输入边界桥接后这个限制不再必要。
  *
  * 用法:
  *   node apply-patch.mjs            # 应用/升级补丁(自动定位、备份、替换、校验)
@@ -62,6 +65,17 @@ const TARGETS = [
       { name: "original", detect: (d) => d.includes("Compose one frozen request and bind it to the adapter registration"), block: await readFile(join(HERE, "orig-agent-loop-block.txt"), "utf8"), action: "replace" }
     ],
     patched: await readFile(join(HERE, "patched-agent-loop-block.txt"), "utf8"),
+    backupPrefix: "index.js.bak-"
+  },
+  {
+    label: "dsh-host-apiproxy (selectModel)",
+    file: API_PROXY_FILE,
+    mark: "dsh-image bridge v3 (local patch)",
+    states: [
+      { name: "v3", detect: (d) => d.includes("dsh-image bridge v3 (local patch)"), action: "skip" },
+      { name: "original", detect: (d) => d.includes("does not accept image input, but this session already contains images"), block: await readFile(join(HERE, "orig-select-model-block.txt"), "utf8"), action: "replace" }
+    ],
+    patched: await readFile(join(HERE, "patched-select-model-block.txt"), "utf8"),
     backupPrefix: "index.js.bak-"
   }
 ];

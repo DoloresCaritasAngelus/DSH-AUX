@@ -150,7 +150,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 ### Integrated Components
 
-- **image-bridge**: lets text-only main models paste images directly while the UI keeps thumbnails; re-run `bridge/apply-patch.mjs` after `npm update`.
+- **image-bridge**: lets text-only main models paste images directly while the UI keeps thumbnails, and allows switching to a text-only model in image-bearing sessions (v3); re-run `bridge/apply-patch.mjs` after `npm update`.
 - **Settings dynamic exposure**: the Web settings page can read/write aux config; the patch ships in this repo's `bridge/` and does not require upstream deepseek-harness changes.
 - **Session event channel**: `aux/llm-call` events are written with `ignorable: true`; without the patch the plugin degrades to not writing events, protecting session logs.
 - **Session delete synergy**: works with the community plugin dsh-plugin-session-delete to clean up unreferenced images when a session is deleted.

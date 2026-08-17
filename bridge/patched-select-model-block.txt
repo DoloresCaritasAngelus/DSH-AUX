@@ -1,0 +1,7 @@
+/**
+						 * dsh-image bridge v3 (local patch): allow switching to a text-only model in
+						 * an image-bearing session. The agent-loop bridge rewrites image blocks to
+						 * local-path text + vision_analyze at the model-input boundary, so the old
+						 * "session contains images -> model must be image-capable" gate is no longer
+						 * needed when this patch is installed.
+						 */

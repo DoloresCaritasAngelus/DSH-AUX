@@ -128,7 +128,8 @@ rm "$DSH_ROOT/node_modules/<NAME>"
 
 - **image-bridge(集成组件,默认安装)**:让纯文本主模型粘贴图片可用,且用户消息
   显示图片缩略图。机制:admit 保留 image block(UI 显示),agent-loop 在模型输入
-  边界按模态改写为路径文本(多模态模型原生看图)。安装:install.sh 已包含;
+  边界按模态改写为路径文本(多模态模型原生看图),selectModel 允许含图会话切换
+  到纯文本模型(v3)。安装:install.sh 已包含;
   单独重装:`cd <repo>/bridge && node apply-patch.mjs`(幂等,可 --dry-run / --rollback)。
   `npm update` 后需重跑;`/aux status` 会报告状态。
 - **会话事件注册通道(必装)**:dsh-aux 向会话写 `aux/llm-call` 事件;DSH

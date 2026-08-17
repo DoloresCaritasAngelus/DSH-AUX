@@ -150,7 +150,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 ### 集成组件
 
-- **image-bridge**:让纯文本主模型也能直接粘贴图片,UI 保留缩略图;`npm update` 后需重跑 `bridge/apply-patch.mjs`。
+- **image-bridge**:让纯文本主模型也能直接粘贴图片,UI 保留缩略图;含图会话可切换到纯文本模型(v3);`npm update` 后需重跑 `bridge/apply-patch.mjs`。
 - **settings 动态暴露**:设置页可读写 aux 配置;对应补丁已随本仓库 `bridge/` 落地,不依赖官方 deepseek-harness 合入。
 - **会话事件注册通道**:`aux/llm-call` 以 `ignorable: true` 标记写入;未装补丁时自动降级不写事件,保护会话日志。
 - **会话删除协同**:配合社区插件 dsh-plugin-session-delete,删除会话时自动清理无引用图片。

@@ -1,10 +1,11 @@
-# dsh-image-bridge v2(dsh-aux 集成组件)
+# dsh-image-bridge v2 + v3(dsh-aux 集成组件)
 
 > **集成组件**:安装 dsh-aux 时随 `install.sh` 一并应用(非可选);仅装插件
 > 本体的,单独运行本目录脚本补上。`/aux status` 会报告其状态。
 
 让纯文本对话模型(deepseek-v4-flash 等)也能**直接粘贴图片发送**的 DSH 本地补丁,
-同时**用户在 UI 里能看到自己发的图片缩略图**(v2 关键改进)。
+同时**用户在 UI 里能看到自己发的图片缩略图**(v2 关键改进),并且在含图片的
+会话中**可以自由切换到纯文本模型**(v3 关键改进)。
 
 参考 [deepseek-harness discussion #733](https://github.com/deepseek-ai/deepseek-harness/discussions/733) 的
 dsh-image-bridge 方案,适配本环境的 **dsh-aux `vision_analyze`** 工具。
@@ -33,6 +34,22 @@ v2 把"改写"从**消息持久化层**移到**模型输入边界**:
 
 **用户视角:图片缩略图照常显示;纯文本模型仍能"看到"图片(经辅助视觉模型)。**
 
+v3 修复**模型切换**:旧版 DSH 在 `selectModel` 里会检查"如果会话中已有图片,
+新模型必须声明 image 输入能力",导致无法从多模态模型切到纯文本模型。
+但 v2 的输入边界桥接已经能处理纯文本模型,所以这个门控不再必要:
+
+```
+含图片会话 → 切换模型
+  ├─ 旧行为:新模型 inputModalities 不含 image → 拒绝切换 ❌
+  └─ v3:不检查图片能力,直接切换 ✅
+       后续发送消息时由 agent-loop 对纯文本模型自动改写图片为路径文本 + vision_analyze
+```
+
+> 不要用"给纯文本模型强行标记 image 能力"来绕过旧门控:那样会让 v2 桥接
+> 误以为模型原生支持图片,把 image block 原样发给真实不支持的模型,导致
+> 供应商返回 `429 invalid_request_error`。v3 直接把门控去掉,让桥接按真实
+> 模态工作。
+
 ## 前置
 
 1. DSH 0.1.0-rc.6(`@deepseek-ai/dsh-host-apiproxy`、`@deepseek-ai/dsh-agent-loop` 同版本)
@@ -42,8 +59,11 @@ v2 把"改写"从**消息持久化层**移到**模型输入边界**:
 
 ```bash
 cd <本仓库路径>/bridge
-node apply-patch.mjs        # 自动识别状态:原始 → v2 / v1 → v2 / 已是 v2 → 跳过
-                            # 两个目标:dsh-host-apiproxy(admit)与 dsh-agent-loop(buildRequest)
+node apply-patch.mjs        # 自动识别状态:原始 → v2 + v3 / v1 → v2 + v3 / 已是 v2+v3 → 跳过
+                            # 三个目标:
+                            #   dsh-host-apiproxy(admit)
+                            #   dsh-agent-loop(buildRequest)
+                            #   dsh-host-apiproxy(selectModel)
 # 重启 DSH 生效(改的是 node_modules 内文件,必须重启)
 ```
 
@@ -51,17 +71,19 @@ node apply-patch.mjs        # 自动识别状态:原始 → v2 / v1 → v2 / 已
 
 ```bash
 node apply-patch.mjs --dry-run     # 只检查,不修改
-node apply-patch.mjs --rollback    # 回滚到最近一次备份(两个目标各自回滚)
+node apply-patch.mjs --rollback    # 回滚到最近一次备份(三个目标各自回滚)
 ```
 
 ## 技术要点
 
-- **两段式桥接**:
+- **桥接链路**:
   1. `dsh-host-apiproxy` admit():image block 原样进消息(UI 显示),仅为附件对象
      补建带扩展名的硬链接;
   2. `dsh-agent-loop` buildRequest():`bridgeImagesForModel` 在模型输入边界按
      模型模态改写——`llm.resolveModelInfo(provider, model)` 的 `inputModalities`
-     非空且含 `image` 则不动;否则(含未声明/空)改写为路径文本。
+     非空且含 `image` 则不动;否则(含未声明/空)改写为路径文本;
+  3. `dsh-host-apiproxy` selectModel():允许在含图片会话中切换到纯文本模型,
+     移除旧的"图片会话必须选图像模型"门控。
 - **硬链接而非符号链接**:附件对象无扩展名,补丁在其旁创建 `<sha256>.png/.jpg/…`
   硬链接(符号链接会被视觉工具的 realpath() 穿透回无扩展名路径)。
 - **多模态模型不受影响**:配了 `defaultInput: [text, image]` 的模型(如
@@ -73,6 +95,7 @@ node apply-patch.mjs --rollback    # 回滚到最近一次备份(两个目标各
   - `orig-block.txt` / `patched-block.txt`(api-proxy 原始/替换块)
   - `v1-block.txt`(v1 已打状态识别块,用于升级)
   - `orig-agent-loop-block.txt` / `patched-agent-loop-block.txt`(agent-loop 方法定义)
+  - `orig-select-model-block.txt` / `patched-select-model-block.txt`(api-proxy selectModel 门控)
   - 校验不匹配则跳过不打,绝不破坏文件。
 
 ## 卸载

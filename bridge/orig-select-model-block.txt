@@ -1,0 +1,11 @@
+						if ([...found.agent.inbox.nextTurn, ...found.agent.inbox.nextStep].some((message) => contentHasImage(message.content)) || messagesHaveImage(found.agent.session.deriveMessages())) {
+							const info = await ctx.llm.resolveModelInfo(resolved.provider, resolved.model);
+							if (info.inputModalities !== void 0 && !info.inputModalities.includes("image")) return err(request, {
+								code: "model-unavailable",
+								message: `Model "${resolved.model}" does not accept image input, but this session already contains images; select an image-capable model.`,
+								details: {
+									provider,
+									model
+								}
+							});
+						}

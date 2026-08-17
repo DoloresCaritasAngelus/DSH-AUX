@@ -48,7 +48,8 @@ export async function handleAuxCommand(service, agent, rawInput) {
     const bridge = await imageBridgeStatus();
     if (bridge !== "unknown") {
       const label = {
-        v2: "已集成(v2:UI 保留缩略图)",
+        v3: "已集成(v3:UI 保留缩略图 + 含图会话可切换纯文本模型)",
+        v2: "已集成(v2:UI 保留缩略图;含图会话切换纯文本模型仍受限)",
         v1: "旧版 v1(建议运行 bridge/apply-patch.mjs 升级)",
         partial: "部分安装(建议运行 bridge/apply-patch.mjs 补全)",
         missing: "未安装(纯文本主模型发图会受限;运行仓库 install.sh 一键集成)"

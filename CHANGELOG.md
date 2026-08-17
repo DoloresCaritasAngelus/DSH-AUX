@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.9(2026-08-17)— image-bridge v3:含图会话可切换纯文本模型
+
+- **修复模型切换**:含图片的会话无法切换到纯文本模型(`selectModel` 拒绝
+  `inputModalities` 不含 image 的新模型)。根因是 DSH 旧门控不知道 dsh-aux
+  的 image-bridge v2 已在模型输入边界把图片改写为 `vision_analyze` 路径文本。
+- **补丁新增第三目标**:`bridge/apply-patch.mjs` 现在同时打
+  `dsh-host-apiproxy selectModel`,移除“图片会话必须选图像模型”的旧门控。
+- **避免错误绕过**:不要再通过“给纯文本模型强行标记 image 能力”来切换;那会让
+  bridge 误以为模型原生支持图片,把 image block 原样发给真实不支持的模型,
+  导致供应商 `429 invalid_request_error`。
+- **状态上报**:`/aux status` 的 image-bridge 状态升级为 `v3`,并区分
+  `v2`(旧 bridge 已装但切换仍受限)与 `v3`(切换已放开)。
+- 新增 `bridge/orig-select-model-block.txt` / `bridge/patched-select-model-block.txt`;
+  测试保持全绿(106 项)。
+
 ## 0.1.8(2026-08-16)— 低/中优先级质量加固
 
 - **路由可观测性**:无路由失败也会记录 `aux/llm-call` 事件;`shouldFallback` 从死代码变为实际使用。
