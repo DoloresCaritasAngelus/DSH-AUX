@@ -9,6 +9,7 @@ import { gcImages } from "./images/gc.js";
 import { handleMemoryCommand } from "./images/memory.js";
 import { reconcileSessionImages } from "./images/ownership.js";
 import { imageBridgeStatus } from "./image-bridge.js";
+import { subagentBridgeStatus } from "./subagent-bridge.js";
 import { isCompactionBridgeInstalled, isCompactionTaskConfigured } from "./compaction-bridge.js";
 import { sessionEventsSupported } from "./events.js";
 import { runVision } from "./tools/vision.js";
@@ -58,6 +59,10 @@ export async function handleAuxCommand(service, agent, rawInput) {
     }
     lines.push(`  - forceAuxVision: ${service.forceAuxVision ? "开启(原生图片也走 AUX 视觉)" : "关闭"}`);
     lines.push(`  - visionFallbackToMain: ${service.visionFallbackToMain ? "开启(失败回退主模型)" : "关闭(视觉失败直接失败)"}`);
+    const subMode = service.subagentMode ?? "native";
+    const subBridge = await subagentBridgeStatus();
+    const subPatch = subBridge === "installed" ? "补丁已装" : subBridge === "unknown" ? "补丁未知" : "补丁未装(请跑 bridge/apply-patch.mjs)";
+    lines.push(`  - subagent-bridge: ${subMode === "native" ? "native(未拦截)" : subMode === "manual" ? "manual(统一 general 模型)" : "vision-aware(按需 vision / general)"}${service.subagentPrepareTools ? " + 注入 AUX 工具兜底" : ""} [${subPatch}]`);
     // Compaction bridge status: when dsh-compaction-basic is present and a
     // dedicated `compaction` AUX route is configured, native session
     // compaction is routed through AUX.

@@ -36,6 +36,7 @@ import {
   taskConcurrency,
   taskTimeoutMs
 } from "./route.js";
+import { resolveSubagentRoute } from "./subagent-route.js";
 import { stripThinkBlocks } from "./prompt.js";
 import {
   AUX_SETTINGS_NAMESPACE,
@@ -111,6 +112,8 @@ export class AuxLlmService extends Service {
   _source;
   /** Per-task merged config, recomputed on settings change. */
   _merged;
+  /** `aux.subagent` routing settings section (bridge). */
+  _subagentSettings;
   /** Per-task semaphores keyed by task key. */
   _semaphores;
   /** Failure cooldown keyed by provider+model. */
@@ -262,7 +265,7 @@ export class AuxLlmService extends Service {
 
   /** Recomputed merged task config from the live settings source. */
   _recomputeMerged() {
-    const settings = this._source?.() ?? { fallbackToMain: true, forceAuxVision: false, visionFallbackToMain: true, showStatusChip: true, tasks: {} };
+    const settings = this._source?.() ?? { fallbackToMain: true, forceAuxVision: false, visionFallbackToMain: true, showStatusChip: true, tasks: {}, subagent: {} };
     const merged = {};
     for (const task of AUX_TASKS) {
       merged[task] = mergeTaskConfig(
@@ -271,6 +274,9 @@ export class AuxLlmService extends Service {
       );
     }
     this._merged = merged;
+    this._subagentSettings = settings.subagent ?? {};
+    this.subagentMode = this._subagentSettings.mode ?? "native";
+    this.subagentPrepareTools = this._subagentSettings.prepareTools !== false;
     this.fallbackToMain = settings.fallbackToMain ?? true;
     this.forceAuxVision = settings.forceAuxVision ?? false;
     this.visionFallbackToMain = settings.visionFallbackToMain ?? true;
@@ -585,6 +591,17 @@ export class AuxLlmService extends Service {
       });
     }
     return out;
+  }
+
+  /**
+   * Resolve one native `subagent` call onto an AUX route. Called by the
+   * dsh-tool-subagent bridge patch (see bridge/). Returns
+   * `{ settled:false }` (run native) when subagent bridging is off or the
+   * mode's route is unconfigured.
+   * @param payload { prompt?, requiresVision?, existingAllow?, existingDeny? }
+   */
+  subagentRoute(payload) {
+    return resolveSubagentRoute(this._subagentSettings, payload ?? {});
   }
 
   /**

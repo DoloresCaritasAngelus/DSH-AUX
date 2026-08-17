@@ -110,6 +110,23 @@ window.__ModuleLoader__.load({
 						else ops.push({ op: "unset", path });
 					}
 				}
+				const sub = draft?.subagent ?? {};
+				if (sub.mode !== void 0 && sub.mode !== "native") ops.push({ op: "set", path: ["subagent", "mode"], value: sub.mode });
+				else ops.push({ op: "unset", path: ["subagent", "mode"] });
+				for (const group of ["general", "vision"]) {
+					for (const key of ["provider", "model"]) {
+						const path = ["subagent", group, key];
+						const val = sub?.[group]?.[key];
+						if (val !== void 0 && val !== "") ops.push({ op: "set", path, value: val });
+						else ops.push({ op: "unset", path });
+					}
+				}
+				if (sub.prepareTools === false) ops.push({ op: "set", path: ["subagent", "prepareTools"], value: false });
+				else ops.push({ op: "unset", path: ["subagent", "prepareTools"] });
+				if (sub.retryVisionWithAux === true) ops.push({ op: "set", path: ["subagent", "retryVisionWithAux"], value: true });
+				else ops.push({ op: "unset", path: ["subagent", "retryVisionWithAux"] });
+				if (Array.isArray(sub.visionKeywords) && sub.visionKeywords.length > 0) ops.push({ op: "set", path: ["subagent", "visionKeywords"], value: sub.visionKeywords });
+				else ops.push({ op: "unset", path: ["subagent", "visionKeywords"] });
 				if (draft?.fallbackToMain !== void 0) {
 					if (draft.fallbackToMain === false) ops.push({ op: "set", path: ["fallbackToMain"], value: false });
 					else ops.push({ op: "unset", path: ["fallbackToMain"] });
@@ -156,6 +173,23 @@ window.__ModuleLoader__.load({
 				}
 			}, react.createElement("option", { value: "" }, placeholder),
 				options.map((o) => react.createElement("option", { key: o.value, value: o.value }, o.label)));
+			// Subagent bridge settings (aux.subagent).
+			const sub = draft?.subagent ?? {};
+			const subField = (group, key) => sub?.[group]?.[key];
+			const setSub = (patch) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.subagent = { ...(next.subagent ?? {}), ...patch }; return next; }); };
+			const setSubGroup = (group, key, value) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.subagent = next.subagent ?? {}; next.subagent[group] = next.subagent[group] ?? {}; if (value === "") delete next.subagent[group][key]; else next.subagent[group][key] = value; return next; }); };
+			const subGroupSelect = (group, key, options, placeholder) => react.createElement("select", {
+				value: subField(group, key) ?? "",
+				disabled: !state.writable || options.length === 0,
+				onChange: (e) => { const value = e.target.value; setSubGroup(group, key, value); if (key === "provider") setSubGroup(group, "model", ""); }
+			}, react.createElement("option", { value: "" }, placeholder),
+				options.map((o) => react.createElement("option", { key: o.value, value: o.value }, o.label)));
+			const subModelOptionsFor = (group) => {
+				const pid = subField(group, "provider") ?? "";
+				if (pid === "") return [];
+				const ids = catalog.models.filter((m) => m.provider === pid).map((m) => m.id);
+				return [...new Set(ids)];
+			};
 			return react.createElement("div", { className: "ax-section" }, tasks.map((task) => react.createElement("div", { key: task, className: "ax-task" },
 				react.createElement("h3", null, labels[task]),
 				react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "provider"), select(task, "provider", providerOptions, "(继承主模型)")),
@@ -167,6 +201,31 @@ window.__ModuleLoader__.load({
 					type: "number", value: field(task, "maxConcurrency") ?? "", placeholder: "2", disabled: !state.writable, onChange: (e) => setField(task, "maxConcurrency", e.target.value)
 				}))
 			)),
+				react.createElement("div", { key: "subagent", className: "ax-task ax-subagent" },
+					react.createElement("h3", null, "子代理辅助模型 (subagent)"),
+					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "模式"), react.createElement("select", {
+						value: sub.mode ?? "native", disabled: !state.writable, onChange: (e) => setSub({ mode: e.target.value })
+					},
+						react.createElement("option", { value: "native" }, "native (原生,不拦截)"),
+						react.createElement("option", { value: "manual" }, "manual (统一用 general)"),
+						react.createElement("option", { value: "vision-aware" }, "vision-aware (按需 vision / general)")
+					)),
+					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "general provider"), subGroupSelect("general", "provider", providerOptions, "(继承主模型)")),
+					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "general model"), subGroupSelect("general", "model", subModelOptionsFor("general").map((id) => ({ value: id, label: id })), "(继承主模型)")),
+					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "vision provider"), subGroupSelect("vision", "provider", providerOptions, "(继承主模型)")),
+					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "vision model"), subGroupSelect("vision", "model", subModelOptionsFor("vision").map((id) => ({ value: id, label: id })), "(继承主模型)")),
+					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "视觉关键词 (逗号分隔)"), react.createElement("input", {
+						type: "text", value: Array.isArray(sub.visionKeywords) ? sub.visionKeywords.join(",") : "", placeholder: "图片,image,截图", disabled: !state.writable, onChange: (e) => setSub({ visionKeywords: e.target.value === "" ? [] : e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
+					})),
+					react.createElement("label", { className: "ax-switch" },
+						react.createElement("input", { type: "checkbox", checked: sub.prepareTools !== false, disabled: !state.writable, onChange: (e) => setSub({ prepareTools: e.target.checked }) }),
+						"给子代理注入 AUX 工具作兜底 (prepareTools)"
+					),
+					react.createElement("label", { className: "ax-switch" },
+						react.createElement("input", { type: "checkbox", checked: sub.retryVisionWithAux === true, disabled: !state.writable, onChange: (e) => setSub({ retryVisionWithAux: e.target.checked }) }),
+						"视觉失败二次派发到 AUX (retryVisionWithAux,实验性)"
+					)
+				),
 				react.createElement("label", { className: "ax-switch" },
 					react.createElement("input", { type: "checkbox", checked: draft?.fallbackToMain !== false, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.fallbackToMain = e.target.checked; return next; }); } }),
 					"失败时降级到主模型 (fallbackToMain)"

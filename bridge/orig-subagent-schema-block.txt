@@ -1,0 +1,5 @@
+				...backgroundEnabled ? { run_in_background: {
+					type: "boolean",
+					description: continuable ? "Whether to run in the background and return a durable subagent id immediately. Defaults to true. Set false to wait for the result when your next action depends on it." : "Whether to run as a background job and return its id. Defaults to false; collect with job_output or stop with job_kill."
+				} } : {}
+			},

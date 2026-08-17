@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0(2026-08-17)— 子代理辅助模型桥接(subagent bridge)
+
+- **透明接管原生 `subagent` 工具**:主模型看到的仍是 `subagent`,补丁在
+  execute 里读取 `ctx.auxLlm.subagentRoute()` 并注入 `agentOptions` 与
+  `toolFilter`。foreground / background / continuable 全部覆盖。
+- **模式**:
+  - `native`(默认):不拦截,原生行为;
+  - `manual`:子代理统一用 `general` 模型;
+  - `vision-aware`:任务需要视觉 → `vision` 模型,否则 → `general` 模型。
+- **判定**:新增可选参数 `requires_vision`(`auto/true/false`);`auto` 用
+  关键词启发式(可配置 `visionKeywords`),不确定时保守落到 `general`。
+- **兜底链**:`prepareTools`(默认开)把 `vision_analyze` 等 AUX 工具注入
+  子代理工具集,子代理模型自己看图失败后可调用 `vision_analyze` → AUX 视觉
+  辅助模型兜底。
+- **设置页**:新增「子代理辅助模型」区块(mode / general / vision /
+  prepareTools / retryVisionWithAux / visionKeywords)。
+- **零系统提示词改动**:不注入系统提示词,兼容极简 / Anchored Standard。
+- `/aux status` 显示 `subagent-bridge` 模式与补丁状态。
+- 新增 `src/subagent-route.js`(纯函数)、`src/subagent-bridge.js`(补丁检测)、
+  `tests/subagent-route.test.js`;`bridge/apply-patch.mjs` 新增
+  `dsh-tool-subagent` 两个补丁目标(schema + request)。测试 118 项全绿。
+
 ## 0.2.0(2026-08-17)— 视觉路由策略开关
 
 - **forceAuxVision(设置页开关,默认关)**:开启后,即使主模型原生支持图片,

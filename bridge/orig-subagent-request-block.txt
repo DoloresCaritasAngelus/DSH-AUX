@@ -1,0 +1,12 @@
+				const request = {
+					label: args.description,
+					prompt: [{
+						type: "text",
+						text: args.prompt
+					}],
+					parent,
+					...config.agentOptions !== void 0 ? { agentOptions: config.agentOptions } : {},
+					...config.persona !== void 0 ? { persona: config.persona } : {},
+					...config.toolFilter !== void 0 ? { toolFilter: config.toolFilter } : {},
+					...maxDepth !== void 0 ? { maxDepth } : {}
+				};

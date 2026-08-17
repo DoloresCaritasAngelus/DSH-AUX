@@ -1088,9 +1088,60 @@ test('projectSettings: 暴露 forceAuxVision / visionFallbackToMain 默认值', 
   const projected = projectSettings({});
   assert.equal(projected.forceAuxVision, false);
   assert.equal(projected.visionFallbackToMain, true);
+  assert.equal(projected.subagent.mode, 'native');
   const custom = projectSettings({ forceAuxVision: true, visionFallbackToMain: false });
   assert.equal(custom.forceAuxVision, true);
   assert.equal(custom.visionFallbackToMain, false);
+});
+
+test('projectSettings: subagent 段透传', () => {
+  const projected = projectSettings({
+    subagent: {
+      mode: 'vision-aware',
+      general: { provider: 'opencode-go', model: 'glm-5.2' },
+      vision: { provider: 'opencode-go', model: 'kimi-k2.7-code' },
+      prepareTools: false,
+      retryVisionWithAux: true,
+      visionKeywords: ['看图', 'image']
+    }
+  });
+  assert.equal(projected.subagent.mode, 'vision-aware');
+  assert.deepEqual(projected.subagent.general, { provider: 'opencode-go', model: 'glm-5.2' });
+  assert.deepEqual(projected.subagent.vision, { provider: 'opencode-go', model: 'kimi-k2.7-code' });
+  assert.equal(projected.subagent.prepareTools, false);
+  assert.equal(projected.subagent.retryVisionWithAux, true);
+  assert.deepEqual(projected.subagent.visionKeywords, ['看图', 'image']);
+});
+
+test('validateAuxSettings: 拒绝 subagent.general/vision 半配置', () => {
+  assert.throws(
+    () => validateAuxSettings({ subagent: { general: { provider: 'opencode-go' } } }),
+    /subagent\.general provider and model must be supplied together/
+  );
+  assert.throws(
+    () => validateAuxSettings({ subagent: { vision: { model: 'kimi-k2.7-code' } } }),
+    /subagent\.vision provider and model must be supplied together/
+  );
+  validateAuxSettings({ subagent: { general: { provider: 'p', model: 'm' } } });
+});
+
+test('subagentRoute: native / manual / vision-aware 服务方法', async () => {
+  const { ctx } = await makeHarness();
+  // native 默认
+  assert.equal(ctx.auxLlm.subagentRoute({ prompt: '看图' }).settled, false);
+  // manual
+  ctx.auxLlm._subagentSettings = {
+    mode: 'manual',
+    general: { provider: 'opencode-go', model: 'glm-5.2' }
+  };
+  assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: 'x' }).agentOptions, { provider: 'opencode-go', model: 'glm-5.2' });
+  // vision-aware + 关键词
+  ctx.auxLlm._subagentSettings = {
+    mode: 'vision-aware',
+    general: { provider: 'opencode-go', model: 'glm-5.2' },
+    vision: { provider: 'opencode-go', model: 'kimi-k2.7-code' }
+  };
+  assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: '描述 imagePath=/tmp/a.png', requiresVision: 'auto' }).agentOptions, { provider: 'opencode-go', model: 'kimi-k2.7-code' });
 });
 
 test('能力门: 未知能力(无 resolveModelInfo 答案)放行', async () => {

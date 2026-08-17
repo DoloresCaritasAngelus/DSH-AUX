@@ -16,11 +16,15 @@
  *  3) @deepseek-ai/dsh-host-apiproxy(selectModel):允许在含图片的会话中
  *     切换到纯文本模型。旧逻辑会因为"会话里有图片"而拒绝无图像能力的
  *     模型;有了上面的输入边界桥接后这个限制不再必要。
+ *  4) @deepseek-ai/dsh-tool-subagent(schema):为 subagent 工具增加
+ *     可选的 `requires_vision` 参数(native 透明接管用)。
+ *  5) @deepseek-ai/dsh-tool-subagent(request):executed 时读取
+ *     `ctx.auxLlm.subagentRoute()` 注入 agentOptions/toolFilter。
  *
  * 用法:
  *   node apply-patch.mjs            # 应用/升级补丁(自动定位、备份、替换、校验)
  *   node apply-patch.mjs --dry-run  # 只检查,不修改
- *   node apply-patch.mjs --rollback # 回滚到最近一次备份(三个目标各自回滚)
+ *   node apply-patch.mjs --rollback # 回滚到最近一次备份(五个目标各自回滚)
  */
 import { readFile, writeFile, copyFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -42,6 +46,10 @@ const AGENT_LOOP_FILE = guardTarget(deployedFile(
   "../../../@deepseek-ai/dsh-agent-loop/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js"
 ), "dsh-image-bridge");
+const SUBAGENT_TOOL_FILE = guardTarget(deployedFile(
+  "../../../@deepseek-ai/dsh-tool-subagent/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js"
+), "dsh-subagent-bridge");
 
 const TARGETS = [
   {
@@ -78,6 +86,28 @@ const TARGETS = [
       { name: "original", detect: (d) => d.includes("does not accept image input, but this session already contains images"), block: await readFile(join(HERE, "orig-select-model-block.txt"), "utf8"), action: "replace" }
     ],
     patched: await readFile(join(HERE, "patched-select-model-block.txt"), "utf8"),
+    backupPrefix: "index.js.bak-"
+  },
+  {
+    label: "dsh-tool-subagent (schema)",
+    file: SUBAGENT_TOOL_FILE,
+    mark: "requires_vision",
+    states: [
+      { name: "patched", detect: (d) => d.includes("requires_vision:"), action: "skip" },
+      { name: "original", detect: (d) => d.includes("...backgroundEnabled ? { run_in_background:"), block: await readFile(join(HERE, "orig-subagent-schema-block.txt"), "utf8"), action: "replace" }
+    ],
+    patched: await readFile(join(HERE, "patched-subagent-schema-block.txt"), "utf8"),
+    backupPrefix: "index.js.bak-"
+  },
+  {
+    label: "dsh-tool-subagent (request)",
+    file: SUBAGENT_TOOL_FILE,
+    mark: 'ctx.get("auxLlm")',
+    states: [
+      { name: "patched", detect: (d) => d.includes("ctx.get(\"auxLlm\")") && d.includes("subagentRoute"), action: "skip" },
+      { name: "original", detect: (d) => d.includes("...config.agentOptions !== void 0 ? { agentOptions: config.agentOptions } : {}"), block: await readFile(join(HERE, "orig-subagent-request-block.txt"), "utf8"), action: "replace" }
+    ],
+    patched: await readFile(join(HERE, "patched-subagent-request-block.txt"), "utf8"),
     backupPrefix: "index.js.bak-"
   }
 ];

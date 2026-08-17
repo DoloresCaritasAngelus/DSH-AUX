@@ -155,6 +155,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **Session event channel**: `aux/llm-call` events are written with `ignorable: true`; without the patch the plugin degrades to not writing events, protecting session logs.
 - **Session delete synergy**: works with the community plugin dsh-plugin-session-delete to clean up unreferenced images when a session is deleted.
 - **compaction-bridge**: once `compaction` is configured, native compaction routes through AUX; unusable images are degraded to text placeholders so compaction never fails outright.
+- **subagent-bridge**: transparently takes over the native `subagent` tool and routes it to AUX auxiliary models in native / manual / vision-aware modes; injects `vision_analyze` into the child as a fallback, with zero system-prompt changes.
 
 ### Minimal / Anchored Standard Compatibility
 

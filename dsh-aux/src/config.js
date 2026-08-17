@@ -57,6 +57,20 @@ export const AUX_SETTINGS_SCHEMA = z.object({
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1)
     })
+  }),
+  subagent: z.object({
+    mode: z.union([z.const("native"), z.const("manual"), z.const("vision-aware")]).default("native"),
+    general: z.object({
+      provider: z.string(),
+      model: z.string()
+    }),
+    vision: z.object({
+      provider: z.string(),
+      model: z.string()
+    }),
+    prepareTools: z.boolean().default(true),
+    retryVisionWithAux: z.boolean().default(false),
+    visionKeywords: z.array(z.string()).default([])
   })
 });
 
@@ -79,7 +93,20 @@ export function projectSettings(settings) {
       ...(raw.maxConcurrency !== void 0 ? { maxConcurrency: raw.maxConcurrency } : {})
     };
   }
-  return { fallbackToMain, forceAuxVision, visionFallbackToMain, showStatusChip, tasks };
+  const rawSub = settings?.subagent ?? {};
+  const subagent = {
+    mode: rawSub.mode ?? "native",
+    ...(rawSub.general !== void 0 && (rawSub.general.provider !== void 0 || rawSub.general.model !== void 0)
+      ? { general: { ...rawSub.general } }
+      : {}),
+    ...(rawSub.vision !== void 0 && (rawSub.vision.provider !== void 0 || rawSub.vision.model !== void 0)
+      ? { vision: { ...rawSub.vision } }
+      : {}),
+    ...(rawSub.prepareTools !== void 0 ? { prepareTools: rawSub.prepareTools } : {}),
+    ...(rawSub.retryVisionWithAux !== void 0 ? { retryVisionWithAux: rawSub.retryVisionWithAux } : {}),
+    ...(Array.isArray(rawSub.visionKeywords) ? { visionKeywords: [...rawSub.visionKeywords] } : {})
+  };
+  return { fallbackToMain, forceAuxVision, visionFallbackToMain, showStatusChip, tasks, subagent };
 }
 
 /**
@@ -96,6 +123,16 @@ export function validateAuxSettings(value) {
     if (hasProvider !== hasModel) {
       throw new Error(
         `aux settings: tasks.${task} provider and model must be supplied together`
+      );
+    }
+  }
+  for (const group of ["general", "vision"]) {
+    const entry = value?.subagent?.[group];
+    const hasProvider = entry?.provider !== void 0;
+    const hasModel = entry?.model !== void 0;
+    if (hasProvider !== hasModel) {
+      throw new Error(
+        `aux settings: subagent.${group} provider and model must be supplied together`
       );
     }
   }
