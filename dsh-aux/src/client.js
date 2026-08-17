@@ -111,7 +111,7 @@ window.__ModuleLoader__.load({
 					}
 				}
 				if (draft?.fallbackToMain !== void 0) {
-					if (draft.fallbackToMain) ops.push({ op: "set", path: ["fallbackToMain"], value: true });
+					if (draft.fallbackToMain === false) ops.push({ op: "set", path: ["fallbackToMain"], value: false });
 					else ops.push({ op: "unset", path: ["fallbackToMain"] });
 				}
 				if (draft?.forceAuxVision !== void 0) {
@@ -119,7 +119,7 @@ window.__ModuleLoader__.load({
 					else ops.push({ op: "unset", path: ["forceAuxVision"] });
 				}
 				if (draft?.visionFallbackToMain !== void 0) {
-					if (draft.visionFallbackToMain) ops.push({ op: "set", path: ["visionFallbackToMain"], value: true });
+					if (draft.visionFallbackToMain === false) ops.push({ op: "set", path: ["visionFallbackToMain"], value: false });
 					else ops.push({ op: "unset", path: ["visionFallbackToMain"] });
 				}
 				if (draft?.showStatusChip !== void 0) {
