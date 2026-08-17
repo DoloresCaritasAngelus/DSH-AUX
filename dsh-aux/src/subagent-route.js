@@ -88,16 +88,21 @@ export function resolveSubagentRoute(settings, request = {}) {
 
   const agentOptions = { provider: group.provider, model: group.model };
 
-  // Tool filter: keep the child's existing allow list, union the AUX tools so
-  // the child can escalate to the auxiliary model when needed (fallback chain).
-  const allows = new Set(Array.isArray(request.existingAllow) ? request.existingAllow : []);
-  if (settings?.prepareTools !== false) {
+  // Tool filter: dsh's toolFilter.allow is a WHITELIST — introducing one would
+  // filter OUT every other tool (bash/read/…), breaking presets like
+  // Anchored/Standard bootstrap. So only when a restriction ALREADY exists do
+  // we union the AUX tools into it (to guarantee the child can escalate to
+  // vision_analyze etc.). With no existing filter we leave the directory open
+  // — AUX tools are globally registered, no allow-list needed.
+  const hasAllowFilter = Array.isArray(request.existingAllow);
+  const allows = new Set(hasAllowFilter ? request.existingAllow : []);
+  if (settings?.prepareTools !== false && hasAllowFilter) {
     for (const name of AUX_SUBAGENT_TOOL_NAMES) allows.add(name);
   }
   const deny = Array.isArray(request.existingDeny) && request.existingDeny.length > 0
     ? [...request.existingDeny]
     : void 0;
-  const toolFilter = allows.size > 0 || deny !== void 0
+  const toolFilter = hasAllowFilter || deny !== void 0
     ? {
         ...(allows.size > 0 ? { allow: [...allows] } : {}),
         ...(deny !== void 0 ? { deny } : {})

@@ -118,6 +118,14 @@ test('prepareTools=false 且无 existingAllow/Deny → 不产生 toolFilter', ()
   assert.equal(r.settled, true)
 })
 
+test('prepareTools=true 但无 existingAllow → 不产生 toolFilter(不限制子代理工具目录)', () => {
+  // toolFilter.allow 是白名单,若我们无中生有加 allow 会过滤掉 bash/read,
+  // 破坏 Anchored/Standard bootstrap。无既有 allow 时必须保持目录开放。
+  const r = resolveSubagentRoute(manualSettings, { prompt: 'x' })
+  assert.equal(r.settled, true)
+  assert.equal(r.toolFilter, void 0)
+})
+
 test('返回对象带 needsVision 字段(命中为 true)', () => {
   const r = resolveSubagentRoute(visionAwareSettings, { prompt: '描述图片', requiresVision: 'auto' })
   assert.equal(r.needsVision, true)

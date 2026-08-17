@@ -66,8 +66,11 @@ resolveSubagentRoute(settings, { requiresVision, prompt, existingAllow })
 ```
 
 - `settled: false` 表示走 native(不注入任何东西)。
-- `toolFilter.allow` = 原 allow(若有)并上 AUX 工具名(`prepareTools=true` 时),
-  保证子代理里有 `vision_analyze` 等工具做兜底。
+- `toolFilter.allow` 是**白名单**:只有当原请求**已有** allow 时,才会把 AUX
+  工具名并进去(`prepareTools=true` 时),保证子代理有 `vision_analyze` 等兜底;
+  **若原本没有 allow,则不产生 toolFilter**,让子代理工具目录保持开放(AUX
+  工具全局已注册,无需白名单)。这避免无中生有的 allow 过滤掉 bash/read 而
+  破坏 Anchored / Standard bootstrap。
 - `toolFilter.deny` 原样保留。
 
 ## 4. 子代理内部兜底链

@@ -11,9 +11,10 @@
   - `vision-aware`:任务需要视觉 → `vision` 模型,否则 → `general` 模型。
 - **判定**:新增可选参数 `requires_vision`(`auto/true/false`);`auto` 用
   关键词启发式(可配置 `visionKeywords`),不确定时保守落到 `general`。
-- **兜底链**:`prepareTools`(默认开)把 `vision_analyze` 等 AUX 工具注入
-  子代理工具集,子代理模型自己看图失败后可调用 `vision_analyze` → AUX 视觉
-  辅助模型兜底。
+- **兜底链**:`prepareTools`(默认开)在子代理**已有 allow 白名单**时并入
+  `vision_analyze` 等 AUX 工具(无 allow 则保持目录开放,避免过滤掉
+  bash/read 破坏 Anchored/Standard bootstrap);子代理模型自己看图失败后可
+  调用 `vision_analyze` → AUX 视觉辅助模型兜底。
 - **设置页**:新增「子代理辅助模型」区块(mode / general / vision /
   prepareTools / visionKeywords)。
 - `retryVisionWithAux` 作为保留配置(schema 已留,暂未暴露到设置页,功能后续实现)。
