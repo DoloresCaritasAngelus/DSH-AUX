@@ -1144,6 +1144,40 @@ test('subagentRoute: native / manual / vision-aware 服务方法', async () => {
   assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: '描述 imagePath=/tmp/a.png', requiresVision: 'auto' }).agentOptions, { provider: 'opencode-go', model: 'kimi-k2.7-code' });
 });
 
+test('settings source 接线: forceAuxVision / visionFallbackToMain / subagentMode 联动', async () => {
+  const { ctx } = await makeHarness();
+  ctx.auxLlm._source = () => ({
+    forceAuxVision: true,
+    visionFallbackToMain: false,
+    subagent: { mode: 'manual', general: { provider: 'opencode-go', model: 'glm-5.2' } }
+  });
+  ctx.auxLlm._recomputeMerged();
+  assert.equal(ctx.auxLlm.forceAuxVision, true);
+  assert.equal(ctx.auxLlm.visionFallbackToMain, false);
+  assert.equal(ctx.auxLlm.subagentMode, 'manual');
+  assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: 'x' }).agentOptions, { provider: 'opencode-go', model: 'glm-5.2' });
+});
+
+test('visionFallbackToMain=false 且未配置 vision 主路线 → 主模型仍作为唯一路线可用', async () => {
+  const { ctx, streams } = await makeHarness();
+  ctx.auxLlm.visionFallbackToMain = false;
+  // 未配置 vision 任务的 provider/model → primary undefined;
+  // 主模型(deepseek-v4-flash, text-only)作为唯一路线,能力门会 content 失败,
+  // 但候选里确实包含主模型(不是 no-route)。
+  await assert.rejects(
+    () => ctx.auxLlm.call('vision', { messages: imageMessage(), session: makeSession() }),
+    (error) => {
+      assert.ok(error instanceof AuxCallError);
+      assert.equal(error.attempts.length, 1);
+      assert.equal(error.attempts[0].provider, 'opencode-go');
+      assert.equal(error.attempts[0].model, 'deepseek-v4-flash');
+      assert.equal(error.attempts[0].kind, 'content');
+      return true;
+    }
+  );
+  assert.equal(streams.length, 0);
+});
+
 test('能力门: 未知能力(无 resolveModelInfo 答案)放行', async () => {
   const { ctx, streams } = await makeHarness({
     tasks: { vision: { provider: 'volcengine-ark', model: 'unknown-model-x' } }

@@ -104,9 +104,22 @@ window.__ModuleLoader__.load({
 				const ops = [];
 				for (const task of tasks) {
 					const entry = draft?.tasks?.[task] ?? {};
-					for (const key of ["provider", "model", "timeoutMs", "maxConcurrency"]) {
-						const path = ["tasks", task, key];
-						if (entry[key] !== void 0 && entry[key] !== "") ops.push({ op: "set", path, value: key === "timeoutMs" || key === "maxConcurrency" ? Number(entry[key]) : entry[key] });
+					const base = ["tasks", task];
+					const hasProvider = typeof entry.provider === "string" && entry.provider !== "";
+					const hasModel = typeof entry.model === "string" && entry.model !== "";
+					if (hasProvider && hasModel) {
+						ops.push({ op: "set", path: [...base, "provider"], value: entry.provider });
+						ops.push({ op: "set", path: [...base, "model"], value: entry.model });
+					} else {
+						// Keep provider/model paired: never persist a half-configured task
+						// (the settings namespace validator would reject it).
+						ops.push({ op: "unset", path: [...base, "provider"] });
+						ops.push({ op: "unset", path: [...base, "model"] });
+					}
+					for (const key of ["timeoutMs", "maxConcurrency"]) {
+						const val = entry[key];
+						const path = [...base, key];
+						if (val !== void 0 && val !== "") ops.push({ op: "set", path, value: Number(val) });
 						else ops.push({ op: "unset", path });
 					}
 				}
@@ -114,17 +127,20 @@ window.__ModuleLoader__.load({
 				if (sub.mode !== void 0 && sub.mode !== "native") ops.push({ op: "set", path: ["subagent", "mode"], value: sub.mode });
 				else ops.push({ op: "unset", path: ["subagent", "mode"] });
 				for (const group of ["general", "vision"]) {
-					for (const key of ["provider", "model"]) {
-						const path = ["subagent", group, key];
-						const val = sub?.[group]?.[key];
-						if (val !== void 0 && val !== "") ops.push({ op: "set", path, value: val });
-						else ops.push({ op: "unset", path });
+					const g = sub?.[group] ?? {};
+					const gbase = ["subagent", group];
+					const gp = typeof g.provider === "string" && g.provider !== "";
+					const gm = typeof g.model === "string" && g.model !== "";
+					if (gp && gm) {
+						ops.push({ op: "set", path: [...gbase, "provider"], value: g.provider });
+						ops.push({ op: "set", path: [...gbase, "model"], value: g.model });
+					} else {
+						ops.push({ op: "unset", path: [...gbase, "provider"] });
+						ops.push({ op: "unset", path: [...gbase, "model"] });
 					}
 				}
 				if (sub.prepareTools === false) ops.push({ op: "set", path: ["subagent", "prepareTools"], value: false });
 				else ops.push({ op: "unset", path: ["subagent", "prepareTools"] });
-				if (sub.retryVisionWithAux === true) ops.push({ op: "set", path: ["subagent", "retryVisionWithAux"], value: true });
-				else ops.push({ op: "unset", path: ["subagent", "retryVisionWithAux"] });
 				if (Array.isArray(sub.visionKeywords) && sub.visionKeywords.length > 0) ops.push({ op: "set", path: ["subagent", "visionKeywords"], value: sub.visionKeywords });
 				else ops.push({ op: "unset", path: ["subagent", "visionKeywords"] });
 				if (draft?.fallbackToMain !== void 0) {

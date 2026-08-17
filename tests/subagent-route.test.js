@@ -80,3 +80,45 @@ test('detectNeedsVision 关键词与大小写不敏感', () => {
   assert.equal(detectNeedsVision('写代码'), false)
   assert.equal(detectNeedsVision('', ['image']), false)
 })
+
+test('未知 mode → settled=false (native 兜底)', () => {
+  const r = resolveSubagentRoute({ mode: 'foo', general: { provider: 'p', model: 'm' } }, { prompt: 'x' })
+  assert.equal(r.settled, false)
+})
+
+test('manual 缺少 general → settled=false', () => {
+  const r = resolveSubagentRoute({ mode: 'manual' }, { prompt: 'x' })
+  assert.equal(r.settled, false)
+})
+
+test('vision-aware 缺少 general(且不需要视觉)→ settled=false', () => {
+  const r = resolveSubagentRoute({ mode: 'vision-aware', vision: { provider: 'v', model: 'vm' } }, { prompt: '写代码', requiresVision: 'auto' })
+  assert.equal(r.settled, false)
+})
+
+test('vision-aware 自定义 visionKeywords 生效', () => {
+  const r = resolveSubagentRoute(
+    { mode: 'vision-aware', vision: { provider: 'opencode-go', model: 'kimi-k2.7-code' }, general: { provider: 'opencode-go', model: 'glm-5.2' }, visionKeywords: ['看图', 'screenshot'] },
+    { prompt: 'screenshot 分析这个画面', requiresVision: 'auto' }
+  )
+  assert.equal(r.needsVision, true)
+  assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'kimi-k2.7-code' })
+})
+
+test('manual 模式下显式 requiresVision 不改变目标(general)', () => {
+  const r = resolveSubagentRoute(manualSettings, { prompt: '看图', requiresVision: true })
+  assert.equal(r.settled, true)
+  assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'glm-5.2' })
+  assert.equal(r.needsVision, false)
+})
+
+test('prepareTools=false 且无 existingAllow/Deny → 不产生 toolFilter', () => {
+  const r = resolveSubagentRoute({ ...manualSettings, prepareTools: false }, { prompt: 'x' })
+  assert.equal(r.toolFilter, void 0)
+  assert.equal(r.settled, true)
+})
+
+test('返回对象带 needsVision 字段(命中为 true)', () => {
+  const r = resolveSubagentRoute(visionAwareSettings, { prompt: '描述图片', requiresVision: 'auto' })
+  assert.equal(r.needsVision, true)
+})

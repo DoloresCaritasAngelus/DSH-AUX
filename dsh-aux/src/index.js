@@ -304,6 +304,11 @@ export class AuxLlmService extends Service {
     if (definition === void 0) {
       throw new Error(`aux: unknown task "${task}"`);
     }
+    if (request.signal?.aborted) {
+      const error = new Error("aux: call aborted");
+      error.failure = { code: "ABORTED", message: "aux: call aborted" };
+      throw error;
+    }
     const semaphore = this._semaphoreFor(task, taskConcurrency(definition));
     const release = await semaphore.acquire();
     const startedAt = Date.now();
@@ -313,9 +318,13 @@ export class AuxLlmService extends Service {
       const primary = resolvePrimaryRoute(definition, this.taskDefaults);
       const candidates = [];
       if (primary !== void 0) candidates.push(primary);
+      // `visionFallbackToMain=false` disables falling back to the main model
+      // AFTER a configured vision aux route fails; when NO vision aux route is
+      // configured at all, the main model is the only option (not a fallback),
+      // so keep it usable.
       const allowMainFallback =
         this.fallbackToMain &&
-        (task !== "vision" || this.visionFallbackToMain);
+        (task !== "vision" || this.visionFallbackToMain || primary === void 0);
       if (
         allowMainFallback &&
         mainRoute !== void 0 &&
