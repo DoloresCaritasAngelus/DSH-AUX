@@ -64,69 +64,83 @@ run = await this.subagents.start(this.provider, {
 });
 ```
 
-补丁后(伪码):
+补丁后(伪码,已按子代理审查修正):
 
 ```js
+const includeWorkflow = (() => {
+  try {
+    const aux = this.ctx?.get?.("auxLlm");
+    return aux?.subagentIncludeWorkflow !== false; // 服务层暴露,仅影响 workflow 路径
+  } catch { return true; }
+})();
 const explicit = request.provider !== void 0 || request.model !== void 0;
-const auxRoute = explicit ? {} : (() => {
+const auxRoute = (!explicit && includeWorkflow) ? (() => {
   try {
     const aux = this.ctx?.get?.("auxLlm");
     return aux?.subagentRoute ? aux.subagentRoute({
       prompt: request.prompt,
-      requiresVision: request.requires_vision,
-      existingAllow: void 0,
-      existingDeny: void 0
+      requiresVision: request.requires_vision
     }) : {};
   } catch { return {}; }
-})();
+})() : {};
+const agentOptions = explicit
+  ? {
+      ...(request.provider !== void 0 ? { provider: request.provider } : {}),
+      ...(request.model !== void 0 ? { model: request.model } : {})
+    }
+  : auxRoute.agentOptions;
 run = await this.subagents.start(this.provider, {
   prompt: [{ type: "text", text: request.prompt }],
   parent: this.parent,
   signal: this.controller.signal,
   ...request.schema !== void 0 ? { outputSchema: request.schema } : {},
-  ...(!explicit && (auxRoute.agentOptions !== void 0)) ? { agentOptions: auxRoute.agentOptions } : {},
-  ...(!explicit && (request.provider !== void 0 || request.model !== void 0)) ? { agentOptions: {
-    ...request.provider !== void 0 ? { provider: request.provider } : {},
-    ...request.model !== void 0 ? { model: request.model } : {}
-  } } : {},
-  ...(!explicit && auxRoute.toolFilter !== void 0) ? { toolFilter: auxRoute.toolFilter } : {}
+  ...(agentOptions !== void 0 ? { agentOptions } : {}),
+  ...(auxRoute.toolFilter !== void 0 ? { toolFilter: auxRoute.toolFilter } : {})
 });
 ```
 
-要点:
-- **显式 override 存在时不查 AUX**(避免脚本意图被覆盖)。
-- **复用 `resolveSubagentRoute`** -> `ctx.auxLlm.subagentRoute`,与 `subagent`
+要点(对应审查 must-fix):
+- **显式 provider/model 必须转发**:`explicit=true` 时用原 `agentOptions`
+  构造,绝不能被 `!explicit` 守卫丢掉(原稿 bug)。
+- **includeWorkflow 只在 workflow 调用点门控**:读取服务层
+  `subagentIncludeWorkflow`,不动共享 `resolveSubagentRoute` / `subagent` 工具路径。
+- 复用 `resolveSubagentRoute` -> `ctx.auxLlm.subagentRoute`,与 `subagent`
   工具同一套纯函数,行为一致。
-- `request.requires_vision` 是可选的(v1 走 prompt 启发式即可,若 worker 协议
-  后续能透传再启用显式参数)。
-- `toolFilter`:与 subagent 工具修复一致 —— **无既有 allow 时不构造白名单**,
-  避免过滤掉 bash/read 破坏 Anchored/Standard bootstrap;AUX 工具全局已注册,
-  子代理目录保持开放。
-- `includeWorkflow=false` 或 `mode=native` 时 `subagentRoute` 返回
-  `{settled:false}` → 完全原生。
+- `request.requires_vision` 是可选的(v1 走 prompt 启发式即可)。
+- `toolFilter`:与 subagent 工具修复一致 —— 无既有 allow 时不构造白名单,
+  避免破坏 Anchored/Standard bootstrap。
 
 ## 5. 补丁与交付物
 
 1. `WORKFLOW-BRIDGE.md`(本设计稿)
-2. 配置:`config.js` 的 `subagent.includeWorkflow`(schema + projectSettings)
-3. 服务:`ctx.auxLlm.subagentRoute` 已存在,无需新增;新增
-   `ctx.auxLlm.subagentRoute` 内部读取 `_subagentSettings.includeWorkflow !== false`
-4. 纯函数:`resolveSubagentRoute` 增加 `includeWorkflow` 判断(或由服务层判断)
+2. 配置:`config.js` 的 `subagent.includeWorkflow`(schema + projectSettings)+
+   `src/client.js` 设置页新增一个开关
+3. 服务:新增 `ctx.auxLlm.subagentIncludeWorkflow` 属性(读
+   `_subagentSettings.includeWorkflow !== false`);`subagentRoute` 保持共享、不改
+4. 纯函数:`resolveSubagentRoute` 不变(不做 includeWorkflow 短路,避免影响
+   `subagent` 工具路径)
 5. 桥接补丁:
    - `bridge/orig-workflow-startchild-block.txt` / `patched-workflow-startchild-block.txt`
    - `bridge/apply-patch.mjs` 新增 `dsh-workflow-worker-thread` 目标
-6. `/aux status` 增加 `workflow-bridge: installed/missing`(复用
-   `subagentBridgeStatus` 类似检测)
+6. `/aux status` 增加独立的 `workflow-bridge: installed/missing`(新增
+   `workflowBridgeStatus()`,与 `subagentBridgeStatus` 分开)
 7. 测试:
-   - 纯函数:`includeWorkflow=false` → 不路由;显式 override 优先
-   - 补丁:`apply-patch.mjs --dry-run` 识别 workflow 目标
+   - 纯函数(precedence):`provider`/`model` 单独与成对时的显式转发,
+     `subagentRoute` 不被调用
+   - includeWorkflow 隔离:`includeWorkflow=false` 仅禁 workflow,`subagent`
+     工具路径不受影响
+   - schema/projection 默认值:includeWorkflow 默认 true
+   - 补丁:`apply-patch.mjs --dry-run` 识别 workflow 目标,不扰动已有 5 目标
    - 运行期:一个 `workflow` 里 2 个 `agent()` 子代理,确认各自走
-     general/vision(需要重启后手动或集成验证)
+     general/vision;显式 provider/model 的子代理不被覆盖
 
 ## 6. 风险
 
-- worker thread 里 `this.ctx` 是否可用需验证;若不可用,改为由 host 端在
-  `startChild` 之前把 `auxLlm` 实例传入 WorkerRun(构造时快照)。
+- `this.ctx` 在 WorkerRun 中可用(已确认),但建议在 `WorkerRun` 构造时把
+  `auxLlm` 实例快照一次,避免每次 start 查找与挂载顺序不确定性。
+- 仅对当前安装的 `dsh-workflow-worker-thread` 引擎生效;若将来注册其它
+  workflow 引擎且自行调 `subagents.start`,会绕过此补丁(`/aux status`
+  应能识别当前引擎)。
 - `request.requires_vision` 透传依赖 worker↔host RPC 协议扩展(未来),
   v1 仅用 prompt 启发式,保守落 general。
 - 与 `subagent` 工具补丁共用同一套 `resolveSubagentRoute`,降低行为分歧风险。
@@ -136,6 +150,6 @@ run = await this.subagents.start(this.provider, {
 1. `subagent.mode=manual, includeWorkflow=true` + 重启后:
    - `subagent` 工具子代理 → general 模型
    - `workflow` `agent()` 子代理 → 同样 general 模型
-2. `includeWorkflow=false` → workflow 子代理仍走默认
+2. `includeWorkflow=false` → workflow 子代理仍走默认,`subagent` 工具不受影响
 3. 显式 `agent(prompt,{provider,model})` → 覆盖 AUX,仍用显式模型
-4. 全部测试通过,`/aux status` 显示两个桥接状态。
+4. 全部测试通过,`/aux status` 显示两个独立桥接状态。
