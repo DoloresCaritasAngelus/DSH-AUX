@@ -49,6 +49,7 @@
 | **统一辅助 LLM 路由** | 每类任务可配独立模型/超时/并发;失败自动降级主模型;连续失败进入冷却;每次调用写入会话事件,可审计 |
 | **四个开箱即用工具** | `vision_analyze`(图像分析)、`web_extract`(网页提取+摘要)、`web_crawl`(站点深度抓取+整体摘要)、`compress_text`(长文本压缩) |
 | **会话压缩桥接** | 配置 `compaction` 任务后,原生 DSH 自动/手动压缩会改走 AUX 辅助模型;含图会话图片缺失/纯文本路由时自动降级,压缩不失败 |
+| **子代理/工作流桥接** | 原生 `subagent` 与 `workflow` 并行 `agent()` 子代理透明走 AUX(native/manual/vision-aware);零新工具、零系统提示词改动 |
 | **`/aux` 命令** | 状态查看、模型切换、图片回收、视觉自检、图片记忆 |
 | **Web 设置页 + 状态 chip** | 每任务模型下拉配置;composer 实时显示最近一次辅助调用 |
 | **会话图片生命周期** | 删除会话自动清理无引用图片;共享保留、归档不误删;图片记忆跨重启可查 |
@@ -165,6 +166,33 @@ Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `web_crawl` / 
 | 重定向 | 逐跳 SSRF 跟随,结果暴露 `redirects` 跳数(落地页 ≠ 请求页) |
 | 代理 | 直连优先,传输出错自动回退 `HTTP(S)_PROXY`(尊重 `NO_PROXY`),零依赖 |
 
+### 子代理与工作流桥接(subagent / workflow)
+
+DSH 原生的 `subagent` 工具,以及 `workflow` 批量**并发扇出的 `agent()` 子代理**,都被**透明桥接**到 AUX——对话里照常用 `subagent`/`workflow`,但真正干活的是 AUX 辅助模型,复用每任务配置、失败冷却和主模型降级。**零新工具、零系统提示词改动**。
+
+| 模式 | 子代理用什么模型 |
+|---|---|
+| `native`(默认) | 不拦截,完全原生/主模型行为 |
+| `manual` | 所有子代理统一走 `subagent.general` 指定模型 |
+| `vision-aware` | 判定「需要视觉」(如命中 `visionKeywords`)时走 `subagent.vision`,否则 `general` |
+
+**配置**(设置页「子代理辅助模型」块,或 yaml):
+
+```yaml
+aux:
+  subagent:
+    mode: vision-aware        # native | manual | vision-aware
+    general: { provider: opencode-go, model: glm-5.2 }
+    vision:  { provider: opencode-go, model: kimi-k2.7-code }
+    includeWorkflow: true      # workflow 的并行 agent() 子代理也走 AUX(默认 true)
+    prepareTools: true         # 给子代理注入 vision_analyze 等 AUX 工具作兜底
+    visionKeywords: [ "图片", "图像", "截图" ]
+    retryVisionWithAux: false  # 实验性:子代理失败后二次派发到 AUX 视觉
+```
+
+- `includeWorkflow=false` 时,即使 `mode != native`,`workflow` 的子代理也不拦截(仅 `subagent` 工具生效)。
+- 安装:本地补丁由 `install.sh`(或 `bridge/apply-patch.mjs`)安装;`/aux status` 会显示 `subagent-bridge` / `workflow-bridge` 的当前模式与补丁状态。设计细节见 `SUBAGENT-BRIDGE.md` / `WORKFLOW-BRIDGE.md`。
+
 ### 安全边界
 
 - **SSRF 防护(默认开启)**:`web_extract` / `web_crawl` 与 `vision_analyze` 的 `imageUrl` 默认拒绝内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、`169.254.169.254`、`*.local`、Teredo/6to4 内嵌私有地址等),且只允许 `http/https`;回退抓取路径的重定向**每一跳都在请求前校验**(逐跳 DNS+地址检查),provider seam 路径也要求返回最终 URL、对该 URL 复审,并把 3xx 交给逐跳逻辑重新跟随。需要抓取本机/内网服务时,在插件配置里显式设置 `allowInternalUrls: true`。
@@ -216,7 +244,7 @@ const result = await ctx.auxLlm.call("compress", {
 - **会话事件注册通道**:`aux/llm-call` 以 `ignorable: true` 标记写入;未装补丁时自动降级不写事件,保护会话日志。
 - **会话删除协同**:配合社区插件 dsh-plugin-session-delete,删除会话时自动清理无引用图片。
 - **compaction-bridge**:配置 `compaction` 任务后,原生压缩改走 AUX;含图会话图片不可用时自动降级为文本占位。
-- **subagent-bridge**:透明接管原生 `subagent`,按 native / manual / vision-aware 模式路由到 AUX 辅助模型;给子代理注入 `vision_analyze` 作兜底,零系统提示词改动。`workflow` 的 `agent()` 并行子代理也可走同一路由(includeWorkflow)。
+- **subagent-bridge**:透明接管原生 `subagent` 与 `workflow` 并行 `agent()` 子代理,按 native / manual / vision-aware 路由到 AUX(见上文「子代理与工作流桥接」)。
 
 ### 极简 / Anchored Standard 兼容
 

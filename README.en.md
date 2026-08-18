@@ -49,6 +49,7 @@ Conversation models are getting stronger, but "look at this image", "read this p
 | **Unified auxiliary LLM routing** | Per-task model/timeout/concurrency; automatic fallback to the main model; failure cooldown; every call is recorded as a session event for auditability |
 | **Four ready-to-use tools** | `vision_analyze` (image analysis), `web_extract` (page extraction + summary), `web_crawl` (site deep-crawl + overall summary), `compress_text` (long-text compression) |
 | **Session compaction bridge** | Once the `compaction` task is configured, native DSH automatic/manual compaction routes through the AUX model; image degradation keeps compaction working even when attachments are missing or the route is text-only |
+| **Subagent / workflow bridge** | The native `subagent` tool and `workflow`'s parallel `agent()` children transparently route to AUX (native / manual / vision-aware); no new tools, no system-prompt changes |
 | **`/aux` commands** | Status, model switching, image GC, vision self-test, image memory |
 | **Web settings + status chip** | Per-task model dropdowns; composer shows the latest auxiliary call |
 | **Session image lifecycle** | Deleted sessions clean up unreferenced images; shared images are preserved; image memory survives restarts |
@@ -164,6 +165,33 @@ For cheap large-context auxiliary models, the goal shifts from "shrink to minimu
 | 403 etc. 4xx | HTTP error with a "may need browser/login" hint instead of feeding empty content to the aux model |
 | Redirects | Followed per-hop with SSRF checks; exposes `redirects` hop count (landing ≠ request URL) |
 | Proxy | Direct-first; on transport failure falls back to `HTTP(S)_PROXY` CONNECT tunnel (honors `NO_PROXY`), zero-dependency |
+
+### Subagent & workflow bridge
+
+DSH's native `subagent` tool, as well as the **concurrently fanned-out `agent()` children of `workflow`**, are transparently bridged to AUX — you keep calling `subagent`/`workflow` as usual, but the work is done by the auxiliary model, reusing per-task config, failure cooldown and main-model fallback. **Zero new tools, zero system-prompt changes.**
+
+| Mode | What model the subagents use |
+|---|---|
+| `native` (default) | Not intercepted — fully native / main-model behavior |
+| `manual` | All subagents use the `subagent.general` model |
+| `vision-aware` | Uses `subagent.vision` when "needs vision" (e.g. matches `visionKeywords`), otherwise `general` |
+
+**Configuration** (settings page "Subagent" block, or yaml):
+
+```yaml
+aux:
+  subagent:
+    mode: vision-aware        # native | manual | vision-aware
+    general: { provider: opencode-go, model: glm-5.2 }
+    vision:  { provider: opencode-go, model: kimi-k2.7-code }
+    includeWorkflow: true      # workflow's parallel agent() children also route via AUX (default true)
+    prepareTools: true         # inject AUX tools (vision_analyze etc.) as a fallback for subagents
+    visionKeywords: [ "图片", "图像", "截图" ]
+    retryVisionWithAux: false  # experimental: re-dispatch a failed subagent to the AUX vision route
+```
+
+- `includeWorkflow=false` means that even with `mode != native`, `workflow` children are not intercepted (only the `subagent` tool is).
+- Installation: the local patches come with `install.sh` (or `bridge/apply-patch.mjs`); `/aux status` shows `subagent-bridge` / `workflow-bridge` mode + patch state. Design: `SUBAGENT-BRIDGE.md` / `WORKFLOW-BRIDGE.md`.
 
 ### Security boundaries
 
