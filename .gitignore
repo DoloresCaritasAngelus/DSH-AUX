@@ -24,4 +24,7 @@ tmp-*.mjs
 
 # 维护者专用(过程性内容,不进 GitHub —— 成品仓库只放用户触达的内容)
 .local/
-scripts/
+# 保留 scripts/ 下的开发脚本但排除构建依赖:gen-package-readme 是 prepack 与
+# tests/readme-sync.test.js 的运行依赖,必须随仓库版本走(非过程性残留)。
+scripts/*
+!scripts/gen-package-readme.mjs

@@ -35,7 +35,9 @@
     "access": "public"
   },
   "scripts": {
-    "test": "node --test ../tests/*.test.js"
+    "test": "node --test ../tests/*.test.js",
+    "gen-package-readme": "node ../scripts/gen-package-readme.mjs",
+    "prepack": "npm run gen-package-readme"
   },
   "engines": {
     "node": ">=20"

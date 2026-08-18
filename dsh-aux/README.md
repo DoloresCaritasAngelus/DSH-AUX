@@ -1,242 +1,299 @@
+<!--
+  README.md — generated snapshot of the repo-root <../../README.md> (single source of truth).
+  DO NOT EDIT BY HAND. Regenerate with: npm run gen-package-readme
+  (runs automatically on prepack before npm pack/publish).
+-->
 [English](README.en.md) | **简体中文**
 
-<div align="center"><img src="../assets/deepseek-girl.png" alt="AUX" width="120" /></div>
+<div align="center"><img src="assets/deepseek-girl.png" alt="AUX" width="120" /></div>
 
-> 嗨~ 我是 AUX,主人的辅助模型小助手 💙 视觉、网页、压缩这些旁路任务都交给我啦,主人专注对话就好哦!
+> 嗨~ 我是 AUX,主人的辅助模型小助手 💙
+> 主模型专心聊天,我负责看图、读网页、压长文!
+> 需要我的时候,直接叫我就好～
+
+<div align="center">
+
+![Version](https://img.shields.io/badge/version-v0.1.8-blue)
+![Tests](https://img.shields.io/badge/tests-163-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)
+
+</div>
+
+# dsh-aux — DSH 辅助模型系统
+
+> 给主 agent 配一个“副手”:**视觉分析、网页提取、长文本压缩**这些旁路任务,由独立辅助 LLM 完成,主模型专注对话。不建子智能体、不做会话协同——装完即用,零配置。
 
 ---
 
-# dsh-aux — 辅助模型系统(Auxiliary Model System for DSH)
-
-> 受 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 辅助模型机制启发、
-> 零历史包袱重做的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(DSH) 插件:
-> 统一辅助 LLM 路由服务 + 三个辅助任务工具,给主 agent 使用。
-> **不建立子智能体、不做会话协同**——辅助任务(视觉、网页提取、文本压缩)由独立辅助 LLM 完成。
-
-[![版本](https://img.shields.io/badge/version-0.1.8-blue)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
-[![测试](https://img.shields.io/badge/tests-163-brightgreen)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
-[![许可证](https://img.shields.io/badge/license-MIT-green)](https://github.com/DoloresCaritasAngelus/DSH-AUX)
-
 ## 目录
 
-- [特性](#特性)
+- [为什么需要它](#为什么需要它)
+- [核心特性](#核心特性)
 - [环境要求](#环境要求)
-- [安装](#安装)
-- [使用](#使用)
-- [配置](#配置)
-- [集成组件与配套](#集成组件与配套)
-- [测试](#测试)
+- [快速开始](#快速开始)
+- [使用指南](#使用指南)
+- [工作原理](#工作原理)
 - [兼容性与依赖](#兼容性与依赖)
-- [常见问题(FAQ)](#常见问题faq)
+- [常见问题](#常见问题)
 - [相关项目](#相关项目)
-- [许可证与致谢](#许可证与致谢)
+- [文档](#文档)
+- [致谢与借鉴](#致谢与借鉴)
+- [许可证](#许可证)
 
-## 特性
+---
 
-- **统一辅助 LLM 路由**(`ctx.auxLlm`):任务分派、路由解析、超时、并发控制、失败冷却、
-  主模型降级、聚合错误,全链路事件溯源(会话事件 + `aux-status` 投影,可审计可恢复)。
-- **三个辅助任务工具**:
-  | 工具 | 作用 |
-  |---|---|
-  | `vision_analyze` | 图像分析(attachmentId / imagePath / imageUrl),focus-hint 意图感知 |
-  | `web_extract` | 网页抓取与摘要(HTML 清洗,可指定问题) |
-  | `compress_text` | 长文本压缩(自动识别代码/日志/文档,支持 `maxOutputChars`、多轮/分层压缩) |
-- **会话压缩桥接**:新增 `compaction` 辅助任务,配置后原生 DSH 的自动/手动上下文压缩会改走 AUX 辅助模型路由,解决含图会话在纯文本主模型下无法压缩的问题。
-- **/aux 命令**:状态查看、模型配置、图片 GC、视觉自检、图片记忆。
-- **设置页 + 状态 chip**:DSH Web 设置里按任务配置 provider/model/timeout/并发;
-  composer 状态 chip 显示最近一次辅助调用。
-- **会话图片生命周期管理**:删除会话时自动清理其无引用图片(事件驱动 + 冷会话对账),
-  共享图片保留,归档不误删;图片记忆跨重启可查。
-- **零配置可用**:未配置任何任务时,辅助任务自动使用会话主模型;想用专用辅助模型
-  在设置页按需配置(下拉只列本机 active 供应商)。
+## 为什么需要它
+
+对话模型越来越强,但“看图、读网页、压长文”这类任务交给主模型做会打断思路、烧上下文。dsh-aux 把它们拆给**辅助模型**:你只管发,背后自动路由到合适的模型——主模型答你的问题,辅助模型负责“看一眼图片”“总结这个网页”“把这 5 万字压缩一下”。
+
+## 核心特性
+
+| 特性 | 说明 |
+|---|---|
+| **统一辅助 LLM 路由** | 每类任务可配独立模型/超时/并发;失败自动降级主模型;连续失败进入冷却;每次调用写入会话事件,可审计 |
+| **四个开箱即用工具** | `vision_analyze`(图像分析)、`web_extract`(网页提取+摘要)、`web_crawl`(站点深度抓取+整体摘要)、`compress_text`(长文本压缩) |
+| **会话压缩桥接** | 配置 `compaction` 任务后,原生 DSH 自动/手动压缩会改走 AUX 辅助模型;含图会话图片缺失/纯文本路由时自动降级,压缩不失败 |
+| **子代理/工作流桥接** | 原生 `subagent` 与 `workflow` 并行 `agent()` 子代理透明走 AUX(native/manual/vision-aware);零新工具、零系统提示词改动 |
+| **`/aux` 命令** | 状态查看、模型切换、图片回收、视觉自检、图片记忆 |
+| **Web 设置页 + 状态 chip** | 每任务模型下拉配置;composer 实时显示最近一次辅助调用 |
+| **会话图片生命周期** | 删除会话自动清理无引用图片;共享保留、归档不误删;图片记忆跨重启可查 |
+| **零配置可用** | 不配任何模型也能跑——辅助任务自动使用会话主模型 |
+
+### 四个工具
+
+| 工具 | 干什么 | 典型场景 |
+|---|---|---|
+| `vision_analyze` | 图像分析(支持多图并行) | “这张图里是什么?” “读出图表数值” “对比两张图” |
+| `web_extract` | 网页抓取 + 摘要(支持 `followLinks` 同源递归) | “总结这个页面” “回答某网页里的问题” “抓这个文档站” |
+| `web_crawl` | 站点深度抓取 + 整体摘要(scope/robots/限流/预算) | “抓取整个文档站并总结” “列出 docs 站所有 API 端点” |
+| `compress_text` | 长文本压缩(自动识别代码/日志/文档,支持输出预算、多轮/分层压缩) | 压日志、压文档、压超长上下文 |
 
 ## 环境要求
 
 - **DSH** ≥ 0.1.0-rc.6
 - **Node.js** ≥ 20
+- **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`,无需额外安装任何第三方运行时库。
 
-## 安装
-
-### 方式一:一键安装(推荐,含 image-bridge 集成组件)
+## 快速开始
 
 ```sh
+# 方式一:克隆仓库后一键安装(推荐,含 image-bridge 集成组件)
 git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
-cd DSH-AUX && ./install.sh     # 插件接线 + image-bridge 补丁 + 设置白名单(幂等可重跑)
-```
+cd DSH-AUX && ./install.sh
 
-### 方式二:仅插件本体(未发布 npm 时,从本地源码安装)
-
-```sh
+# 方式二:本地源码安装插件本体(未发布 npm 时使用)
 git clone https://github.com/DoloresCaritasAngelus/DSH-AUX.git
 cd DSH-AUX/dsh-aux
 dsh plugin --profile web add "file:$(pwd)"
-# 补 image-bridge(纯文本主模型发图必需):
-cd <仓库>/bridge && node apply-patch.mjs
-# 补 settings 白名单(设置页可写 aux):
-node <仓库>/bridge/patch-settings-allowlist.mjs
 ```
 
-### 方式三:手动
+重启 DSH 后:
 
-```sh
-ln -s /path/to/dsh-aux <DSH>/node_modules/@dolorescaritasangelus/dsh-aux
-# 在 profile 的 cordis.patch.yml 追加:
-# - insert:
-#     - id: aux
-#       name: '@dolorescaritasangelus/dsh-aux'
+1. 发一张图片给 agent,它会用 `vision_analyze` 描述给你(纯文本主模型也能发——image-bridge 已集成);
+2. 输入 `/aux status` 查看各任务路由;
+3. 想让视觉走专用模型?`/aux model vision <provider>/mimo-v2.5`。
+
+## 使用指南
+
+### 命令
+
+| 命令 | 作用 |
+|---|---|
+| `/aux status` | 查看各任务路由与最近调用 |
+| `/aux history [N]` | 简要溯源:最近 N 次辅助调用(默认 10) |
+| `/aux history full [N]` | 全部溯源:完整事件字段(默认全部) |
+| `/aux model <task> [provider/model]` | 查看/设置某任务的辅助模型 |
+| `/aux vision <path> <question...>` | 命令行直接看图 |
+| `/aux test <task>` | 自检某任务路由 |
+| `/aux memory [n]` | 查看最近图片分析记忆 |
+| `/aux gc-images [days]` | 手动回收旧附件图片 |
+
+### 设置页
+
+Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` 分别配置模型。其中 **`compaction` 就是会话压缩模型**——配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。`web_extract` / `web_crawl` 还可单独配置 `maxChars`(页面字符预算,默认 32000)。也可关闭「在对话界面显示辅助模型状态芯片」(关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 不受影响)。
+
+### 网页提取 (web_extract)
+
+抓取一个网页(或开 `followLinks` 顺同源链接)交给辅助模型,返回**事实摘要 + 要点**。
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `url` | 必填 | 要抓的页面 |
+| `question` | — | 可选追问,用于聚焦回答 |
+| `maxChars` | 32000 | 页面字符预算,可配;递归时作全站累计预算 |
+| `followLinks` | `off` | `same-origin` 时在同源内顺链递归抓文档站 |
+| `maxPages` / `maxDepth` | 3 / 1 | 递归的页数 / 链接深度上限(`0` 仅抓种子) |
+
+- **输出**:单页返回 `summary`/`keyPoints` + `chars`(正文码点)与 `truncated`(是否被裁);递归额外给 `pages`、`totalChars`。
+- **边界**:静态 HTML 摘要代理——不执行 JS(SPA 站点可能是空壳),不能点击/翻页/填表。
+- **递归**:与 web_crawl 同一套抓取引擎,遵守 robots.txt、每主机限速与逐跳 SSRF;只顺同源文档链接,跳过图片/压缩包/音视频。
+
+### 站点抓取 (web_crawl)
+
+从种子 URL 出发**深度抓取整个文档站**(或 `hosts` 白名单的多个子站),一次辅助调用返回整体摘要 + 页面清单。完整设计见 `WEB-CRAWL-DESIGN.md`。
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `url` | 必填 | 起始种子页 |
+| `scope` | `same-origin` | 抓取范围;`hosts` 时只抓 `hosts` 列出的主机 |
+| `hosts` | — | `scope=hosts` 时的允许主机(种子必须在其中) |
+| `seedUrls` | — | 额外深度-0 种子(仍 SSRF 校验并按 scope 过滤) |
+| `maxPages` / `maxDepth` | 10 / 2 | 页数上限 / 链接深度上限 |
+| `maxCharsPerPage` | 32000 | 每页字符预算 |
+| `respectRobots` | true | 遵守 robots.txt(Disallow 路径不抓) |
+| `minIntervalMs` | 250 | 同一主机两次请求的最小间隔 |
+| `useSitemap` | false | 从 `<origin>/sitemap.xml` 补种(嵌套 index 不递归) |
+| `maxPagesPerHost` | 0(不限) | 单主机页数上限 |
+| `perPageSummaries` | false | false=聚合摘要;true=每页单独摘要 |
+
+**两种摘要模式**
+
+| 模式 | 怎么摘要 | 成本 |
+|---|---|---|
+| **A(默认)** | 所有页面一次性调用 → 整体 `summary`/`keyPoints` + `pages` 清单 | 1 次调用 |
+| **B**(`perPageSummaries:true`) | 每页单独摘要 → `perPage` 列表,再对摘要做一次聚合 | ≈ 页数 + 1 次调用 |
+
+**行为**:遵守 robots 与每主机限速,每页每跳都走 SSRF 逐跳校验;静态 HTML、不渲染 JS;**声明非并发安全**——靠顺序 BFS + 限速避免对单域扇出轰炸。
+
+### 清洗与反爬(大上下文时代)
+
+面向便宜的大上下文辅助模型,网页提取的目标从「压缩到最小」转为「**去毒后完整交付**」:把干净的整页交给辅助模型直接回答/摘要,主模型只拿结果。
+
+**清洗**:`htmlToText` 整块删除 `script/style/iframe/canvas` 等零语义块与 `data:` base64,只留正文文本与数字/URL。**去毒(H5)不变**:页面正文包进带随机 nonce 的不可信数据块,与 `Question` 物理分离,忽略一切内嵌指令。
+
+**反爬(零依赖)**
+
+| 场景 | 行为 |
+|---|---|
+| 编码 | 按 `Content-Type` / `<meta charset>` 用 `TextDecoder` 解码(GBK/GB18030 等不乱码) |
+| JS Challenge | 检测到 CF/挑战壳 → 返回 `browserRequired` 标记,不烧 aux token,提示改用浏览器 |
+| 429 / 502-504 | 自动重试一次(短退避);仍失败报带 rate-limited 提示的错 |
+| 403 等 4xx | 报带「可能需浏览器/登录」提示的错,不给 aux 喂空内容 |
+| 重定向 | 逐跳 SSRF 跟随,结果暴露 `redirects` 跳数(落地页 ≠ 请求页) |
+| 代理 | 直连优先,传输出错自动回退 `HTTP(S)_PROXY`(尊重 `NO_PROXY`),零依赖 |
+
+### 子代理与工作流桥接(subagent / workflow)
+
+DSH 原生的 `subagent` 工具,以及 `workflow` 批量**并发扇出的 `agent()` 子代理**,都被**透明桥接**到 AUX——对话里照常用 `subagent`/`workflow`,但真正干活的是 AUX 辅助模型,复用每任务配置、失败冷却和主模型降级。**零新工具、零系统提示词改动**。
+
+| 模式 | 子代理用什么模型 |
+|---|---|
+| `native`(默认) | 不拦截,完全原生/主模型行为 |
+| `manual` | 所有子代理统一走 `subagent.general` 指定模型 |
+| `vision-aware` | 判定「需要视觉」(如命中 `visionKeywords`)时走 `subagent.vision`,否则 `general` |
+
+**配置**(设置页「子代理辅助模型」块,或 yaml):
+
+```yaml
+aux:
+  subagent:
+    mode: vision-aware        # native | manual | vision-aware
+    general: { provider: opencode-go, model: glm-5.2 }
+    vision:  { provider: opencode-go, model: kimi-k2.7-code }
+    includeWorkflow: true      # workflow 的并行 agent() 子代理也走 AUX(默认 true)
+    prepareTools: true         # 给子代理注入 vision_analyze 等 AUX 工具作兜底
+    visionKeywords: [ "图片", "图像", "截图" ]
+    retryVisionWithAux: false  # 实验性:子代理失败后二次派发到 AUX 视觉
 ```
 
-然后重启 DSH。
+- `includeWorkflow=false` 时,即使 `mode != native`,`workflow` 的子代理也不拦截(仅 `subagent` 工具生效)。
+- 安装:本地补丁由 `install.sh`(或 `bridge/apply-patch.mjs`)安装;`/aux status` 会显示 `subagent-bridge` / `workflow-bridge` 的当前模式与补丁状态。设计细节见 `SUBAGENT-BRIDGE.md` / `WORKFLOW-BRIDGE.md`。
 
-## 使用
+### 安全边界
 
-- 直接调用工具:主 agent 会在需要时使用 `vision_analyze` / `web_extract` / `compress_text`。
-- 命令行:`/aux status`(路由与最近调用)、`/aux model <task> [provider/model]`(查看/设置)、
-  `/aux vision <imagePath> <question...>`(命令行看图)、`/aux test <task>`(自检)、
-  `/aux memory [n]`(图片记忆)、`/aux gc-images [days]`(手动回收旧附件)。
-- 设置页:Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `compress` / `compaction`
-  配置模型;其中 `compaction` 即会话压缩模型,配置后原生压缩会走 AUX。
-  还可关闭「在对话界面显示辅助模型状态芯片」,关闭后不再向 Web/第三方暴露
-  `aux-status` 投影,`/aux status` 命令不受影响。
+- **SSRF 防护(默认开启)**:`web_extract` / `web_crawl` 与 `vision_analyze` 的 `imageUrl` 默认拒绝内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、`169.254.169.254`、`*.local`、Teredo/6to4 内嵌私有地址等),且只允许 `http/https`;回退抓取路径的重定向**每一跳都在请求前校验**(逐跳 DNS+地址检查),provider seam 路径也要求返回最终 URL、对该 URL 复审,并把 3xx 交给逐跳逻辑重新跟随。需要抓取本机/内网服务时,在插件配置里显式设置 `allowInternalUrls: true`。
+- **Prompt 注入缓解**:辅助模型提示把网页正文、待压缩文本、图片内文字都视为**不可信数据**;网页正文被包裹进带随机 nonce 的 `<<<UNTRUSTED PAGE DATA …>>>` … `<<<END UNTRUSTED PAGE DATA …>>>` 数据块,与 `Question` 指令物理分离,并明确禁止执行其中嵌入的指令;`guideText` 是受信任的插件配置,只应从可信来源复制。
+- **并发硬上限**:每个任务的 `maxConcurrency` 即使配置得更大,实际也按 **10** 封顶,避免误配导致对辅助模型并发轰炸。
 
-### 编程调用(其他插件)
+### 编程调用(给其他插件开发者)
 
 ```js
 const result = await ctx.auxLlm.call("compress", {
-  messages,      // DSH 消息(可含 image block)
-  system,        // 可选 system prompt
-  session,       // 记录 aux/llm-call 事件的会话
-  signal,        // 取消信号(与 per-task 超时融合)
-  purpose        // 语义标签(如 "compaction")
+  messages,
+  system,
+  session,
+  signal
 });
 // => { text, provider, model }
 ```
 
-自定义任务:`ctx.auxLlm.registerTask({ key, label, timeoutMs, maxConcurrency })`。
+自定义任务:`ctx.auxLlm.registerTask(...)`。
 
-## 配置
+## 工作原理
 
-每任务:`provider` + `model`(必须成对)、`timeoutMs`(默认 60000)、`maxConcurrency`(默认 2,**硬上限 10**)。
-设置页全局项:`fallbackToMain`(辅助模型失败自动降级主模型,默认开)、`showStatusChip`(状态芯片开关,默认开)。
-插件配置全局项:`allowInternalUrls`(SSRF 防护,默认 `false`)、`guideText`(自定义主 agent 引导,受信任)。
-
-路由解析顺序:显式配置(settings/插件 config)> 未配置 → 会话主模型。
-失败冷却:同一 provider+model 连续失败 3 次 → 冷却 60s。
-
-**SSRF 防护(默认开启)**:`web_extract` 与 `vision_analyze` 的 `imageUrl` 默认拒绝
-内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、
-`169.254.169.254`、`*.local` 等),且只允许 `http/https`;重定向的每一跳也会在
-请求前校验。需要抓取本机/内网服务时,在插件配置里显式设置 `allowInternalUrls: true`。
-辅助模型提示把网页正文、待压缩文本、图片内文字视为**不可信数据**,明确禁止执行其中
-嵌入的指令;`guideText` 是受信任的插件配置,只应从可信来源复制。
-
-`compaction` 任务:配置 provider/model 后即启用会话压缩桥接——原生
-`dsh-compaction-basic` 的摘要调用会通过 `ctx.auxLlm` 执行。建议为含图会话选择
-真正支持图片且上下文足够的模型(例如 `mimo-v2.5` 或 `minimax-m3`)。
-
-```sh
-/aux model compaction <provider>/mimo-v2.5
-```
-
-> 注意：原生 `dsh-compaction-basic` 是**单次全量摘要**，没有分片/渐进能力。
-> 对超大输入（实测 shadowed 449K tokens 可单次成功）请调大
-> `compaction.timeoutMs`（例如 `300000`），默认 60s 在超大输入时容易超时失败。
-
-> 含图会话压缩时，AUX 会先检查图片附件与路由能力：附件可读且路由支持图片则
-> 保留图像信息；附件已被 GC/清理或路由为纯文本时，自动把图片降级为文本占位，
-> 避免 `/compact` / 自动压缩因一张不可用的图片整体失败。
-
-## 集成组件与配套
-
-- **image-bridge(集成组件)**:与插件一起安装(install.sh 默认执行)。让**纯文本
-  主模型**也能直接粘贴图片发送,且用户消息保留图片缩略图(模型输入边界按模态
-  改写为路径文本,多模态模型原生看图;含图会话可切换到纯文本模型,v3)。修改
-  node_modules 核心包,`npm update` 后重跑 `bridge/apply-patch.mjs` 即可;`/aux status` 会报告其状态。
-- **compaction-bridge(会话压缩协同)**:运行时桥接,不修改 node_modules 文件。
-  当 `compaction` 任务配置了专用模型时,`dsh-aux` 会覆写
-  `BasicCompactionEngine.prototype.summarize`,让原生压缩的摘要调用走
-  `ctx.auxLlm.call("compaction", …)`,从而复用 AUX 的路由/超时/并发/冷却/降级/
-  事件记录;未配置时保持原生摘要行为不变。
-- **settings 动态暴露**(install.sh 一并应用):设置页读写 aux 配置是插件
-  **原生能力**——注册 namespace 时声明 `exposedToWeb`,由 dsh-settings 的
-  `listExposed()` 与 api-proxy 动态合并实现(平台 deferred work 的本地实现)。
-- **会话删除协同**:DSH 原生无"删除会话"功能,由社区插件
-  [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete)
-  提供(Web UI 删除按钮 + 风险确认)。两者**零代码依赖、事件级协同**:
-  删除插件调用 `sessions.detachEntered()` → 平台广播 `session/disposed` →
-  dsh-aux 自动清理该会话的无引用图片(另有 5 分钟对账兜底)。没有它,
-  dsh-aux 其余能力完全不受影响。
-- **极简 / Anchored Standard Bootstrap 是设计行为**:首个持久 `tool/call` 前只
-  暴露 Minimal 工具对(`bash` + `str_replace_editor`),并剥离自动注入的上下文与
-  提示——这是这些预设实现“首轮轨迹锚定”的核心,不是缺陷。dsh-aux **首轮绝不注入
-  任何 AUX 上下文/提示词**(包括含图首轮),并在极简模式下把自己的三个工具从
-  assembled 目录中过滤掉;首个 `tool/call` 后目录开放,AUX 工具出现,通过
-  `agent/pre-step` 注入一次提示,引导模型直接使用 `vision_analyze`,避免为看图
-  创建子代理。`vision_analyze` 是否常驻取决于 preset 的 resident 目录/
-  `dev_tool_search` 解锁策略。Anchored Standard 的设计与实现见
-  [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main)。
-
-## 测试
-
-```sh
-node --test tests/*.test.js            # 163 项,零依赖
-```
+- **路由解析**:显式配置 > 任务默认 > 会话主模型;辅助模型失败自动降级主模型。
+- **健壮性**:每任务超时(默认 60s)、并发信号量(默认 2)、失败冷却(连续 3 次 → 停 60s)、错误分类、聚合错误报告每一跳。
+- **可观测**:每次调用写 `aux/llm-call` 会话事件 + `aux-status` 投影,历史可回放。
+- **图片能力门**:调用前查模型输入能力,明确不支持的模型直接跳过换路;未声明能力的模型放行由服务端决定。
+- **压缩协同**:`dsh-compaction-basic` 的摘要调用可通过 `ctx.auxLlm` 的 `compaction` 任务执行,复用 AUX 的超时/并发/冷却/降级/事件记录。
 
 ## 源码结构
 
-`src/index.js` 只保留 **Service 装配与路由调度**;其余按领域拆分:
+`dsh-aux/src/index.js` 只保留 **Service 装配与路由调度**,其余按领域拆分,方便社区贡献者定位:
 
 - `config.js` / `route.js` / `prompt.js` / `url-policy.js` — 配置、路由、提示词、SSRF 策略
 - `events.js` / `projection.js` / `bootstrap.js` / `commands.js` / `fetch.js` — 事件、投影、Bootstrap 引导、命令、抓取
-- `tools/` — 三工具实现与注册
+- `tools/` — `vision_analyze` / `web_extract` / `compress_text` 工具实现与注册
 - `images/` — 附件归属、清理、图片记忆、图片引用解析
 - `image-bridge.js` / `compaction-bridge.js` / `compaction-messages.js` — 桥接与压缩消息降级
 
 ## 兼容性与依赖
 
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。
-- **运行时零第三方依赖**:peerDependencies 全部为 DSH 官方包(DSH 环境自带),
-  无 `dependencies`;测试同样零依赖、无网络。
+- **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
+- **测试零依赖**:`node --test tests/*.test.js`(163 项,含 aux 102 / compression 35 / core-review 4 / fetch-vision 4 / images-review 7 / fs-boundary 2 / bridge-target 4 / memory 1 / bridge 4)。
 
-## 常见问题(FAQ)
+### 集成组件
 
-### 1. 为什么"极简 / Anchored Standard"模式下首轮用不了 AUX 工具?
+- **image-bridge**:让纯文本主模型也能直接粘贴图片,UI 保留缩略图;含图会话可切换到纯文本模型(v3);`npm update` 后需重跑 `bridge/apply-patch.mjs`。
+- **settings 动态暴露**:设置页可读写 aux 配置;对应补丁已随本仓库 `bridge/` 落地,不依赖官方 deepseek-harness 合入。
+- **会话事件注册通道**:`aux/llm-call` 以 `ignorable: true` 标记写入;未装补丁时自动降级不写事件,保护会话日志。
+- **会话删除协同**:配合社区插件 dsh-plugin-session-delete,删除会话时自动清理无引用图片。
+- **compaction-bridge**:配置 `compaction` 任务后,原生压缩改走 AUX;含图会话图片不可用时自动降级为文本占位。
+- **subagent-bridge**:透明接管原生 `subagent` 与 `workflow` 并行 `agent()` 子代理,按 native / manual / vision-aware 路由到 AUX(见上文「子代理与工作流桥接」)。
 
-这是 **Anchored Standard Bootstrap 的设计行为**,不是缺陷:首个持久 `tool/call`
-之前只暴露 Minimal 工具对(`bash` + `str_replace_editor`),并剥离自动注入的上下文
-与提示,以便实现"首轮轨迹锚定"。dsh-aux **首轮绝不注入任何 AUX 上下文/提示词**
-(包括含图首轮);首个 `tool/call` 后工具目录开放,AUX 工具出现,并通过
-`agent/pre-step` 注入一次提示,引导模型直接使用 `vision_analyze`。详情见
-[Anchored Standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main)。
+### 极简 / Anchored Standard 兼容
 
-### 2. 为什么含图会话压缩时图片会"退化"成文本占位?
+首个持久 `tool/call` 前只暴露 Minimal 工具对,并剥离自动注入上下文——这是这些预设实现“首轮轨迹锚定”的核心机制。dsh-aux **首轮绝不注入任何 AUX 上下文/提示词**;首个 `tool/call` 后目录开放,AUX 工具出现,并通过 `agent/pre-step` 注入一次提示,引导直接使用 `vision_analyze`,避免子代理绕路。Anchored Standard 的设计与实现见 [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main)。
 
-AUX 在压缩前会检查图片附件与路由能力:若附件可读且路由支持图片,则保留图像信息;
-若附件已被 GC/清理,或路由为纯文本(不支持图片的模型),则自动把图片降级为文本占位,
-避免 `/compact` 或自动压缩因一张不可用的图片整体失败。建议为含图会话选择真正支持
-图片的模型(例如 `mimo-v2.5` 或 `minimax-m3`),并适当调大
-`compaction.timeoutMs`(超大输入时默认 60s 容易超时失败)。
+## 常见问题
 
-### 3. 为什么删除会话时图片会被清理?
+**Q1:为什么在极简 / Anchored Standard 预设的首轮看不到 `vision_analyze` 等 AUX 工具?**
 
-这是**会话图片生命周期管理**的一部分:删除会话时自动清理其无引用图片(事件驱动 +
-冷会话对账),共享图片保留、归档不误删;配合社区插件
-[dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete)
-提供删除入口,两者零代码依赖、事件级协同。
+A:这些预设的“首轮轨迹锚定”机制会在首个持久 `tool/call` 前只暴露 Minimal 工具对,并剥离自动注入的上下文。dsh-aux 尊重这一机制,**首轮绝不注入任何 AUX 上下文/提示词**,也不会提前暴露自己的工具。首个 `tool/call` 之后工具目录开放,`vision_analyze` / `web_extract` / `compress_text` 就会出现,并通过 `agent/pre-step` 注入一次提示引导直接使用。
+
+**Q2:为什么 `/compact` 在含图会话里失败了?**
+
+A:如果会话消息里的 image block 对应附件对象已被 GC/清理(读回报 `Attachment object is missing.`),或所有可选压缩路由均不支持图片输入,图片对压缩不可用。此时 dsh-aux 会把图片**降级为文本占位**(`[图片: name (type, WxH) — 未纳入压缩摘要]`)后继续交给 AUX 压缩,避免整个压缩任务失败——所以正常情况下压缩不会因图片不可用而失败。
+
+**Q3:dsh-aux 需要配置模型才能用吗?**
+
+A:不需要。dsh-aux 是**零配置**的:不配任何模型也能跑,辅助任务会自动回退到会话主模型。你可以随时通过设置页或 `/aux model <task> <provider/model>` 为某个任务指定专用模型。
 
 ## 相关项目
 
-- [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main):Anchored Standard 预设,首轮轨迹锚定与极简 Bootstrap。
-- [dsh-vision-toolkit](https://github.com/Anionex/dsh-vision-toolkit):视觉工具集。
-- [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete):会话删除插件,与 dsh-aux 事件级协同清理图片。
-- [SeekMaid-pet](https://github.com/DoloresCaritasAngelus/SeekMaid-pet):桌面宠物 SeekMaid(DeepSeek 娘)。
+- [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main) — Anchored Standard 预设的设计与实现
+- [dsh-vision-toolkit](https://github.com/Anionex/dsh-vision-toolkit) — 社区视觉工具集
+- [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete) — 会话删除插件(删除会话时自动清理无引用图片)
+- [SeekMaid-pet](https://github.com/DoloresCaritasAngelus/SeekMaid-pet) — SeekMaid 电子宠物
 
-## 许可证与致谢
+## 文档
 
-[MIT License](./LICENSE) © 2026 dsh-aux contributors——自由使用、修改、分发,
-保留版权声明即可。
+| 文档 | 内容 |
+|---|---|
+| [AI.md](./dsh-aux/AI.md) | 给 AI 代理的安装指南 |
+| [PRD.md](./PRD.md) | 需求规格与设计决策 |
+| [CHANGELOG.md](./CHANGELOG.md) | 版本历史 |
+| [COMPARISON.md](./COMPARISON.md) | 与社区视觉插件的架构对比 |
+| [VISION-AGENT.md](./VISION-AGENT.md) | 视觉子代理策略与记忆架构 |
+| [SESSION-ATTACHMENT-GC.md](./SESSION-ATTACHMENT-GC.md) | 会话删除时图片清理设计 |
+| [CONTRIBUTIONS.md](./CONTRIBUTIONS.md) | 致谢与借鉴说明 |
 
-设计受 **Hermes Agent**(辅助模型机制概念)、**agent-vision-toolkit**(focus-hint
-意图感知方法论、图内文字策略)、**dsh-vision**(prompt 引导与思考块剥离)、
-**deepseek-harness #733**(图片桥接思路)启发,逐条借鉴与差异说明见
-[CONTRIBUTIONS.md](./CONTRIBUTIONS.md)。
+## 致谢与借鉴
+
+设计受 **Hermes Agent**、**agent-vision-toolkit**、**dsh-vision**、**deepseek-harness #733** 与 **DeepSeek Harness** 平台启发,逐条说明见 [CONTRIBUTIONS.md](./CONTRIBUTIONS.md)。
+
+## 许可证
+
+[MIT License](./LICENSE) © 2026 dsh-aux contributors

@@ -16,6 +16,10 @@
   `history` 简要溯源(默认最近 10 次,新→旧),`history full` 全部溯源
   (完整字段:路由/耗时/降级/error/输入输出 chars/purpose)。与
   `/aux status` 里「每任务最新一次」互补。
+- **README 单一真相(U1)**:npm 发布用的 `dsh-aux/README.md`(.en)不再是第二份
+  人工维护文档,改为仓库根 README 的**生成快照**——新增
+  `scripts/gen-package-readme.mjs`(`prepack` 自动再生成,`--check` 供 CI),并
+  加回归测试防漂移(270 项全过)。消除"两套 README"文档债。
 
 ## 0.3.0(2026-08-17)— 子代理辅助模型桥接(subagent bridge)
 
