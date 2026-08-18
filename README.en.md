@@ -112,8 +112,8 @@ Web → Settings → Auxiliary Models. You can configure a model for `vision` / 
   - `url` (required), `question` (optional follow-up), `maxChars` (page code-point budget; config default, then 8000);
   - `followLinks: "off" | "same-origin"`: default `off` → single page; `same-origin` → BFS over same-origin document links;
   - `maxPages` (crawl cap, default 3), `maxDepth` (link depth cap, default 1; `0` = root only).
-- **Output metadata**: single pages return `chars` (code points sent to the model) and `truncated`; crawls return `pages: [{url, chars, truncated}]`, `totalChars`, and an overall `truncated` flag so oversized documents are visible.
-- **Crawl semantics**: every page and every hop runs the per-hop SSRF check; only same-origin document links are followed (image/archive/media extensions are skipped); accumulated text is bounded by the shared `maxChars` budget; one auxiliary call produces the overall summary.
+- **Output metadata**: single pages return `chars` (content code points sent to the model, wrappers/marker excluded) and `truncated`; crawls return `pages: [{url, chars, truncated}]`, `totalChars`, and an overall `truncated` flag so oversized documents are visible.
+- **Crawl semantics**: `followLinks` delegates to the shared crawl engine — every page and every hop runs the per-hop SSRF check, and robots.txt + per-host rate limits apply exactly as in web_crawl; only same-origin document links are followed (image/archive/media extensions are skipped); accumulated text is bounded by the shared `maxChars` budget; one auxiliary call produces the overall summary.
 
 ### web_crawl
 
@@ -121,7 +121,7 @@ Web → Settings → Auxiliary Models. You can configure a model for `vision` / 
 - **Parameters**: `url` (seed, required), `question`, `scope` (`same-origin` default / `hosts` whitelist; `domain` not enabled), `hosts`, `seedUrls` (extra depth-0 seeds; still SSRF-checked and scope-filtered), `maxPages` (default 10), `maxDepth` (default 2), `maxCharsPerPage` (config default/8000), `maxTotalChars` (default derived as maxPages × per-page), `maxPagesPerHost` (per-host page cap, default 0 = unlimited), `maxSeconds`, `minIntervalMs` (default 250), `respectRobots` (default true), `useSitemap` (default false; seeds from `<origin>/sitemap.xml`, nested indices skipped), `perPageSummaries` (default false), `perPageConcurrency` (default 1).
 - **Two summary modes**: Mode A (default, `perPageSummaries:false`) — one aggregate call for the overall summary; Mode B (`perPageSummaries:true`) — **one call per page** producing `perPage:[{url, summary, keyPoints}]`, then a lightweight aggregation over the per-page summaries for the overall summary (cost ≈ pages+1 calls, bounded by `perPageConcurrency`). The `mode` field is `aggregate` / `per-page`.
 - **Default behavior**: respects `robots.txt` (Disallow paths are not requested), enforces a per-host gap ≥ `minIntervalMs`; every page and hop runs the per-hop SSRF check; static HTML first, no JS rendering.
-- **Output**: `root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars` / `truncated` / `summary` / `keyPoints` / `perPage` (filled in mode B) / `mode` / `warnings`.
+- **Output**: `root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars` (mode A = crawled page-text code points; mode B = per-page summary code points) / `truncated` / `summary` / `keyPoints` / `perPage` (filled in mode B) / `mode` / `warnings`.
 - **Concurrency semantics**: `web_crawl` explicitly declares **not concurrency-safe** (`isConcurrencySafe=false`), backed by `minIntervalMs` and the sequential BFS, so a single domain is never flooded.
 
 ### Security boundaries

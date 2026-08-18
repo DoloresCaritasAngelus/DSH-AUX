@@ -20,7 +20,7 @@
  */
 import { htmlToText, isBinaryContentType, isHtmlContentType } from "../prompt.js";
 import { assertSafeFetchUrlForService, fetchWithSsrf } from "../fetch.js";
-import { codePointCount, truncateByChars } from "./text.js";
+import { truncateByChars } from "./text.js";
 
 /**
  * Read a fetch response body as text, aborting the read as soon as the raw
@@ -84,7 +84,7 @@ export async function finishLocalFetch(response, finalUrl, { textCap, rawCap, la
   return {
     finalUrl,
     text: capped.text,
-    chars: codePointCount(capped.text),
+    chars: capped.kept,
     truncated: capped.truncated || raw.truncated,
     isHtml,
     rawHtml
@@ -117,15 +117,24 @@ export async function fetchPage(service, targetUrl, { textCap, rawCap = textCap,
         const local = await fetchWithSsrf(service, from, label, signal);
         return finishLocalFetch(local.response, local.finalUrl, { textCap, rawCap, label });
       }
+      // Best-effort release of any provider-buffered body on the error paths
+      // (mirrors the local path cancelling streaming bodies), so rejected
+      // responses are not retained until GC.
+      const releaseBody = () => {
+        try { if (typeof result?.body?.cancel === "function") result.body.cancel().catch(() => {}); } catch { /* best-effort */ }
+      };
       if (statusCode >= 400) {
+        releaseBody();
         throw new Error(`${label}: HTTP ${statusCode} fetching ${targetUrl}`);
       }
       if (typeof result.url !== "string" || result.url.length === 0) {
+        releaseBody();
         throw new Error(`${label}: web provider returned no final URL for ${targetUrl}`);
       }
       await assertSafeFetchUrlForService(service, result.url, label);
       const body = result.body;
       if (body === null || typeof body !== "object" || (body.kind !== "html" && body.kind !== "text") || typeof body.content !== "string") {
+        releaseBody();
         throw new Error(`${label}: web provider returned an unsupported body for ${targetUrl}`);
       }
       const isHtml = body.kind === "html";
@@ -139,7 +148,7 @@ export async function fetchPage(service, targetUrl, { textCap, rawCap = textCap,
       return {
         finalUrl: result.url,
         text: capped.text,
-        chars: codePointCount(capped.text),
+        chars: capped.kept,
         truncated: capped.truncated,
         isHtml,
         rawHtml

@@ -318,10 +318,14 @@ export function htmlToText(html) {
   text = text.replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, " ");
   // Tags: replace with a space so adjacent words stay separated.
   text = text.replace(/<[^>]+>/g, " ");
-  // Decode entities (loop for &#123; numeric forms).
+  // Decode entities (loop for &#123; numeric forms). Lone surrogates
+  // (U+D800–U+DFFF) are skipped so decoding untrusted markup cannot inject
+  // ill-formed code units into downstream counts.
   text = text.replace(/&#(\d+);/g, (_m, code) => {
     const point = Number(code);
-    return point > 0 && point < 0x110000 ? String.fromCodePoint(point) : "";
+    if (point <= 0 || point >= 0x110000) return "";
+    if (point >= 0xd800 && point <= 0xdfff) return "";
+    return String.fromCodePoint(point);
   });
   for (const [entity, value] of Object.entries(HTML_ENTITIES)) {
     text = text.split(entity).join(value);

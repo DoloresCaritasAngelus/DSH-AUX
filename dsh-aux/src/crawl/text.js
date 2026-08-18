@@ -22,14 +22,15 @@ export function codePointCount(text) {
 /**
  * Truncate text to at most `maxChars` CODE POINTS (never splitting a
  * surrogate pair), appending a truncation marker when anything was cut.
- * @returns `{ text, chars, truncated }` — `chars` is the ORIGINAL code-point
- * count, `truncated` whether a cut happened.
+ * @returns `{ text, chars, kept, truncated }` — `chars` is the ORIGINAL
+ * code-point count, `kept` the retained content code points (marker
+ * excluded), `truncated` whether a cut happened.
  */
 export function truncateByChars(text, maxChars) {
   const str = typeof text === "string" ? text : String(text ?? "");
   const limit = Number.isInteger(maxChars) && maxChars >= 0 ? maxChars : 0;
   const total = codePointCount(str);
-  if (total <= limit) return { text: str, chars: total, truncated: false };
+  if (total <= limit) return { text: str, chars: total, kept: total, truncated: false };
   let end = 0;
   let count = 0;
   for (let i = 0; i < str.length && count < limit; ) {
@@ -38,5 +39,5 @@ export function truncateByChars(text, maxChars) {
     count += 1;
     end = i;
   }
-  return { text: str.slice(0, end) + TRUNCATED_MARKER, chars: total, truncated: true };
+  return { text: str.slice(0, end) + TRUNCATED_MARKER, chars: total, kept: count, truncated: true };
 }

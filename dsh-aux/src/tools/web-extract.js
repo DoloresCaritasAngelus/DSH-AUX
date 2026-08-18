@@ -2,9 +2,9 @@
  * dsh-aux `web_extract` tool implementation.
  *
  * Fetching happens in the shared crawl core (`src/crawl/`): seam-first with
- * SSRF hardening (`fetchPage`) and same-origin BFS with a shared character
- * budget (`crawlPages`). This file owns the single-page/`followLinks`
- * summarization flow and its prompts.
+ * SSRF hardening (`fetchPage`) and the same-origin BFS crawl engine
+ * (`crawlSite`, scope "same-origin" — same engine web_crawl uses). This file
+ * owns the single-page/`followLinks` summarization flow and its prompts.
  *
  * Secondary-injection hardening: page text is wrapped in explicit
  * `<<<UNTRUSTED PAGE DATA ...>>>` … `<<<END UNTRUSTED PAGE DATA ...>>>`
@@ -21,7 +21,7 @@ import {
   webExtractUserMessageMulti
 } from "../prompt.js";
 import { fetchPage } from "../crawl/fetch-page.js";
-import { crawlPages } from "../crawl/queue.js";
+import { crawlSite } from "../crawl/queue.js";
 import { assertSafeFetchUrlForService } from "../fetch.js";
 import { DEFAULT_MAX_CHARS } from "../route.js";
 
@@ -93,7 +93,18 @@ export async function runWebExtract(service, args, exec) {
     };
   }
 
-  const crawl = await crawlPages(service, url, { maxChars, maxPages: effectiveMaxPages, maxDepth, signal: exec.signal, label: "web_extract" });
+  // followLinks delegates to the shared crawl engine (crawlSite, scope
+  // same-origin) so robots.txt / per-host rate limits / budgets are identical
+  // to web_crawl — no parallel crawl implementation (design §2.1).
+  const crawl = await crawlSite(service, url, {
+    scope: "same-origin",
+    maxPages: effectiveMaxPages,
+    maxDepth,
+    maxCharsPerPage: maxChars,
+    maxTotalChars: maxChars,
+    signal: exec.signal,
+    label: "web_extract"
+  });
   if (crawl.pages.length === 0) {
     throw new Error("web_extract: no pages could be fetched");
   }

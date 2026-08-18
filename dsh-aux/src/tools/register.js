@@ -67,10 +67,10 @@ export function registerAuxTools(service) {
           keyPoints: { type: "array", items: { type: "string" }, required: true },
           provider: { type: "string", required: true },
           model: { type: "string", required: true },
-          chars: { type: "integer", description: "Code points of page text sent to the model (single-page calls)." },
+          chars: { type: "integer", description: "Code points of the page's retained content sent to the model (truncation marker excluded; single-page calls)." },
           truncated: { type: "boolean", description: "True when page text was cut to fit maxChars." },
           pages: { type: "array", description: "Per-page crawl metadata (present when followLinks is same-origin).", items: { type: "object", additionalProperties: false, properties: { url: { type: "string", required: true }, chars: { type: "integer", required: true }, truncated: { type: "boolean", required: true } } } },
-          totalChars: { type: "integer", description: "Total code points sent to the model across a crawl." }
+          totalChars: { type: "integer", description: "Total content code points sent to the model across a crawl (truncation markers/wrappers excluded)." }
         }
       },
       render: (args, value) => [
@@ -109,11 +109,11 @@ export function registerAuxTools(service) {
         properties: {
           root: { type: "string", required: true },
           scope: { type: "string", required: true },
-          pages: { type: "array", required: true, items: { type: "object", additionalProperties: false, properties: { url: { type: "string", required: true }, chars: { type: "integer", required: true }, truncated: { type: "boolean", required: true }, title: { type: "string" } } } },
+          pages: { type: "array", required: true, items: { type: "object", additionalProperties: false, properties: { url: { type: "string", required: true }, chars: { type: "integer", required: true, description: "Retained content code points (marker excluded)." }, truncated: { type: "boolean", required: true }, title: { type: "string" } } } },
           fetched: { type: "integer", required: true },
           skipped: { type: "integer", required: true },
           blocked: { type: "integer", required: true },
-          totalChars: { type: "integer", required: true },
+          totalChars: { type: "integer", required: true, description: "Mode A: total content code points of crawled page texts; Mode B: total code points of per-page summaries." },
           truncated: { type: "boolean", required: true },
           summary: { type: "string", required: true },
           keyPoints: { type: "array", items: { type: "string" }, required: true },

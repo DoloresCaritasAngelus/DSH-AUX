@@ -164,3 +164,41 @@
 - 链接发现的 raw HTML 扫描有上限(`LINK_SCAN_*`:4×预算,32k–256k),超长页链接发现不完整——已文档化。
 - DNS rebinding/TOCTOU 保持文档化已知限制。
 
+### 第二轮:线上验证 + 3 并行子代理复核
+
+线上验证(碧蓝航线 BILIWIKI)抓到 **2 个单测桩未暴露的真回归**,均已修并加回归:
+
+1. **seam `this` 解绑**(`fetch-page.js`):能力探测把 `ctx.web.fetch` 存为变量后裸调用,
+   真实 `WebRuntime.fetch` 读 `this.fetchProviders` → TypeError(线上 `web_extract` 直接报错)。
+   修复:`web.fetch.call(web, …)` 按方法调用;回归测试以"方法体依赖 this"的实方法桩锁定。
+2. **`/robots.txt` 被 HTML wiki 页劫持**(`queue.js fetchRobots`):MediaWiki 把
+   `/blhx/robots.txt` 重定向为 HTML 页面,被误解析成全站 Disallow → web_crawl 0 页。
+   修复:纯文本校验(content-type HTML 或文档序言 `<html/<!doctype` 即视为"无策略",乐观放行);
+   回归测试锁定。
+
+并行复核(代码质量 / 设计符合度 / 测试健壮性)结论与落地:
+
+| 发现 | 处置 |
+|---|---|
+| **P0-a⚠️ 设计漂移**:web_extract.followLinks 保留了独立 `crawlPages` 引擎,与 `crawlSite` 平行;followLinks 缺 robots/minInterval、`isConcurrencySafe=true`,与 web_crawl 不对称 | **已修**:删除 `crawlPages`,followLinks 委托 `crawlSite(scope:"same-origin")`;robots+限流与 web_crawl 完全一致;README 同步 |
+| **M1**:模式 B `runWithConcurrency` 某页失败时其余并发 worker 悬空继续烧 aux 调用 | **已修**:逐项捕获错误、全部 worker 收敛后抛首个错误 |
+| **M3**:seam 校验错误路径未释放 provider 已缓冲 body | **已修**:错误抛出前 best-effort `result.body.cancel()` |
+| **P0-b**:`crawlSite` 未知 scope(如 domain)静默当 same-origin | **已修**:引擎层拒绝非 `same-origin`/`hosts` |
+| **L1/L2**:`chars`/`totalChars` 把截断标记计入、口径不统一 | **已修**:`truncateByChars` 新增 `kept`(内容码点),工具级 `chars`/`totalChars` 均按内容码点;schema/README 描述精确化(模式 B 为逐页摘要码点) |
+| **L3**:robots HTML 嗅探正则过宽(把含 `<head>` 字面规则的合法 robots 当 HTML) | **已修**:仅匹配文档序言 `<html/<!doctype` |
+| **L4/L5**:`readTextCapped` 码元/码点注释易误导;`htmlToText` 数字实体可注入孤立代理项 | L4 注释澄清;L5 跳过 U+D800–DFFF |
+| **测试盲区(高)**:seam 非 provider 错误负路径、seam finalUrl 内网复审、`readTextCapped` 三态、其他 provider 不可用形态、robots 高级选择器语义、`maxTotalChars` 显式预算 | **均已补测试**(web-extract-fixes +5、web-crawl +2) |
+| M2/C-3(robots/sitemap 不纳入 minInterval/每主机配额)、maxSeconds deadline 时序测试 | 文档化为已知边界(低危,每源每次 crawl 各 1 次) |
+
+- 全量 `node --test tests/*.test.js`:**254 通过**。
+- 结论:两个线上 bug 与设计偏离均已消除;实现与 WEB-EXTRACT-REVIEW / WEB-CRAWL-DESIGN
+  的双设计意图高度一致;剩余发现均为低危边界。
+
+### 线上验证摘要(2026-08,碧蓝航线 BILIWIKI)
+
+- `web_extract` 首页/埃塞克斯号:单页活路正常,分节摘要、数据块隔离、honest 截断有效;
+  埃塞克斯(O 级首舰,SSR 航母,空袭向技能,原型 USS Essex CV-9)要点可提取。
+- `web_crawl`(respectRobots:false,因运行进程未含 robots 修复):管线(10 页 BFS、
+  聚合摘要、pages 清单、预算)工作正常;该站舰船内容为 JS 渲染 → 静态抓取多为导航页,
+  **如实印证 F2「静态 HTML,不渲染 JS」能力边界**。
+

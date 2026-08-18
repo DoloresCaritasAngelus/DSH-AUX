@@ -112,8 +112,8 @@ Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `web_crawl`
   - `url`(必填)、`question`(可选追问)、`maxChars`(页面码点预算,默认取配置,再取 8000);
   - `followLinks: "off" | "same-origin"`:默认 `off` 单页;`same-origin` 时在同源内 BFS 递归抓取文档站;
   - `maxPages`(递归上限,默认 3)、`maxDepth`(链接深度上限,默认 1,`0` 仅根页)。
-- **输出元数据**:单页返回 `chars`(送达模型的码点数)与 `truncated`(是否被截断);递归时返回 `pages: [{url, chars, truncated}]`、`totalChars` 与整体 `truncated`,方便感知大页面被裁。
-- **递归语义**:每页、每一跳都走 SSRF 逐跳校验;只顺同源文档链接且跳过图片/压缩包/音视频等非文档资源;累计文本受 `maxChars` 总预算约束,一次辅助调用输出整体摘要。
+- **输出元数据**:单页返回 `chars`(送达模型的页面正文码点,不含包装/截断标记)与 `truncated`(是否被截断);递归时返回 `pages: [{url, chars, truncated}]`、`totalChars` 与整体 `truncated`,方便感知大页面被裁。
+- **递归语义**:`followLinks` 委托 web_crawl 的共享抓取引擎,每页、每一跳都走 SSRF 逐跳校验,并**与 web_crawl 一致遵守 robots.txt 与每主机最小请求间隔**;只顺同源文档链接且跳过图片/压缩包/音视频等非文档资源;累计文本受 `maxChars` 总预算约束,一次辅助调用输出整体摘要。
 
 ### 站点抓取 (web_crawl)
 
@@ -121,7 +121,7 @@ Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `web_crawl`
 - **参数**:`url`(种子,必填)、`question`、`scope`(`same-origin` 默认 / `hosts` 白名单;`domain` 未启用)、`hosts`、`seedUrls`(额外 depth-0 种子,仍 SSRF 校验并按 scope 过滤)、`maxPages`(默认 10)、`maxDepth`(默认 2)、`maxCharsPerPage`(默认配置/8000)、`maxTotalChars`(默认按 maxPages×单页推导)、`maxPagesPerHost`(每主机页数上限,默认 0=不限)、`maxSeconds`、`minIntervalMs`(默认 250)、`respectRobots`(默认 true)、`useSitemap`(默认 false,从 `<origin>/sitemap.xml` 补种,嵌套 index 跳过)、`perPageSummaries`(默认 false)、`perPageConcurrency`(默认 1)。
 - **两种摘要模式**:模式 A(默认)`perPageSummaries:false` —— 一次聚合调用输出整体摘要;模式 B `perPageSummaries:true` —— **每页一次**调用输出 `perPage:[{url, summary, keyPoints}]`,再对逐页摘要做一次轻量聚合得整体摘要(成本 ≈ 页面数+1 次调用,受 `perPageConcurrency` 控制)。`mode` 字段标注 `aggregate` / `per-page`。
 - **默认行为**:尊重 `robots.txt`(Disallow 路径不请求)、同主机请求间隔 ≥ `minIntervalMs`;每页每跳都走 SSRF 逐跳校验;静态 HTML 优先,不渲染 JS。
-- **输出**:`root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars` / `truncated` / `summary` / `keyPoints` / `perPage`(模式 B 填充)/ `mode` / `warnings`。
+- **输出**:`root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars`(模式 A=抓取正文码点,模式 B=逐页摘要码点)/ `truncated` / `summary` / `keyPoints` / `perPage`(模式 B 填充)/ `mode` / `warnings`。
 - **并发语义**:`web_crawl` 明确声明**非并发安全**(`isConcurrencySafe=false`),由 minInterval 与顺序 BFS 兜底,防止对单域扇出轰炸。
 
 ### 安全边界

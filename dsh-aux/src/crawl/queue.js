@@ -1,14 +1,12 @@
 /**
- * Crawl queue helpers (BFS, dedup, budget, scope, robots, per-host intervals)
- * shared by web_extract and web_crawl.
- *
- * - `crawlPages`: exact same-origin behavior web_extract's `followLinks` uses.
- * - `crawlSite`: the web_crawl engine — scope (same-origin | hosts), robots.txt
- *   (default on), per-host minimum interval, page/total/time budgets.
+ * Crawl engine helpers (BFS, dedup, budget, scope, robots, per-host intervals)
+ * shared by web_extract.followLinks and web_crawl via `crawlSite`. There is a
+ * single crawl implementation — the web_extract and web_crawl tools both
+ * delegate here (design: no parallel crawl logic).
  *
  * @module @dolorescaritasangelus/dsh-aux/crawl/queue
  */
-import { extractPageLinks, extractPageLinksWhere, htmlToText } from "../prompt.js";
+import { extractPageLinksWhere, htmlToText } from "../prompt.js";
 import { fetchPage } from "./fetch-page.js";
 import { truncateByChars } from "./text.js";
 import { fetchWithSsrf } from "../fetch.js";
@@ -96,7 +94,9 @@ async function fetchRobots(service, origin, { label, signal }) {
     // /robots.txt to an HTML page; parsing that would produce a bogus blanket
     // block. If the response is HTML, treat the site as having no usable
     // robots policy — optimistically allow (robots failures never block).
-    if (/text\/html/i.test(contentType) || /<\s*(html|!doctype|body|head)\b/i.test(text)) {
+    // The body sniff only matches a document prologue so a legal robots file
+    // containing a literal "<head>/<html" in a rule is not misfiled.
+    if (/text\/html/i.test(contentType) || /^\s*(<!doctype\s+html|<\s*html\b)/i.test(text)) {
       return new RobotsPolicy([]);
     }
     return RobotsPolicy.parse(text);
@@ -120,43 +120,10 @@ function sleep(ms) {
 }
 
 /**
- * Sequential same-origin BFS crawl (web_extract `followLinks`). Each page is
- * fetched through the seam-first + per-hop SSRF path and its text is capped to
- * the remaining shared character budget.
- * @returns `{ pages, totalChars }` — `totalChars` is the code-point length of
- * the capped page text actually sent to the model.
- */
-export async function crawlPages(service, rootUrl, { maxChars, maxPages, maxDepth, signal, label = "web_extract" }) {
-  const rootParsed = new URL(rootUrl);
-  const origin = rootParsed.origin;
-  const rawCap = Math.min(LINK_SCAN_MAX, Math.max(LINK_SCAN_MIN, maxChars * LINK_SCAN_FACTOR));
-  const seen = new Set([normalizePageUrl(rootUrl)]);
-  const queue = [{ url: rootUrl, depth: 0 }];
-  const pages = [];
-  let totalChars = 0;
-  while (queue.length > 0 && pages.length < maxPages) {
-    const { url: pageUrl, depth } = queue.shift();
-    const remaining = maxChars - totalChars;
-    if (remaining <= 0) break;
-    const page = await fetchPage(service, pageUrl, { textCap: remaining, rawCap, signal, label });
-    pages.push({ url: page.finalUrl, chars: page.chars, truncated: page.truncated, depth, isHtml: page.isHtml, rawHtml: page.rawHtml, text: page.text });
-    totalChars += page.chars;
-    if (depth < maxDepth && page.isHtml && pages.length < maxPages) {
-      for (const link of extractPageLinks(page.rawHtml ?? "", page.finalUrl, origin)) {
-        const key = normalizePageUrl(link);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        queue.push({ url: link, depth: depth + 1 });
-      }
-    }
-  }
-  return { pages, totalChars };
-}
-
-/**
- * General crawl engine for web_crawl: BFS with configurable scope, robots.txt
- * (default on), per-host minimum interval, and page/total/time budgets.
- * Every page and every hop goes through the seam-first + per-hop SSRF path.
+ * General crawl engine for web_extract.followLinks and web_crawl: BFS with
+ * configurable scope, robots.txt (default on), per-host minimum interval, and
+ * page/total/time budgets. Every page and every hop goes through the
+ * seam-first + per-hop SSRF path.
  *
  * @param opts { scope?, hosts?, maxPages?, maxDepth?, maxCharsPerPage?,
  *   maxTotalChars?, minIntervalMs?, maxSeconds?, respectRobots?, signal?, label? }
@@ -182,6 +149,11 @@ export async function crawlSite(service, rootUrl, opts = {}) {
 
   const rootParsed = new URL(rootUrl);
   const rootOrigin = rootParsed.origin;
+  // Defend at the engine level too (not only at the tool entry): an unknown
+  // scope must not silently fall back to same-origin crawling.
+  if (scope !== "same-origin" && scope !== "hosts") {
+    throw new Error(`${label}: scope must be "same-origin" or "hosts" (domain not enabled in v1)`);
+  }
   let allowedHosts = null;
   if (scope === "hosts") {
     if (!Array.isArray(hosts) || !hosts.includes(rootParsed.hostname)) {

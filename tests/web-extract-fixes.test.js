@@ -28,6 +28,7 @@ import {
 } from '../dsh-aux/src/prompt.js';
 import { codePointCount, resolveMaxChars, truncateByChars, runWebExtract } from '../dsh-aux/src/tools/web-extract.js';
 import { fetchWithSsrf } from '../dsh-aux/src/fetch.js';
+import { readTextCapped } from '../dsh-aux/src/crawl/fetch-page.js';
 import { mergeTaskConfig, resolveConfig, taskMaxChars } from '../dsh-aux/src/route.js';
 import { isPrivateIp } from '../dsh-aux/src/url-policy.js';
 
@@ -353,6 +354,84 @@ test('H1/H2: seam fetch 是依赖 this 的实方法(防解绑回归,线上复现
     assert.ok(userText.includes('THIS BOUND OK 42'));
     assert.equal(value.url, 'https://example.com/this');
   });
+});
+
+test('H1 负路径: seam 抛自有校验错误(web provider returned…)不被吞、不回退本地', async () => {
+  // 若 isProviderUnavailable 的宽匹配(/web provider/i)被误放宽,这条自有错误会被
+  // 误判为"无 provider"并回退本地,把真实业务错误静默吞掉——负向回归锁死窄匹配。
+  const harness = await withWebSeamHarness((s) => {
+    s.provide('web', { async fetch() { throw new Error('web provider returned an invalid result for x'); } });
+  });
+  await withGlobalFetch(async () => { throw new Error('本地回退不应被调用'); }, async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    await assert.rejects(
+      () => runWebExtract(harness.ctx.auxLlm, { url: 'https://example.com/x' }, exec),
+      /web provider returned an invalid result/
+    );
+    assert.equal(harness.streams.length, 0, '不应发起 LLM 调用');
+  });
+});
+
+test('H2: seam 返回的最终 URL 指向内网 → 复审拒绝(post-check)', async () => {
+  const harness = await withWebSeamHarness((s) => {
+    s.provide('web', { async fetch() { return { url: 'http://169.254.169.254/latest/meta-data/', statusCode: 200, body: { kind: 'text', content: 'x' }, truncated: false }; } });
+  });
+  const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+  await assert.rejects(() => runWebExtract(harness.ctx.auxLlm, { url: 'https://example.com/seam' }, exec), /blocked by default/);
+});
+
+test('H1: 其余 provider 不可用形态(code/纯 message)也回退本地', async () => {
+  const cases = [
+    { code: 'WEB_PROVIDER_CONFIGURED_MISSING', message: 'configured web provider "x" is not registered' },
+    { code: 'WEB_PROVIDER_AMBIGUOUS', message: 'multiple usable web providers are registered' },
+    { code: void 0, message: 'no usable web provider is registered' } // 纯 message,无 code
+  ];
+  for (const { code, message } of cases) {
+    const harness = await withWebSeamHarness((s) => {
+      const err = new Error(message);
+      if (code !== void 0) err.code = code;
+      s.provide('web', { async fetch() { throw err; } });
+    });
+    let fetched = false;
+    await withGlobalFetch(async (url) => { fetched = true; return { ok: true, status: 200, url: String(url), headers: { get: () => 'text/plain' }, text: async () => 'FALLBACK-' + (code ?? 'msg') }; }, async () => {
+      const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+      const value = await runWebExtract(harness.ctx.auxLlm, { url: 'https://example.com/fb' }, exec);
+      assert.ok(fetched, `${code ?? 'message'} 形态应回退本地`);
+      assert.ok(harness.streams[0].messages[0].content.find((b) => b.type === 'text').text.includes('FALLBACK-'));
+      assert.equal(value.provider, 'opencode-go');
+    });
+  }
+});
+
+test('readTextCapped: 无 reader 兜底走 text(),按码点截断', async () => {
+  const r = await readTextCapped({ text: async () => 'a😀b😀c' }, 3);
+  assert.equal(r.truncated, true);
+  assert.equal(r.rawChars, 5);
+  assert.deepEqual([...r.text.split('\n')[0]], ['a', '😀', 'b'], '不切开代理对');
+  const r2 = await readTextCapped({ text: async () => 'abc' }, 10);
+  assert.equal(r2.truncated, false);
+  assert.equal(r2.text, 'abc');
+});
+
+test('readTextCapped: 流式 body 超限即 cancel 断流', async () => {
+  const state = { cancelled: false };
+  const body = {
+    getReader() {
+      let done = false;
+      return {
+        async read() {
+          if (done) return { done: true, value: undefined };
+          done = true;
+          return { done: false, value: new TextEncoder().encode('abcdef') };
+        },
+        async cancel() { state.cancelled = true; }
+      };
+    }
+  };
+  const r = await readTextCapped({ body }, 3);
+  assert.ok(r.truncated, '超限应标记截断');
+  assert.equal(r.text.split('\n')[0].length, 3);
+  assert.ok(state.cancelled, '超限应被 cancel 以停止网络读取');
 });
 
 test('Low: 二进制 content-type 被拒绝', async () => {

@@ -54,20 +54,30 @@ async function callCrawlSummarizer(service, userText, inputChars, exec) {
   });
 }
 
-/** Run `fn` over items with at most `limit` concurrent workers (order preserved). */
+/** Run `fn` over items with at most `limit` concurrent workers (order
+ * preserved). Errors are captured per item so every worker settles (no
+ * dangling aux calls when one page fails); the FIRST error is rethrown after
+ * all workers finish. */
 async function runWithConcurrency(items, limit, fn) {
   const results = new Array(items.length);
   let next = 0;
+  let firstError;
   const worker = async () => {
     for (;;) {
       const index = next;
       next += 1;
       if (index >= items.length) break;
-      results[index] = await fn(items[index], index);
+      try {
+        results[index] = { ok: true, value: await fn(items[index], index) };
+      } catch (error) {
+        results[index] = { ok: false };
+        if (firstError === void 0) firstError = error;
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, worker));
-  return results;
+  if (firstError !== void 0) throw firstError;
+  return results.map((r) => r.value);
 }
 
 /** web_crawl execution. */

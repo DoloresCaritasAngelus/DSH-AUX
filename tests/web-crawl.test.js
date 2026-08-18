@@ -76,6 +76,19 @@ async function withFetchMap(map, fn) {
 
 // ── robots 策略 ───────────────────────────────────────────────────────────
 
+test('RobotsPolicy: 高级选择器(如 /private/*)按字面前缀处理,不解释通配符', () => {
+  // 设计文档:只做前缀匹配,不解释 * / $ 等高级选择器。
+  const p = RobotsPolicy.parse('Disallow: /private/*\n');
+  // '/private/secret' 不以字面 '/private/*' 开头 → 不匹配 → 放行(通配符未解释)
+  assert.equal(p.isAllowed('/private/secret'), true);
+  // 字面以 '/private/*' 开头的路径才会命中 Disallow
+  assert.equal(p.isAllowed('/private/*/x'), false);
+  // 最长真实前缀规则生效(allow 更具体 → 放行)
+  const p3 = RobotsPolicy.parse('Disallow: /private\nAllow: /private-pub\n');
+  assert.equal(p3.isAllowed('/private-pub/x'), true);
+  assert.equal(p3.isAllowed('/private/inside'), false);
+});
+
 test('RobotsPolicy: 前缀匹配/最长规则/Allow 覆盖', () => {
   const policy = RobotsPolicy.parse('User-agent: *\nDisallow: /api\nDisallow: /private\nAllow: /api/public\n');
   assert.equal(policy.isAllowed('/'), true);
@@ -363,6 +376,21 @@ test('注册: web_crawl 新增 P2 参数与 perPage 条目 schema', async () => 
   const perPageSchema = tool.output?.schema?.properties?.perPage;
   assert.ok(perPageSchema?.items?.properties?.summary !== void 0, 'perPage 条目应声明 summary 字段');
   assert.ok(tool.output.schema.properties.mode !== void 0);
+});
+
+test('crawlSite: maxTotalChars 显式预算截断累计文本', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/root': '<html><body>' + 'R'.repeat(260) + '<a href="/c">c</a></body></html>',
+    'https://a.example/c': '<html><body>' + 'C'.repeat(260) + '</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 5, maxDepth: 1, maxCharsPerPage: 200, maxTotalChars: 300 });
+    assert.equal(crawl.fetched, 2);
+    assert.ok(crawl.totalChars <= 300, '累计应受显式 maxTotalChars 约束: ' + crawl.totalChars);
+    assert.ok(crawl.pages.every((p) => p.truncated), '两页都应被截断');
+  });
 });
 
 // ── P4a: seedUrls 多种子 + maxPagesPerHost 每站上限 ────────────────────────
