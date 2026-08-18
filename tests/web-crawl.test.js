@@ -1,0 +1,250 @@
+/**
+ * web_crawl(P1)验收测试(node:test,零依赖)。
+ *
+ * 覆盖 WEB-CRAWL-DESIGN.md 的 P1 范围:
+ *  - robots.txt 策略(前缀匹配/最长规则/404 放行)
+ *  - scope: same-origin / hosts 白名单与跨域计数
+ *  - minIntervalMs 每主机限速
+ *  - 预算(单页/总量)、渲染边界 description 未做、isConcurrencySafe=false
+ *  - runWebCrawl 模式 A 全流程 + 配置默认 maxChars
+ *  - 路由/注册联动(AUX_TASKS 含 web_crawl)
+ */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { Context } from '@deepseek-ai/cordis';
+import AuxLlmService from '../dsh-aux/src/index.js';
+import { crawlSite, RobotsPolicy } from '../dsh-aux/src/crawl/queue.js';
+import { runWebCrawl } from '../dsh-aux/src/tools/web-crawl.js';
+import { AUX_TASKS, resolveConfig } from '../dsh-aux/src/route.js';
+
+function settle() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+/** 本地路径 harness(web seam 无 fetch 能力 → 强制本地逐跳),可传 plugin config。 */
+async function makeLocalHarness(config) {
+  const ctx = new Context();
+  const streams = [];
+  const tools = [];
+  await ctx.plugin({
+    name: 'local-crawl-stubs',
+    apply(s) {
+      s.provide('tools', { register(d) { tools.push(d); return () => {}; } });
+      s.provide('systemPrompt', { section() { return () => {}; } });
+      s.provide('settings', {});
+      s.provide('web', {});
+      s.provide('fs', { async resolve(p) { return { displayPath: p }; }, async stat() { return { type: 'file' }; }, async readBytes() { return new Uint8Array(0); } });
+      s.provide('attachments', { imageLimits: { maxImageBytes: 1000, maxMessageImageBytes: 1000, maxImagesPerMessage: 1, maxImagePixels: 1000, mediaTypes: ['image/png'] }, async validateImage() {}, async saveImage(i) { return { attachmentId: 'a', mediaType: i.mediaType, bytes: 0, width: 1, height: 1 }; }, async readImage(r) { return { ref: r, data: new Uint8Array(0) }; } });
+      s.provide('llm', {
+        modelCapabilities: new Map([['deepseek-v4-flash', ['text']]]),
+        async resolveModelInfo(provider, model) { return { provider, model, inputModalities: ['text'] }; },
+        stream(options) {
+          streams.push(options);
+          return (async function* () {
+            yield { type: 'block-start', index: 0, blockType: 'text' };
+            yield { type: 'text-delta', index: 0, text: 'OUTPUT_TEXT' };
+            yield { type: 'block-end', index: 0, block: { type: 'text', text: 'OUTPUT_TEXT' } };
+            yield { type: 'finish', reason: { kind: 'stop' } };
+          })();
+        }
+      });
+      s.provide('agentDefaultModel', { currentSelection() { return { provider: 'opencode-go', model: 'deepseek-v4-flash' }; } });
+    }
+  });
+  await ctx.plugin(AuxLlmService, config ?? {});
+  await settle();
+  ctx.auxLlm._dnsLookup = async () => ({ address: '93.184.216.34' });
+  return { ctx, streams, tools };
+}
+
+/** 全局 fetch 桩:map = { url: htmlText } 或 { url: { body, contentType } }。返回调用记录。 */
+async function withFetchMap(map, fn) {
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    calls.push(u);
+    const entry = map[u];
+    if (entry === undefined) return { ok: false, status: 404, url: u, headers: { get: () => 'text/plain' }, text: async () => 'nf' };
+    const body = typeof entry === 'string' ? entry : entry.body;
+    const contentType = typeof entry === 'string' ? 'text/html' : (entry.contentType ?? 'text/html');
+    return { ok: true, status: 200, url: u, headers: { get: () => contentType }, text: async () => body };
+  };
+  try {
+    return await fn(calls);
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+// ── robots 策略 ───────────────────────────────────────────────────────────
+
+test('RobotsPolicy: 前缀匹配/最长规则/Allow 覆盖', () => {
+  const policy = RobotsPolicy.parse('User-agent: *\nDisallow: /api\nDisallow: /private\nAllow: /api/public\n');
+  assert.equal(policy.isAllowed('/'), true);
+  assert.equal(policy.isAllowed('/docs'), true);
+  assert.equal(policy.isAllowed('/api'), false);
+  assert.equal(policy.isAllowed('/api/status'), false);
+  assert.equal(policy.isAllowed('/api/public'), true);
+  assert.equal(policy.isAllowed('/private/x'), false);
+  assert.equal(RobotsPolicy.parse('').isAllowed('/anything'), true);
+  assert.equal(RobotsPolicy.parse('Disallow: /').isAllowed('/x'), false);
+});
+
+test('crawlSite: respectRobots 默认开启,Disallow 路径不请求', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': 'User-agent: *\nDisallow: /private',
+    'https://a.example/root': '<html><body>ROOT<a href="/public">p</a><a href="/private">priv</a></body></html>',
+    'https://a.example/public': '<html><body>PUBLIC</body></html>'
+  };
+  await withFetchMap(map, async (calls) => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 5, maxDepth: 2 });
+    assert.equal(crawl.fetched, 2);
+    assert.equal(crawl.skippedByRobots, 1);
+    assert.equal(crawl.pages.map((p) => p.url).includes('https://a.example/private'), false);
+    assert.ok(!calls.includes('https://a.example/private'), '被 robots 拒绝的路径不应实际请求');
+  });
+});
+
+test('crawlSite: robots 404/缺失时放行全部', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/root': '<html><body>ROOT<a href="/next">n</a></body></html>',
+    'https://a.example/next': '<html><body>NEXT</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 5, maxDepth: 2 });
+    assert.equal(crawl.fetched, 2);
+    assert.equal(crawl.skippedByRobots, 0);
+  });
+});
+
+// ── scope ─────────────────────────────────────────────────────────────────
+
+test('crawlSite: 默认 same-origin,跨域链接被跳过并计数', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/root': '<html><body>ROOT<a href="/local">l</a><a href="https://other.example/x">x</a><a href="https://other.example/y">y</a></body></html>',
+    'https://a.example/local': '<html><body>LOCAL</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 5, maxDepth: 2 });
+    assert.equal(crawl.fetched, 2);
+    assert.equal(crawl.skippedByScope, 2, '两个跨域链接应计入跳过');
+    assert.deepEqual(crawl.pages.map((p) => p.url), ['https://a.example/root', 'https://a.example/local']);
+  });
+});
+
+test('crawlSite: scope=hosts 多主机白名单,种子必须在 hosts 内', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://docs.example.com/robots.txt': '',
+    'https://docs.example.com/root': '<html><body>ROOT<a href="https://api.example.com/endpoint">api</a><a href="https://other.example/x">x</a></body></html>',
+    'https://api.example.com/endpoint': '<html><body>ENDPOINT</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://docs.example.com/root', { scope: 'hosts', hosts: ['docs.example.com', 'api.example.com'], maxPages: 5, maxDepth: 2 });
+    assert.equal(crawl.fetched, 2);
+    assert.equal(crawl.skippedByScope, 1);
+    assert.ok(crawl.pages.some((p) => p.url === 'https://api.example.com/endpoint'));
+  });
+  await assert.rejects(
+    () => crawlSite(ctx.auxLlm, 'https://docs.example.com/root', { scope: 'hosts', hosts: ['api.example.com'] }),
+    /seed host/
+  );
+});
+
+// ── 限速 ──────────────────────────────────────────────────────────────────
+
+test('crawlSite: minIntervalMs 限制同主机最小间隔', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/root': '<html><body>ROOT<a href="/a">a</a></body></html>',
+    'https://a.example/a': '<html><body>A<a href="/b">b</a></body></html>',
+    'https://a.example/b': '<html><body>B</body></html>'
+  };
+  await withFetchMap(map, async (calls) => {
+    // 关掉 robots 以避免 robots.txt 请求污染时间窗
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 3, maxDepth: 2, respectRobots: false, minIntervalMs: 15 });
+    assert.equal(crawl.fetched, 3);
+    const pageCalls = calls.filter((u) => u !== 'https://a.example/robots.txt');
+    assert.equal(pageCalls.length, 3);
+    // 难以精确测时间,验证至少按序请求且无重复
+    assert.deepEqual(pageCalls, ['https://a.example/root', 'https://a.example/a', 'https://a.example/b']);
+  });
+});
+
+// ── runWebCrawl 全流程(模式 A) ────────────────────────────────────────────
+
+test('runWebCrawl: 模式 A 输出结构 + 单次聚合 aux 调用', async () => {
+  const { ctx, streams } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/root': '<html><head><title>首页</title></head><body>ROOT TXT<a href="/guide">guide</a></body></html>',
+    'https://a.example/guide': '<html><head><title>指南</title></head><body>GUIDE TXT 42</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    const value = await runWebCrawl(ctx.auxLlm, { url: 'https://a.example/root', maxPages: 3, maxDepth: 2 }, exec);
+    assert.equal(value.root, 'https://a.example/root');
+    assert.equal(value.scope, 'same-origin');
+    assert.equal(value.fetched, 2);
+    assert.equal(value.pages.length, 2);
+    assert.equal(value.pages[0].title, '首页');
+    assert.equal(value.pages[1].title, '指南');
+    assert.ok(value.pages.every((p) => Number.isInteger(p.chars)));
+    assert.equal(value.perPage.length, 0, '模式 A 不产生逐页摘要');
+    assert.equal(value.summary, 'OUTPUT_TEXT');
+    assert.equal(value.provider, 'opencode-go');
+    assert.equal(value.model, 'deepseek-v4-flash');
+    // 一次聚合 aux 调用
+    assert.equal(streams.length, 1);
+    const userText = streams[0].messages[0].content.find((b) => b.type === 'text').text;
+    assert.ok(userText.includes('PAGE 1/2 URL: https://a.example/root'));
+    assert.ok(userText.includes('PAGE 2/2 URL: https://a.example/guide'));
+  });
+});
+
+test('runWebCrawl: 每页 char 预算取自合并配置(web_crawl.maxChars)', async () => {
+  const { ctx } = await makeLocalHarness({ tasks: { web_crawl: { maxChars: 200 } } });
+  const long = '<html><body>' + 'T'.repeat(4000) + '</body></html>';
+  const map = { 'https://a.example/robots.txt': '', 'https://a.example/root': long };
+  await withFetchMap(map, async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    const value = await runWebCrawl(ctx.auxLlm, { url: 'https://a.example/root', maxPages: 1, maxDepth: 0 }, exec);
+    assert.ok(value.pages[0].chars >= 200 && value.pages[0].chars <= 220, '配置默认应把单页限制在 ~200 码点(含截断标记): ' + value.pages[0].chars);
+    assert.equal(value.pages[0].truncated, true);
+  });
+});
+
+test('runWebCrawl: 校验参数(domain 未启用 / hosts 缺种子)', async () => {
+  const { ctx } = await makeLocalHarness();
+  const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+  await assert.rejects(() => runWebCrawl(ctx.auxLlm, { url: 'https://a.example/x', scope: 'domain' }, exec), /domain.*not enabled/i);
+  await assert.rejects(() => runWebCrawl(ctx.auxLlm, { url: 'https://a.example/x', scope: 'bogus' }, exec), /scope must be/i);
+  await assert.rejects(() => runWebCrawl(ctx.auxLlm, { url: 'https://a.example/x', scope: 'hosts', hosts: [] }, exec), /seed host/);
+});
+
+// ── 注册 / 路由联动 ───────────────────────────────────────────────────────
+
+test('注册: web_crawl 工具存在、isConcurrencySafe=false、参数/输出 schema 齐全', async () => {
+  const { tools } = await makeLocalHarness();
+  const tool = tools.find((t) => t.name === 'web_crawl');
+  assert.ok(tool, '应注册 web_crawl');
+  assert.equal(tool.isConcurrencySafe(), false, '深度抓取不得标为并发安全');
+  assert.ok(tool.parameters.type === 'object', 'defineTool 会转成 JSON-schema 形状');
+  assert.ok(tool.parameters.required?.includes('url'), 'url 应为顶层必填');
+  assert.equal(tool.parameters.properties.url?.type, 'string');
+  assert.ok(tool.parameters.properties.scope !== void 0);
+  assert.ok(tool.parameters.properties.hosts !== void 0);
+  assert.ok(tool.output?.schema?.properties?.pages !== void 0);
+});
+
+test('路由: AUX_TASKS 含 web_crawl,resolveConfig 允许 web_crawl.maxChars', () => {
+  assert.ok(AUX_TASKS.includes('web_crawl'));
+  const resolved = resolveConfig({ tasks: { web_crawl: { maxChars: 1234 } } });
+  assert.equal(resolved.tasks.web_crawl.maxChars, 1234);
+  assert.throws(() => resolveConfig({ tasks: { vision: { maxChars: 1 } } }), /unknown key\(s\) maxChars/);
+});

@@ -18,7 +18,7 @@ export const AUX_CALL_EVENT = "aux/llm-call";
 /** Projection key exposing the latest per-task aux call snapshot. */
 export const AUX_STATUS_KEY = "aux-status";
 /** Tool names registered by dsh-aux (hidden from the `minimal` preset). */
-export const AUX_TOOL_NAMES = Object.freeze(["vision_analyze", "web_extract", "compress_text"]);
+export const AUX_TOOL_NAMES = Object.freeze(["vision_analyze", "web_extract", "web_crawl", "compress_text"]);
 /** Interval (ms) for reconciling the session-to-image ownership map against
  * the live session set. Cold sessions (not attached in memory after a
  * restart) never emit session/disposed when deleted, so the event-driven
@@ -40,6 +40,13 @@ export const AUX_SETTINGS_SCHEMA = z.object({
       maxConcurrency: z.number().step(1).min(1)
     }),
     web_extract: z.object({
+      provider: z.string(),
+      model: z.string(),
+      timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
+      maxConcurrency: z.number().step(1).min(1),
+      maxChars: z.number().step(1).min(1)
+    }),
+    web_crawl: z.object({
       provider: z.string(),
       model: z.string(),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
@@ -93,7 +100,7 @@ export function projectSettings(settings) {
       ...(raw.model !== void 0 ? { model: raw.model } : {}),
       ...(raw.timeoutMs !== void 0 ? { timeoutMs: raw.timeoutMs } : {}),
       ...(raw.maxConcurrency !== void 0 ? { maxConcurrency: raw.maxConcurrency } : {}),
-      ...(task === "web_extract" && raw.maxChars !== void 0 ? { maxChars: raw.maxChars } : {})
+      ...((task === "web_extract" || task === "web_crawl") && raw.maxChars !== void 0 ? { maxChars: raw.maxChars } : {})
     };
   }
   const rawSub = settings?.subagent ?? {};
@@ -146,6 +153,7 @@ export function validateAuxSettings(value) {
 export const TASK_LABELS = Object.freeze({
   vision: "图像分析",
   web_extract: "网页提取",
+  web_crawl: "站点抓取",
   compress: "文本压缩",
   compaction: "会话压缩"
 });

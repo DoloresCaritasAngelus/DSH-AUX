@@ -152,3 +152,31 @@
    `maxTotalChars` 缺省按 `maxPages × maxCharsPerPage` 推导。
 5. 模式 B 默认固定 `perPageConcurrency:1`(顺序),后续再放开受限并发。
 6. `web_crawl` 与 `web_search` 联动(以搜索结果作种子)留到 P4 评估,不做进 v1。
+
+---
+
+## 实施进度(2026-08)
+
+### P0 完成(共享抓取核心重构)
+
+- 新增 `src/crawl/text.js`(`codePointCount`/`truncateByChars`)、
+  `src/crawl/fetch-page.js`(`readTextCapped`/`isProviderUnavailable`/
+  `finishLocalFetch`/`fetchPage`)、`src/crawl/queue.js`(`crawlPages`/
+  `crawlSite`/`RobotsPolicy`/`extractTitle`/预算)。
+- `web_extract.js` 改消费共享核心并按需 `re-export` 文本辅助(`web_crawl` 同源
+  委托路径行为不变)。全量测试保持绿。
+
+### P1 完成(web_crawl 工具)
+
+- 新增 `src/tools/web-crawl.js`(`runWebCrawl`,模式 A 聚合摘要)+ 注册
+  `web_crawl` 工具(`isConcurrencySafe=false`、scope/hosts/robots/限流/预算参数、
+  输出 `pages`/`fetched`/`skipped`/`blocked`/`warnings` 等)。
+- `route.js`/`config.js`/`commands.js`:AUX_TASKS 增 `web_crawl`(可 `maxChars`
+  配置、`/aux status`/`/aux model`/`/aux test web_crawl` 可用、设置 schema 声明)。
+- 新增 `tests/web-crawl.test.js`(11 用例)。
+- README(中/英)增 `web_crawl` 小节。
+- 全量 `node --test tests/*.test.js`:**234 通过**。
+
+### P2/P3(未开始)
+
+模式 B 每页摘要、sitemap 引导、受控并发、设置页 UI 任务块、后续文档微调。

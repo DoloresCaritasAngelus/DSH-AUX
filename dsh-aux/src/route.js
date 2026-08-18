@@ -7,7 +7,7 @@
  */
 
 /** Built-in auxiliary task keys. */
-export const AUX_TASKS = Object.freeze(["vision", "web_extract", "compress", "compaction"]);
+export const AUX_TASKS = Object.freeze(["vision", "web_extract", "web_crawl", "compress", "compaction"]);
 
 /** Default per-task timeout (ms). */
 export const DEFAULT_TASK_TIMEOUT_MS = 60_000;
@@ -53,10 +53,10 @@ export function resolveConfig(config) {
     }
     const entry = {};
     const allowedKeys = ["provider", "model", "timeoutMs", "maxConcurrency"];
-    // maxChars (deployment-level page-text cap) is meaningful for web_extract;
-    // kept task-scoped so a stray vision.maxChars is refused rather than
-    // silently ignored.
-    if (task === "web_extract") allowedKeys.push("maxChars");
+    // maxChars (deployment-level page-text cap) is meaningful for web_extract
+    // and web_crawl; kept task-scoped so a stray vision.maxChars is refused
+    // rather than silently ignored.
+    if (task === "web_extract" || task === "web_crawl") allowedKeys.push("maxChars");
     const unknownKeys = Object.keys(raw).filter((key) => !allowedKeys.includes(key));
     if (unknownKeys.length > 0) {
       throw new Error(`AuxConfig tasks.${task} has unknown key(s) ${unknownKeys.join(", ")}`);

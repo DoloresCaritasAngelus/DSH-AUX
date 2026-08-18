@@ -47,19 +47,20 @@
 | 特性 | 说明 |
 |---|---|
 | **统一辅助 LLM 路由** | 每类任务可配独立模型/超时/并发;失败自动降级主模型;连续失败进入冷却;每次调用写入会话事件,可审计 |
-| **三个开箱即用工具** | `vision_analyze`(图像分析)、`web_extract`(网页提取+摘要)、`compress_text`(长文本压缩) |
+| **四个开箱即用工具** | `vision_analyze`(图像分析)、`web_extract`(网页提取+摘要)、`web_crawl`(站点深度抓取+整体摘要)、`compress_text`(长文本压缩) |
 | **会话压缩桥接** | 配置 `compaction` 任务后,原生 DSH 自动/手动压缩会改走 AUX 辅助模型;含图会话图片缺失/纯文本路由时自动降级,压缩不失败 |
 | **`/aux` 命令** | 状态查看、模型切换、图片回收、视觉自检、图片记忆 |
 | **Web 设置页 + 状态 chip** | 每任务模型下拉配置;composer 实时显示最近一次辅助调用 |
 | **会话图片生命周期** | 删除会话自动清理无引用图片;共享保留、归档不误删;图片记忆跨重启可查 |
 | **零配置可用** | 不配任何模型也能跑——辅助任务自动使用会话主模型 |
 
-### 三个工具
+### 四个工具
 
 | 工具 | 干什么 | 典型场景 |
 |---|---|---|
 | `vision_analyze` | 图像分析(支持多图并行) | “这张图里是什么?” “读出图表数值” “对比两张图” |
-| `web_extract` | 网页抓取 + 摘要 | “总结这个页面” “回答某网页里的问题” |
+| `web_extract` | 网页抓取 + 摘要(支持 `followLinks` 同源递归) | “总结这个页面” “回答某网页里的问题” “抓这个文档站” |
+| `web_crawl` | 站点深度抓取 + 整体摘要(scope/robots/限流/预算) | “抓取整个文档站并总结” “列出 docs 站所有 API 端点” |
 | `compress_text` | 长文本压缩(自动识别代码/日志/文档,支持输出预算、多轮/分层压缩) | 压日志、压文档、压超长上下文 |
 
 ## 环境要求
@@ -102,11 +103,11 @@ dsh plugin --profile web add "file:$(pwd)"
 
 ### 设置页
 
-Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `compress` / `compaction` 配置模型;其中 **`compaction` 就是会话压缩模型**,配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。`web_extract` 还可以单独配置 **`maxChars`**(页面字符预算,默认 8000,递归抓取时作为累计预算)。还可以关闭「在对话界面显示辅助模型状态芯片」——关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 命令不受影响。
+Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` 配置模型;其中 **`compaction` 就是会话压缩模型**,配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。`web_extract` / `web_crawl` 还可以单独配置 **`maxChars`**(页面字符预算,默认 8000;web_extract 递归时作累计预算,web_crawl 作单页预算)。还可以关闭「在对话界面显示辅助模型状态芯片」——关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 命令不受影响。
 
 ### 网页提取 (web_extract)
 
-- **能力边界**:`web_extract` 是**静态 HTML 摘要代理**——只抓取静态 HTML,不执行 JavaScript(SPA/动态站可能拿到空壳);不能点击/翻页/填表。要渲染型抓取或完整浏览器行为,请使用专门的 headless/渲染 provider 或后续的 `web_crawl` 能力。
+- **能力边界**:`web_extract` 是**静态 HTML 摘要代理**——只抓取静态 HTML,不执行 JavaScript(SPA/动态站可能拿到空壳);不能点击/翻页/填表。要渲染型抓取或完整浏览器行为,请使用专门的 headless/渲染 provider 或后续的深度抓取能力。
 - **参数**:
   - `url`(必填)、`question`(可选追问)、`maxChars`(页面码点预算,默认取配置,再取 8000);
   - `followLinks: "off" | "same-origin"`:默认 `off` 单页;`same-origin` 时在同源内 BFS 递归抓取文档站;
@@ -114,9 +115,17 @@ Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `compress` 
 - **输出元数据**:单页返回 `chars`(送达模型的码点数)与 `truncated`(是否被截断);递归时返回 `pages: [{url, chars, truncated}]`、`totalChars` 与整体 `truncated`,方便感知大页面被裁。
 - **递归语义**:每页、每一跳都走 SSRF 逐跳校验;只顺同源文档链接且跳过图片/压缩包/音视频等非文档资源;累计文本受 `maxChars` 总预算约束,一次辅助调用输出整体摘要。
 
+### 站点抓取 (web_crawl)
+
+- **定位**:从种子 URL 深度抓取文档站(或白名单主机集),一次辅助调用输出**整体站点摘要** + 页面清单。设计稿见 `WEB-CRAWL-DESIGN.md`。
+- **参数**:`url`(种子,必填)、`question`、`scope`(`same-origin` 默认 / `hosts` 白名单;`domain` 未启用)、`hosts`、`maxPages`(默认 10)、`maxDepth`(默认 2)、`maxCharsPerPage`(默认配置/8000)、`maxTotalChars`(默认按 maxPages×单页推导)、`maxSeconds`、`minIntervalMs`(默认 250)、`respectRobots`(默认 true)。
+- **默认行为**:尊重 `robots.txt`(Disallow 路径不请求)、同主机请求间隔 ≥ `minIntervalMs`;每页每跳都走 SSRF 逐跳校验;静态 HTML 优先,不渲染 JS。
+- **输出**:`root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars` / `truncated` / `summary` / `keyPoints` / `perPage`(v1 为空)/ `warnings`。
+- **并发语义**:`web_crawl` 明确声明**非并发安全**(`isConcurrencySafe=false`),由 minInterval 与顺序 BFS 兜底,防止对单域扇出轰炸。
+
 ### 安全边界
 
-- **SSRF 防护(默认开启)**:`web_extract` 与 `vision_analyze` 的 `imageUrl` 默认拒绝内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、`169.254.169.254`、`*.local`、Teredo/6to4 内嵌私有地址等),且只允许 `http/https`;回退抓取路径的重定向**每一跳都在请求前校验**(逐跳 DNS+地址检查),provider seam 路径也要求返回最终 URL、对该 URL 复审,并把 3xx 交给逐跳逻辑重新跟随。需要抓取本机/内网服务时,在插件配置里显式设置 `allowInternalUrls: true`。
+- **SSRF 防护(默认开启)**:`web_extract` / `web_crawl` 与 `vision_analyze` 的 `imageUrl` 默认拒绝内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、`169.254.169.254`、`*.local`、Teredo/6to4 内嵌私有地址等),且只允许 `http/https`;回退抓取路径的重定向**每一跳都在请求前校验**(逐跳 DNS+地址检查),provider seam 路径也要求返回最终 URL、对该 URL 复审,并把 3xx 交给逐跳逻辑重新跟随。需要抓取本机/内网服务时,在插件配置里显式设置 `allowInternalUrls: true`。
 - **Prompt 注入缓解**:辅助模型提示把网页正文、待压缩文本、图片内文字都视为**不可信数据**;网页正文被包裹进带随机 nonce 的 `<<<UNTRUSTED PAGE DATA …>>>` … `<<<END UNTRUSTED PAGE DATA …>>>` 数据块,与 `Question` 指令物理分离,并明确禁止执行其中嵌入的指令;`guideText` 是受信任的插件配置,只应从可信来源复制。
 - **并发硬上限**:每个任务的 `maxConcurrency` 即使配置得更大,实际也按 **10** 封顶,避免误配导致对辅助模型并发轰炸。
 

@@ -108,7 +108,7 @@ async function pollUntil(condition, { timeoutMs = 2000, intervalMs = 10 } = {}) 
 // ── route.js 纯逻辑 ──────────────────────────────────────────────────────
 
 test('resolveConfig: 空配置合法,未知键抛错', () => {
-  assert.deepEqual(resolveConfig({}), { tasks: { vision: {}, web_extract: {}, compress: {}, compaction: {} } });
+  assert.deepEqual(resolveConfig({}), { tasks: { vision: {}, web_extract: {}, web_crawl: {}, compress: {}, compaction: {} } });
   assert.throws(() => resolveConfig({ nope: 1 }), /unknown key\(s\) nope/);
   assert.throws(() => resolveConfig({ tasks: { vision: { extra: 1 } } }), /unknown key\(s\) extra/);
 });
@@ -503,7 +503,7 @@ test('装配: ctx.auxLlm 可用,三工具注册,投影与命令注册', async ()
   const { ctx, tools, projections, commands, sections } = await makeHarness();
   assert.ok(ctx.auxLlm instanceof AuxLlmService);
   const names = tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ['compress_text', 'vision_analyze', 'web_extract']);
+  assert.deepEqual(names, ['compress_text', 'vision_analyze', 'web_crawl', 'web_extract']);
   assert.equal(projections.length, 1);
   assert.equal(projections[0].key, AUX_STATUS_KEY);
   assert.deepEqual(projections[0].init(), { tasks: {} });
@@ -571,6 +571,7 @@ test('Bootstrap 预设引导: minimal 目录过滤掉 AUX 工具,Anchored Standa
     { name: 'str_replace_editor' },
     { name: 'vision_analyze' },
     { name: 'web_extract' },
+    { name: 'web_crawl' },
     { name: 'compress_text' }
   ];
   const assembly = { tools: allTools, sections: [] };

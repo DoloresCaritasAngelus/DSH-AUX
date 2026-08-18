@@ -6,9 +6,10 @@
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { runVision } from "./vision.js";
 import { runWebExtract } from "./web-extract.js";
+import { runWebCrawl } from "./web-crawl.js";
 import { runCompress } from "./compress.js";
 
-/** Register the three auxiliary tools. */
+/** Register the auxiliary tools. */
 export function registerAuxTools(service) {
   const ctx = service.ctx;
   // The vision tool needs the durable attachment service; register it in
@@ -79,6 +80,51 @@ export function registerAuxTools(service) {
     timeoutMs: 90_000,
     isConcurrencySafe: () => true,
     execute: (args, exec) => runWebExtract(service, args, exec)
+  }));
+  ctx.tools.register(defineTool({
+    name: "web_crawl",
+    description: "Crawl a documentation site (or a whitelisted host set) starting from a seed URL and summarize the whole site with the auxiliary model: returns an overall summary plus per-page metadata. Respects robots.txt and per-host rate limits by default; every page and hop is SSRF-checked. Fetches static HTML only — no JavaScript rendering.",
+    parameters: {
+      url: { type: "string", required: true, description: "Seed URL; the crawl starts here." },
+      question: { type: "string", description: "Optional question to focus the summary." },
+      scope: { type: "string", description: "'same-origin' (default): only the seed's origin. 'hosts': only the hostnames listed in hosts[] (domain scope is not enabled in v1)." },
+      hosts: { type: "array", items: { type: "string" }, description: "Allowed hostnames when scope is 'hosts' (the seed host must be included)." },
+      maxPages: { type: "integer", description: "Max pages to fetch (default 10)." },
+      maxDepth: { type: "integer", description: "Max link depth from the seed (default 2); 0 = seed only." },
+      maxCharsPerPage: { type: "integer", description: "Per-page code-point budget (default from config, else 8000)." },
+      maxTotalChars: { type: "integer", description: "Total code-point budget across pages; 0 (default) derives it as maxPages × maxCharsPerPage." },
+      maxSeconds: { type: "integer", description: "Total time budget in seconds; 0 (default) = unlimited." },
+      minIntervalMs: { type: "integer", description: "Minimum gap between requests to the same host (default 250)." },
+      respectRobots: { type: "boolean", description: "Respect robots.txt (default true); set false to ignore robots checks." }
+    },
+    output: {
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          root: { type: "string", required: true },
+          scope: { type: "string", required: true },
+          pages: { type: "array", required: true, items: { type: "object", additionalProperties: false, properties: { url: { type: "string", required: true }, chars: { type: "integer", required: true }, truncated: { type: "boolean", required: true }, title: { type: "string" } } } },
+          fetched: { type: "integer", required: true },
+          skipped: { type: "integer", required: true },
+          blocked: { type: "integer", required: true },
+          totalChars: { type: "integer", required: true },
+          truncated: { type: "boolean", required: true },
+          summary: { type: "string", required: true },
+          keyPoints: { type: "array", items: { type: "string" }, required: true },
+          perPage: { type: "array", required: true },
+          provider: { type: "string", required: true },
+          model: { type: "string", required: true },
+          warnings: { type: "array", items: { type: "string" } }
+        }
+      },
+      render: (args, value) => [
+        { type: "text", text: `已抓取 ${value.fetched} 页(跳过 ${value.skipped},失败 ${value.blocked})\n\n` + value.summary + (value.keyPoints.length > 0 ? "\n\n要点:\n- " + value.keyPoints.join("\n- ") : "") + "\n\n页面:\n" + value.pages.map((p) => "- " + p.url + (p.title ? ` (${p.title})` : "")).join("\n") }
+      ]
+    },
+    timeoutMs: 180_000,
+    isConcurrencySafe: () => false,
+    execute: (args, exec) => runWebCrawl(service, args, exec)
   }));
   ctx.tools.register(defineTool({
     name: "compress_text",

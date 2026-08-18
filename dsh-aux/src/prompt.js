@@ -220,13 +220,22 @@ const SKIP_LINK_EXT_RE = /\.(png|jpe?g|gif|webp|svg|ico|bmp|webm|mp4|m4v|mp3|ogg
  * @returns absolute http(s) URLs (hash stripped), in document order.
  */
 export function extractPageLinks(rawHtml, baseUrl, origin) {
+  return extractPageLinksWhere(rawHtml, baseUrl, (parsed) => parsed.origin === origin);
+}
+
+/**
+ * Generalised variant: keep links for which `match(parsedUrl)` returns true.
+ * Used by web_crawl for `scope: "hosts"`, where more than one origin is
+ * allowed; `extractPageLinks` delegates here with a same-origin matcher.
+ */
+export function extractPageLinksWhere(rawHtml, baseUrl, match) {
   if (typeof rawHtml !== "string" || rawHtml.length === 0) return [];
   const out = [];
   const seen = new Set();
   const re = /<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
-  let match;
-  while ((match = re.exec(rawHtml)) !== null) {
-    const href = (match[1] ?? match[2] ?? match[3] ?? "").trim();
+  let match_;
+  while ((match_ = re.exec(rawHtml)) !== null) {
+    const href = (match_[1] ?? match_[2] ?? match_[3] ?? "").trim();
     if (href.length === 0 || href.startsWith("#")) continue;
     let parsed;
     try {
@@ -235,7 +244,7 @@ export function extractPageLinks(rawHtml, baseUrl, origin) {
       continue;
     }
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
-    if (parsed.origin !== origin) continue;
+    if (!match(parsed)) continue;
     parsed.hash = "";
     const normalized = parsed.href;
     if (seen.has(normalized)) continue;

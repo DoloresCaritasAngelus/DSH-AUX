@@ -20,7 +20,7 @@ import type { Session, SessionEvent } from '@deepseek-ai/dsh-session';
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings';
 
 /** The built-in auxiliary task keys. */
-export type AuxTaskKey = 'vision' | 'web_extract' | 'compress' | 'compaction';
+export type AuxTaskKey = 'vision' | 'web_extract' | 'web_crawl' | 'compress' | 'compaction';
 
 /** A resolved provider/model route. */
 export interface AuxRoute {

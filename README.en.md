@@ -47,19 +47,20 @@ Conversation models are getting stronger, but "look at this image", "read this p
 | Feature | Description |
 |---|---|
 | **Unified auxiliary LLM routing** | Per-task model/timeout/concurrency; automatic fallback to the main model; failure cooldown; every call is recorded as a session event for auditability |
-| **Three ready-to-use tools** | `vision_analyze` (image analysis), `web_extract` (page extraction + summary), `compress_text` (long-text compression) |
+| **Four ready-to-use tools** | `vision_analyze` (image analysis), `web_extract` (page extraction + summary), `web_crawl` (site deep-crawl + overall summary), `compress_text` (long-text compression) |
 | **Session compaction bridge** | Once the `compaction` task is configured, native DSH automatic/manual compaction routes through the AUX model; image degradation keeps compaction working even when attachments are missing or the route is text-only |
 | **`/aux` commands** | Status, model switching, image GC, vision self-test, image memory |
 | **Web settings + status chip** | Per-task model dropdowns; composer shows the latest auxiliary call |
 | **Session image lifecycle** | Deleted sessions clean up unreferenced images; shared images are preserved; image memory survives restarts |
 | **Zero-config** | Works without any model configuration — auxiliary tasks automatically use the session's main model |
 
-### The Three Tools
+### The Four Tools
 
 | Tool | What it does | Typical use |
 |---|---|---|
 | `vision_analyze` | Image analysis (multi-image parallel) | "What's in this image?" "Read the chart values" "Compare two images" |
-| `web_extract` | Fetch + summarize web pages | "Summarize this page" "Answer from this page" |
+| `web_extract` | Fetch + summarize web pages (supports `followLinks` same-origin recursion) | "Summarize this page" "Answer from this page" "Summarize this doc site" |
+| `web_crawl` | Deep-crawl a site + overall summary (scope/robots/rate limits/budgets) | "Crawl the whole docs site and summarize" "List all API endpoints on the docs site" |
 | `compress_text` | Long-text compression (auto-detects code/log/doc, supports output budget, multi-round/hierarchical) | Compress logs, docs, or oversized context |
 
 ## Requirements
@@ -102,11 +103,11 @@ After restarting DSH:
 
 ### Settings
 
-Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. `web_extract` also exposes **`maxChars`** (the page character budget, default 8000; used as the total budget during a crawl). You can also disable "Show auxiliary model status chip in conversation UI" — when disabled, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
+Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `web_crawl` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. `web_extract` / `web_crawl` also expose **`maxChars`** (the page character budget, default 8000; web_extract uses it as the total budget during a crawl, web_crawl as the per-page budget). You can also disable "Show auxiliary model status chip in conversation UI" — when disabled, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
 
 ### web_extract
 
-- **Capability boundary**: `web_extract` is a **static-HTML summary proxy** — it fetches static HTML only and does not execute JavaScript (SPA/dynamic sites may come back as empty shells); it cannot click, paginate, or fill forms. Use a dedicated headless/rendering provider or the future `web_crawl` capability for browser-level behavior.
+- **Capability boundary**: `web_extract` is a **static-HTML summary proxy** — it fetches static HTML only and does not execute JavaScript (SPA/dynamic sites may come back as empty shells); it cannot click, paginate, or fill forms. Use a dedicated headless/rendering provider for browser-level behavior.
 - **Parameters**:
   - `url` (required), `question` (optional follow-up), `maxChars` (page code-point budget; config default, then 8000);
   - `followLinks: "off" | "same-origin"`: default `off` → single page; `same-origin` → BFS over same-origin document links;
@@ -114,9 +115,17 @@ Web → Settings → Auxiliary Models. You can configure a model for `vision` / 
 - **Output metadata**: single pages return `chars` (code points sent to the model) and `truncated`; crawls return `pages: [{url, chars, truncated}]`, `totalChars`, and an overall `truncated` flag so oversized documents are visible.
 - **Crawl semantics**: every page and every hop runs the per-hop SSRF check; only same-origin document links are followed (image/archive/media extensions are skipped); accumulated text is bounded by the shared `maxChars` budget; one auxiliary call produces the overall summary.
 
+### web_crawl
+
+- **Positioning**: deep-crawls a documentation site (or a whitelisted host set) from a seed URL and produces an **overall site summary** + page index in one auxiliary call. Design: `WEB-CRAWL-DESIGN.md`.
+- **Parameters**: `url` (seed, required), `question`, `scope` (`same-origin` default / `hosts` whitelist; `domain` not enabled), `hosts`, `maxPages` (default 10), `maxDepth` (default 2), `maxCharsPerPage` (config default/8000), `maxTotalChars` (default derived as maxPages × per-page), `maxSeconds`, `minIntervalMs` (default 250), `respectRobots` (default true).
+- **Default behavior**: respects `robots.txt` (Disallow paths are not requested), enforces a per-host gap ≥ `minIntervalMs`; every page and hop runs the per-hop SSRF check; static HTML first, no JS rendering.
+- **Output**: `root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars` / `truncated` / `summary` / `keyPoints` / `perPage` (empty in v1) / `warnings`.
+- **Concurrency semantics**: `web_crawl` explicitly declares **not concurrency-safe** (`isConcurrencySafe=false`), backed by `minIntervalMs` and the sequential BFS, so a single domain is never flooded.
+
 ### Security boundaries
 
-- **SSRF protection (on by default)**: `web_extract` and `vision_analyze`'s `imageUrl` reject internal/loopback/cloud-metadata addresses (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.169.254`, `*.local`, Teredo/6to4-embedded private addresses, etc.) by default and only allow `http/https`; the fallback fetch path validates **every redirect hop before the request is sent** (per-hop DNS + address check), and the provider-seam path requires a final URL, re-validates it, and hands any 3xx back to the per-hop follower. To fetch local/intranet services, explicitly set `allowInternalUrls: true` in the plugin config.
+- **SSRF protection (on by default)**: `web_extract`, `web_crawl`, and `vision_analyze`'s `imageUrl` reject internal/loopback/cloud-metadata addresses (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.169.254`, `*.local`, Teredo/6to4-embedded private addresses, etc.) by default and only allow `http/https`; the fallback fetch path validates **every redirect hop before the request is sent** (per-hop DNS + address check), and the provider-seam path requires a final URL, re-validates it, and hands any 3xx back to the per-hop follower. To fetch local/intranet services, explicitly set `allowInternalUrls: true` in the plugin config.
 - **Prompt-injection mitigation**: auxiliary prompts treat page content, text-to-compress, and text inside images as **untrusted data** and explicitly forbid executing embedded instructions; page bodies are wrapped in nonce-bearing `<<<UNTRUSTED PAGE DATA …>>>` … `<<<END UNTRUSTED PAGE DATA …>>>` data blocks, physically separated from the `Question` instruction; `guideText` is trusted plugin config — only copy it from trusted sources.
 - **Concurrency hard cap**: even if a task's `maxConcurrency` is configured higher, the effective value is capped at **10**, preventing misconfiguration from flooding the auxiliary model.
 

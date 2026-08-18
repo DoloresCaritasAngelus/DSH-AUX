@@ -14,6 +14,7 @@ import { isCompactionBridgeInstalled, isCompactionTaskConfigured } from "./compa
 import { sessionEventsSupported } from "./events.js";
 import { runVision } from "./tools/vision.js";
 import { runWebExtract } from "./tools/web-extract.js";
+import { runWebCrawl } from "./tools/web-crawl.js";
 import { runCompress } from "./tools/compress.js";
 
 /** Handle the /aux command. */
@@ -231,6 +232,13 @@ export async function handleTestCommand(service, agent, args) {
         { agent, signal: new AbortController().signal }
       );
       text = `抓取成功: ${value.url} | 摘要 ${value.summary.slice(0, 80)}...`;
+    } else if (task === "web_crawl") {
+      const value = await runWebCrawl(
+        service,
+        { url: "https://example.com", maxPages: 1, maxDepth: 0 },
+        { agent, signal: new AbortController().signal }
+      );
+      text = `站点抓取成功: ${value.fetched} 页 | 摘要 ${value.summary.slice(0, 80)}...`;
     } else if (task === "compaction") {
       const result = await service.call("compaction", {
         messages: [
