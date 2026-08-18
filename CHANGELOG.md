@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.1(未发布)— /aux 子命令识别修复
+
+- **修复 `/aux status` / `/aux history` 等带参子命令被当成普通聊天发送**。
+  根因:DSH 客户端对"未声明 `input` 提示的裸命令"只认无参裸行
+  (`/aux` 单独回车),带参整行 `matchEnter` 直接落空回默认输入槽。这是官方
+  设计——`/goal`、`/plan`、`/preset`、`/echo` 等带参命令都通过声明
+  `input: { hint }` 让 `desc.input !== undefined` 走 leading-claim 执行路径。
+  现在 dsh-aux 注册 `/aux` 时补上了 `input.hint`(列出全部子命令),
+  裸 `/aux` 与 `/aux <subcommand> ...` 均正确执行。
+- 依据:`deepseek-harness/master` 的
+  `packages/client/ui-commands/src/client/service.ts` `matchEnter` 判定表。
+
 ## 0.3.0(2026-08-17)— 子代理辅助模型桥接(subagent bridge)
 
 - **透明接管原生 `subagent` 工具**:主模型看到的仍是 `subagent`,补丁在

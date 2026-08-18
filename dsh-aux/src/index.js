@@ -221,6 +221,18 @@ export class AuxLlmService extends Service {
       commandCtx.commands.register({
         name: "aux",
         description: "辅助模型系统: /aux status — 查看各任务路由与最近调用",
+        // The input hint is load-bearing, not cosmetic: dsh's client-side
+        // command matching treats a bare host command WITHOUT an input hint as
+        // a no-args command — an argued line like "/aux status" then falls
+        // through to ordinary chat instead of executing (official ui-commands
+        // matchEnter: `if (desc.input !== undefined) return claim; if (!bare)
+        // return undefined`). Declaring `input` routes every `/aux ...` line
+        // (bare or argued) through the leading-claim executor, so subcommands
+        // actually run. Mirror of how official /goal /plan /preset /echo
+        // register their argument-taking commands.
+        input: {
+          hint: "status | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory"
+        },
         handler: ({ agent, rawInput }) => handleAuxCommand(this, agent, rawInput)
       });
     });
