@@ -334,9 +334,29 @@ test('H1: provider 抛 code=WEB_PROVIDER_UNAVAILABLE 回退本地', async () => 
   });
 });
 
+test('H1/H2: seam fetch 是依赖 this 的实方法(防解绑回归,线上复现)', async () => {
+  const harness = await withWebSeamHarness((s) => {
+    s.provide('web', {
+      fetchProviders: true,
+      async fetch(request) {
+        // 真实 dsh-web.WebRuntime.fetch 内部读 this.fetchProviders —— 能力探测
+        // 重构时若解绑调用会丢 this,必须按方法调用。
+        if (this === void 0 || this.fetchProviders !== true) throw new Error('web_crawl: this binding lost');
+        return { url: String(request.url), statusCode: 200, body: { kind: 'text', content: 'THIS BOUND OK 42' }, truncated: false };
+      }
+    });
+  });
+  await withGlobalFetch(async () => { throw new Error('不应走到本地回退'); }, async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    const value = await runWebExtract(harness.ctx.auxLlm, { url: 'https://example.com/this' }, exec);
+    const userText = harness.streams[0].messages[0].content.find((b) => b.type === 'text').text;
+    assert.ok(userText.includes('THIS BOUND OK 42'));
+    assert.equal(value.url, 'https://example.com/this');
+  });
+});
+
 test('Low: 二进制 content-type 被拒绝', async () => {
-  const { ctx } = await makeLocalHarness();
-  await withGlobalFetch(async (url) => ({ ok: true, status: 200, url: String(url), headers: { get: () => 'application/octet-stream' }, text: async () => 'PNG....' }), async () => {
+  const { ctx } = await makeLocalHarness();  await withGlobalFetch(async (url) => ({ ok: true, status: 200, url: String(url), headers: { get: () => 'application/octet-stream' }, text: async () => 'PNG....' }), async () => {
     const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
     await assert.rejects(() => runWebExtract(ctx.auxLlm, { url: 'https://example.com/a.png' }, exec), /not an HTML\/text page/);
   });

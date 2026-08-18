@@ -99,10 +99,13 @@ export async function finishLocalFetch(response, finalUrl, { textCap, rawCap, la
  */
 export async function fetchPage(service, targetUrl, { textCap, rawCap = textCap, signal, label = "web_extract" }) {
   await assertSafeFetchUrlForService(service, targetUrl, label);
-  const webFetch = service.ctx?.web?.fetch;
+  const web = service.ctx?.web;
+  const webFetch = web?.fetch;
   if (typeof webFetch === "function") {
     try {
-      const result = await webFetch({ url: targetUrl }, signal);
+      // Call as a method of the web service: real dsh-web's `fetch` reads
+      // `this.fetchProviders`, so an unbound call would lose its receiver.
+      const result = await webFetch.call(web, { url: targetUrl }, signal);
       if (result === null || typeof result !== "object") {
         throw new Error(`${label}: web provider returned an invalid result for ${targetUrl}`);
       }
