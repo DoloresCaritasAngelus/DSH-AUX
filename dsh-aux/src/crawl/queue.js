@@ -91,7 +91,15 @@ async function fetchRobots(service, origin, { label, signal }) {
     const contentType = local.response.headers.get("content-type") ?? "";
     if (isBinaryContentType(contentType)) return new RobotsPolicy([]);
     const raw = await readTextCapped(local.response, 16_384);
-    return RobotsPolicy.parse(raw.text);
+    const text = raw.text;
+    // A robots file is plain text. Some servers (notably MediaWiki) rewrite
+    // /robots.txt to an HTML page; parsing that would produce a bogus blanket
+    // block. If the response is HTML, treat the site as having no usable
+    // robots policy — optimistically allow (robots failures never block).
+    if (/text\/html/i.test(contentType) || /<\s*(html|!doctype|body|head)\b/i.test(text)) {
+      return new RobotsPolicy([]);
+    }
+    return RobotsPolicy.parse(text);
   } catch {
     // robots failure must never block the crawl — optimistically allow
     return new RobotsPolicy([]);

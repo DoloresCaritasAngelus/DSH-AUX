@@ -91,7 +91,7 @@ test('RobotsPolicy: 前缀匹配/最长规则/Allow 覆盖', () => {
 test('crawlSite: respectRobots 默认开启,Disallow 路径不请求', async () => {
   const { ctx } = await makeLocalHarness();
   const map = {
-    'https://a.example/robots.txt': 'User-agent: *\nDisallow: /private',
+    'https://a.example/robots.txt': { body: 'User-agent: *\nDisallow: /private', contentType: 'text/plain' },
     'https://a.example/root': '<html><body>ROOT<a href="/public">p</a><a href="/private">priv</a></body></html>',
     'https://a.example/public': '<html><body>PUBLIC</body></html>'
   };
@@ -113,6 +113,22 @@ test('crawlSite: robots 404/缺失时放行全部', async () => {
   await withFetchMap(map, async () => {
     const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 5, maxDepth: 2 });
     assert.equal(crawl.fetched, 2);
+    assert.equal(crawl.skippedByRobots, 0);
+  });
+});
+
+test('crawlSite: /robots.txt 被 HTML 页面劫持时按无 robots 策略乐观放行(线上复现)', async () => {
+  // MediaWiki 会把 /robots.txt 重定向到名为 Robots.txt 的 HTML 页面;若误解析
+  // 会产生全站误封。HTML 响应应视为"无可用 robots 策略"。
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': { body: '<!DOCTYPE html><html><head><title>Robots.txt</title></head><body>this is a wiki page</body></html>', contentType: 'text/html' },
+    'https://a.example/root': '<html><body>ROOT<a href="/next">n</a></body></html>',
+    'https://a.example/next': '<html><body>NEXT</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 5, maxDepth: 2 });
+    assert.equal(crawl.fetched, 2, 'HTML 形式的 robots 不应阻塞抓取');
     assert.equal(crawl.skippedByRobots, 0);
   });
 });
