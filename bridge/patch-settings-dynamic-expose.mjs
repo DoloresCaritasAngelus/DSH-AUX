@@ -18,7 +18,7 @@ import { readFile, writeFile, copyFile, readdir, access } from "node:fs/promises
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { deployedFile, guardTarget } from "./target.js";
+import { deployedFile, guardTarget, readPackageVersion, isRc7OrNewer } from "./target.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -66,6 +66,13 @@ if (rollbackMode) {
 
 const data = await readFile(TARGET, "utf8");
 if (data.includes(MARK)) { log("已是补丁状态,跳过"); process.exit(0); }
+// rc.7+ 原生动态暴露(settings.describe),本补丁只为 rc.6 兜底(版本检测+动态
+// 补丁,蓝图 §2.3):rc.7+ 直接跳过,不打多余补丁。
+const installedVersion = readPackageVersion(TARGET);
+if (isRc7OrNewer(installedVersion)) {
+  log(`检测到 rc.7+(${installedVersion}) 原生动态设置暴露,跳过本补丁(仅 rc.6 需要)`);
+  process.exit(0);
+}
 const missing = [];
 for (const [name, origFile] of REPLACEMENTS) {
   if (!data.includes(await block(origFile))) missing.push(name);

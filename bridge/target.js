@@ -12,7 +12,7 @@
  *
  * @module dsh-aux-bridge-target
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -65,4 +65,31 @@ export function guardTarget(file, label) {
     console.error(`[${label}] ${error.message}`);
     process.exit(1);
   }
+}
+
+/**
+ * Read the `version` field of the package owning a patch target
+ * (`.../lib/index.js` → sibling `package.json`). Returns null when unavailable.
+ */
+export function readPackageVersion(targetFile) {
+  const pkgPath = join(dirname(targetFile), "..", "package.json");
+  if (!existsSync(pkgPath)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(pkgPath, "utf8"));
+    return typeof parsed.version === "string" ? parsed.version : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether an installed package version is on the rc.7+ line (or later), i.e.
+ * DSH web settings are exposed dynamically via `settings.describe()` and the
+ * rc.6-era allowlist/dynamic-expose patches are no longer applicable.
+ * Matches `0.1.0-rc.7`, `0.1.0-rc.8`, … (rc number ≥ 7).
+ */
+export function isRc7OrNewer(version) {
+  if (typeof version !== "string") return false;
+  const match = /-[a-z0-9.-]*rc\.([0-9]+)/i.exec(version);
+  return match !== null && Number(match[1]) >= 7;
 }
