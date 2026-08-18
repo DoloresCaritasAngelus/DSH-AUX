@@ -52,7 +52,7 @@ export function registerAuxTools(service) {
     parameters: {
       url: { type: "string", required: true, description: "The HTTP(S) URL to fetch and summarize." },
       question: { type: "string", description: "Optional question to answer from the page." },
-      maxChars: { type: "integer", description: "Max page code points sent to the model (per call; for a crawl, the shared total budget). Default from config, else 8000." },
+      maxChars: { type: "integer", description: "Max page code points sent to the model (per call; for a crawl, the shared total budget). Default from config, else 32000." },
       followLinks: { type: "string", description: "'off' (default): single page. 'same-origin': follow same-origin links, crawling up to maxPages pages within maxDepth and the shared maxChars budget." },
       maxPages: { type: "integer", description: "Max pages to fetch when followLinks is same-origin (default 3)." },
       maxDepth: { type: "integer", description: "Max link depth to follow when followLinks is same-origin; 0 = root only (default 1)." }
@@ -65,16 +65,21 @@ export function registerAuxTools(service) {
           url: { type: "string", required: true },
           summary: { type: "string", required: true },
           keyPoints: { type: "array", items: { type: "string" }, required: true },
-          provider: { type: "string", required: true },
-          model: { type: "string", required: true },
+          provider: { type: "string", description: "Aux model used (absent on diagnostic-only results)." },
+          model: { type: "string", description: "Aux model used (absent on diagnostic-only results)." },
           chars: { type: "integer", description: "Code points of the page's retained content sent to the model (truncation marker excluded; single-page calls)." },
           truncated: { type: "boolean", description: "True when page text was cut to fit maxChars." },
           pages: { type: "array", description: "Per-page crawl metadata (present when followLinks is same-origin).", items: { type: "object", additionalProperties: false, properties: { url: { type: "string", required: true }, chars: { type: "integer", required: true }, truncated: { type: "boolean", required: true } } } },
-          totalChars: { type: "integer", description: "Total content code points sent to the model across a crawl (truncation markers/wrappers excluded)." }
+          totalChars: { type: "integer", description: "Total content code points sent to the model across a crawl (truncation markers/wrappers excluded)." },
+          error: { type: "string", description: "Diagnostic notice when the page could not yield content (e.g. JS challenge)." },
+          browserRequired: { type: "boolean", description: "True when the page is a JS-challenge shell that needs a browser/rendering provider (no aux call was made)." },
+          challengeProvider: { type: "string", description: "Detected challenge vendor (e.g. cloudflare) when browserRequired is true." },
+          httpStatus: { type: "integer", description: "HTTP status observed when a diagnostic is returned." },
+          redirects: { type: "integer", description: "Redirect hops followed when known (local per-hop fetch path)." }
         }
       },
       render: (args, value) => [
-        { type: "text", text: value.summary + (value.keyPoints.length > 0 ? "\n\n要点:\n- " + value.keyPoints.join("\n- ") : "") + (Array.isArray(value.pages) ? "\n\n已抓取 " + value.pages.length + " 页: " + value.pages.map((p) => p.url).join(" · ") : "") }
+        { type: "text", text: (value.browserRequired ? "⚠️ 需浏览器渲染: " + (value.error ?? "") + "\n\n" : "") + (value.summary ?? "") + ((value.keyPoints?.length ?? 0) > 0 ? "\n\n要点:\n- " + value.keyPoints.join("\n- ") : "") + (Array.isArray(value.pages) ? "\n\n已抓取 " + value.pages.length + " 页: " + value.pages.map((p) => p.url).join(" · ") : "") }
       ]
     },
     timeoutMs: 90_000,
@@ -91,7 +96,7 @@ export function registerAuxTools(service) {
       hosts: { type: "array", items: { type: "string" }, description: "Allowed hostnames when scope is 'hosts' (the seed host must be included)." },
       maxPages: { type: "integer", description: "Max pages to fetch (default 10)." },
       maxDepth: { type: "integer", description: "Max link depth from the seed (default 2); 0 = seed only." },
-      maxCharsPerPage: { type: "integer", description: "Per-page code-point budget (default from config, else 8000)." },
+      maxCharsPerPage: { type: "integer", description: "Per-page code-point budget (default from config, else 32000)." },
       maxTotalChars: { type: "integer", description: "Total code-point budget across pages; 0 (default) derives it as maxPages × maxCharsPerPage." },
       maxSeconds: { type: "integer", description: "Total time budget in seconds; 0 (default) = unlimited." },
       minIntervalMs: { type: "integer", description: "Minimum gap between requests to the same host (default 250)." },
@@ -118,14 +123,18 @@ export function registerAuxTools(service) {
           summary: { type: "string", required: true },
           keyPoints: { type: "array", items: { type: "string" }, required: true },
           perPage: { type: "array", required: true, items: { type: "object", additionalProperties: false, properties: { url: { type: "string", required: true }, summary: { type: "string", required: true }, keyPoints: { type: "array", items: { type: "string" }, required: true } } } },
-          provider: { type: "string", required: true },
-          model: { type: "string", required: true },
+          provider: { type: "string", description: "Aux model used (absent on diagnostic-only results)." },
+          model: { type: "string", description: "Aux model used (absent on diagnostic-only results)." },
           mode: { type: "string", description: "'aggregate' (mode A default) or 'per-page' (mode B)." },
+          error: { type: "string", description: "Diagnostic notice when the crawl yielded no content (e.g. JS challenge)." },
+          browserRequired: { type: "boolean", description: "True when targets are JS-challenge shells needing a browser/rendering provider." },
+          challengeProvider: { type: "string", description: "Detected challenge vendor when browserRequired is true." },
+          httpStatus: { type: "integer", description: "HTTP status observed when a diagnostic is returned." },
           warnings: { type: "array", items: { type: "string" } }
         }
       },
       render: (args, value) => [
-        { type: "text", text: (value.mode === "per-page" ? `已抓取 ${value.fetched} 页(逐页摘要 ` + value.perPage.length + " 篇)\n\n" : `已抓取 ${value.fetched} 页(跳过 ${value.skipped},失败 ${value.blocked})\n\n`) + value.summary + (value.keyPoints.length > 0 ? "\n\n要点:\n- " + value.keyPoints.join("\n- ") : "") + "\n\n页面:\n" + value.pages.map((p) => "- " + p.url + (p.title ? ` (${p.title})` : "")).join("\n") + (value.perPage.length > 0 ? "\n\n逐页摘要:\n" + value.perPage.map((p) => "### " + p.url + "\n" + p.summary).join("\n\n") : "") }
+        { type: "text", text: (value.browserRequired ? "⚠️ 需浏览器渲染: " + (value.error ?? "") + "\n\n" : "") + (value.mode === "per-page" ? `已抓取 ${value.fetched} 页(逐页摘要 ` + (value.perPage?.length ?? 0) + " 篇)\n\n" : `已抓取 ${value.fetched} 页(跳过 ${value.skipped},失败 ${value.blocked})\n\n`) + (value.summary ?? "") + ((value.keyPoints?.length ?? 0) > 0 ? "\n\n要点:\n- " + value.keyPoints.join("\n- ") : "") + (Array.isArray(value.pages) && value.pages.length > 0 ? "\n\n页面:\n" + value.pages.map((p) => "- " + p.url + (p.title ? ` (${p.title})` : "")).join("\n") : "") + ((value.perPage?.length ?? 0) > 0 ? "\n\n逐页摘要:\n" + value.perPage.map((p) => "### " + p.url + "\n" + p.summary).join("\n\n") : "") }
       ]
     },
     timeoutMs: 180_000,

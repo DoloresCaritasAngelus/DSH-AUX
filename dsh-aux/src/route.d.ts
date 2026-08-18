@@ -15,7 +15,7 @@ export declare const DEFAULT_TASK_CONCURRENCY: number;
 /** Hard upper bound for any per-task concurrency cap. */
 export declare const MAX_TASK_CONCURRENCY: number;
 /** Default page-text cap (code points) for web_extract. */
-export declare const DEFAULT_MAX_CHARS: number;
+export declare const DEFAULT_MAX_CHARS: number; // default page-text code-point cap (web_extract/web_crawl)
 /** Failures in a row that put a route into cooldown. */
 export declare const COOLDOWN_FAILURE_THRESHOLD: number;
 /** Cooldown TTL after the threshold is reached (ms). */

@@ -103,13 +103,13 @@ After restarting DSH:
 
 ### Settings
 
-Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `web_crawl` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. `web_extract` / `web_crawl` also expose **`maxChars`** (the page character budget, default 8000; web_extract uses it as the total budget during a crawl, web_crawl as the per-page budget). You can also disable "Show auxiliary model status chip in conversation UI" — when disabled, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
+Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `web_crawl` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. `web_extract` / `web_crawl` also expose **`maxChars`** (the page character budget, default 32000; web_extract uses it as the total budget during a crawl, web_crawl as the per-page budget). You can also disable "Show auxiliary model status chip in conversation UI" — when disabled, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
 
 ### web_extract
 
 - **Capability boundary**: `web_extract` is a **static-HTML summary proxy** — it fetches static HTML only and does not execute JavaScript (SPA/dynamic sites may come back as empty shells); it cannot click, paginate, or fill forms. Use a dedicated headless/rendering provider for browser-level behavior.
 - **Parameters**:
-  - `url` (required), `question` (optional follow-up), `maxChars` (page code-point budget; config default, then 8000);
+  - `url` (required), `question` (optional follow-up), `maxChars` (page code-point budget; config default, then 32000);
   - `followLinks: "off" | "same-origin"`: default `off` → single page; `same-origin` → BFS over same-origin document links;
   - `maxPages` (crawl cap, default 3), `maxDepth` (link depth cap, default 1; `0` = root only).
 - **Output metadata**: single pages return `chars` (content code points sent to the model, wrappers/marker excluded) and `truncated`; crawls return `pages: [{url, chars, truncated}]`, `totalChars`, and an overall `truncated` flag so oversized documents are visible.
@@ -118,11 +118,22 @@ Web → Settings → Auxiliary Models. You can configure a model for `vision` / 
 ### web_crawl
 
 - **Positioning**: deep-crawls a documentation site (or a whitelisted host set) from a seed URL and produces an **overall site summary** + page index in one auxiliary call. Design: `WEB-CRAWL-DESIGN.md`.
-- **Parameters**: `url` (seed, required), `question`, `scope` (`same-origin` default / `hosts` whitelist; `domain` not enabled), `hosts`, `seedUrls` (extra depth-0 seeds; still SSRF-checked and scope-filtered), `maxPages` (default 10), `maxDepth` (default 2), `maxCharsPerPage` (config default/8000), `maxTotalChars` (default derived as maxPages × per-page), `maxPagesPerHost` (per-host page cap, default 0 = unlimited), `maxSeconds`, `minIntervalMs` (default 250), `respectRobots` (default true), `useSitemap` (default false; seeds from `<origin>/sitemap.xml`, nested indices skipped), `perPageSummaries` (default false), `perPageConcurrency` (default 1).
+- **Parameters**: `url` (seed, required), `question`, `scope` (`same-origin` default / `hosts` whitelist; `domain` not enabled), `hosts`, `seedUrls` (extra depth-0 seeds; still SSRF-checked and scope-filtered), `maxPages` (default 10), `maxDepth` (default 2), `maxCharsPerPage` (config default/32000), `maxTotalChars` (default derived as maxPages × per-page), `maxPagesPerHost` (per-host page cap, default 0 = unlimited), `maxSeconds`, `minIntervalMs` (default 250), `respectRobots` (default true), `useSitemap` (default false; seeds from `<origin>/sitemap.xml`, nested indices skipped), `perPageSummaries` (default false), `perPageConcurrency` (default 1).
 - **Two summary modes**: Mode A (default, `perPageSummaries:false`) — one aggregate call for the overall summary; Mode B (`perPageSummaries:true`) — **one call per page** producing `perPage:[{url, summary, keyPoints}]`, then a lightweight aggregation over the per-page summaries for the overall summary (cost ≈ pages+1 calls, bounded by `perPageConcurrency`). The `mode` field is `aggregate` / `per-page`.
 - **Default behavior**: respects `robots.txt` (Disallow paths are not requested), enforces a per-host gap ≥ `minIntervalMs`; every page and hop runs the per-hop SSRF check; static HTML first, no JS rendering.
 - **Output**: `root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars` (mode A = crawled page-text code points; mode B = per-page summary code points) / `truncated` / `summary` / `keyPoints` / `perPage` (filled in mode B) / `mode` / `warnings`.
 - **Concurrency semantics**: `web_crawl` explicitly declares **not concurrency-safe** (`isConcurrencySafe=false`), backed by `minIntervalMs` and the sequential BFS, so a single domain is never flooded.
+
+### Cleaning & anti-crawl (large-context era shift)
+
+- **Delivery philosophy**: for cheap large-context auxiliary models (1M context / 300K-attention scale), `web_extract`/`web_crawl` shift from "shrink to minimum" to "**deliver clean, de-toxed content whole**" — the default delivery budget is now **32000 code points** (raise via `maxChars` / per-task config); the aux model answers/summarizes directly, the main model only receives the result.
+- **Cleaning**: `htmlToText` drops whole non-content subtrees (`script/style/noscript/template/svg/head/canvas/iframe`) and tag-strip removes `data:` base64; only plain text + numbers/URLs remain. H5 de-tox stays unchanged (untrusted data block + `Question` separation).
+- **Anti-crawl (zero-dependency)**:
+  - **Encoding**: non-UTF-8 pages are decoded by charset sniffed from `Content-Type charset` or `<meta charset>` (GBK/GB18030 no longer mojibake).
+  - **JS Challenge (Cloudflare & co.)**: when a bot-check shell is detected (`cf-chl`/`__cf_bm`/"Just a moment"…), the tools **do not burn aux tokens**, returning a structured `browserRequired:true` + `challengeProvider` marker so the main model can route to a browser/rendering provider.
+  - **429/502/503/504**: one automatic retry with a short backoff; a persistent failure surfaces as an HTTP error with a "rate limited" hint.
+  - **Redirects**: followed per-hop with SSRF checks; the `redirects` hop count is exposed so the main model can see the landing page differs from the request.
+  - 4xx (e.g. 403) surface as HTTP errors with a "may need browser/login" hint instead of feeding empty content to the aux model.
 
 ### Security boundaries
 

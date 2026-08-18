@@ -20,6 +20,7 @@ import AuxLlmService from '../dsh-aux/src/index.js';
 import {
   extractKeyPoints,
   extractPageLinks,
+  htmlToText,
   isBinaryContentType,
   webExtractSystemPrompt,
   webExtractUserMessage,
@@ -28,7 +29,7 @@ import {
 } from '../dsh-aux/src/prompt.js';
 import { codePointCount, resolveMaxChars, truncateByChars, runWebExtract } from '../dsh-aux/src/tools/web-extract.js';
 import { fetchWithSsrf } from '../dsh-aux/src/fetch.js';
-import { readTextCapped } from '../dsh-aux/src/crawl/fetch-page.js';
+import { charsetFromContentType, detectBrowserChallenge, readTextCapped, sniffMetaCharset } from '../dsh-aux/src/crawl/fetch-page.js';
 import { mergeTaskConfig, resolveConfig, taskMaxChars } from '../dsh-aux/src/route.js';
 import { isPrivateIp } from '../dsh-aux/src/url-policy.js';
 
@@ -486,8 +487,8 @@ test('resolveConfig: web_extract 允许 maxChars,其他任务拒绝', () => {
   assert.throws(() => resolveConfig({ tasks: { vision: { maxChars: 100 } } }), /unknown key\(s\) maxChars/);
 });
 
-test('mergeTaskConfig / taskMaxChars: settings 覆盖,缺省 8000', () => {
-  assert.equal(taskMaxChars({}), 8000);
+test('mergeTaskConfig / taskMaxChars: settings 覆盖,缺省 32000', () => {
+  assert.equal(taskMaxChars({}), 32000);
   assert.equal(taskMaxChars({ maxChars: 999 }), 999);
   assert.equal(mergeTaskConfig({ maxChars: 100 }, { maxChars: 200 }).maxChars, 200);
   assert.equal(mergeTaskConfig({ maxChars: 100 }, {}).maxChars, 100);
@@ -496,7 +497,7 @@ test('mergeTaskConfig / taskMaxChars: settings 覆盖,缺省 8000', () => {
 test('resolveMaxChars: 调用参数 > 合并配置 > 默认', () => {
   assert.equal(resolveMaxChars({ _merged: { web_extract: { maxChars: 500 } } }, {}), 500);
   assert.equal(resolveMaxChars({}, { maxChars: 12 }), 12);
-  assert.equal(resolveMaxChars({}, {}), 8000);
+  assert.equal(resolveMaxChars({}, {}), 32000);
   assert.throws(() => resolveMaxChars({}, { maxChars: -1 }), /positive integer/);
 });
 
@@ -602,4 +603,96 @@ test('Teredo: 只有 2001:0000::/32 前缀按内嵌 IPv4 判定', () => {
   assert.equal(isPrivateIp('2001:0:4136:e378:8000:63bf:f7f7:f7f7'), false); // ->8.8.8.8
   assert.equal(isPrivateIp('2001:4860:4860::8888'), false); // Google DNS 非 Teredo
   assert.equal(isPrivateIp('2001:db8::1'), false); // 文档前缀不是 Teredo
+});
+
+// ── 清洗增强 / 反爬(2026-08 时代转向)─────────────────────────────────────
+
+test('htmlToText: canvas/iframe 整块删除,base64 不长留', () => {
+  const html = [
+    '<p>正文 hello</p>',
+    '<canvas id=c>canvas噪音</canvas>',
+    '<iframe src="https://ads.example/x">iframe噪音</iframe>',
+    '<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABC+YAAQAAAP4=">',
+    '<a href="https://example.com/over/192.168.1.1"></a>'
+  ].join('\n');
+  const text = htmlToText(html);
+  assert.ok(!text.includes('canvas'), text);
+  assert.ok(!text.includes('iframe'), text);
+  assert.ok(!text.includes('base64'), text);
+  assert.ok(text.includes('正文 hello'));
+});
+
+test('反爬: charset 工具函数(content-type / meta 嗅探)', () => {
+  assert.equal(charsetFromContentType('text/html; charset=utf-8'), 'utf-8');
+  assert.equal(charsetFromContentType('text/html; charset=GBK'), 'gbk');
+  assert.equal(charsetFromContentType('text/html'), null);
+  assert.equal(sniffMetaCharset('<html><head><meta charset="gb2312"></head></html>'), 'gb2312');
+  assert.equal(sniffMetaCharset('<meta http-equiv="content-type" content="text/html; charset=gbk">'), 'gbk');
+  assert.equal(sniffMetaCharset('no meta here'), null);
+});
+
+test('反爬: 无 header charset 时按 <meta charset> 解码(GBK 不乱码)', async () => {
+  const { ctx, streams } = await makeLocalHarness();
+  const ascii = (s) => [...s].map((c) => c.charCodeAt(0));
+  const GBK = [0xd6, 0xd0, 0xce, 0xc4]; // "中文" in GBK/GB2312
+  const bytes = Uint8Array.from([...ascii('<html><head><meta charset="gb2312"></head><body>'), ...GBK, ...ascii('</body></html>')]);
+  await withGlobalFetch(async (url) => ({ ok: true, status: 200, url: String(url), headers: { get: () => 'text/html' }, arrayBuffer: async () => bytes }), async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    const value = await runWebExtract(ctx.auxLlm, { url: 'https://a.example/gbk' }, exec);
+    const userText = streams[0].messages[0].content.find((b) => b.type === 'text').text;
+    assert.ok(!userText.includes('\ufffd'), '不应出现替换符乱码');
+    assert.ok(userText.includes('中文'), userText);
+    assert.equal(value.url, 'https://a.example/gbk');
+  });
+});
+
+test('反爬: 检测到 JS-Challenge(Cloudflare)时不调 aux,返回 browserRequired 标记', async () => {
+  const { ctx, streams } = await makeLocalHarness();
+  const challengeBody = '<html><head><title>Just a moment...</title><script>__cf_chl_opt=1;if(window._cf_chl_opt){}</script></head><body>Checking your browser before accessing.</body></html>';
+  await withGlobalFetch(async (url) => ({ ok: true, status: 200, url: String(url), headers: { get: () => 'text/html' }, text: async () => challengeBody }), async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    const value = await runWebExtract(ctx.auxLlm, { url: 'https://example.com/cf' }, exec);
+    assert.equal(value.browserRequired, true);
+    assert.equal(value.challengeProvider, 'cloudflare');
+    assert.equal(streams.length, 0, 'challenge 页不应发起 aux 调用');
+  });
+});
+
+test('反爬: 429 重试一次后成功,不再报错', async () => {
+  const { ctx, streams } = await makeLocalHarness();
+  let calls = 0;
+  await withGlobalFetch(async (url) => {
+    calls += 1;
+    if (calls === 1) return { ok: false, status: 429, url: String(url), headers: { get: () => 'text/plain' }, text: async () => '' };
+    return { ok: true, status: 200, url: String(url), headers: { get: () => 'text/plain' }, text: async () => 'OK 429 重试成功' };
+  }, async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    const value = await runWebExtract(ctx.auxLlm, { url: 'https://example.com/429' }, exec);
+    assert.equal(calls, 2, '应重试一次');
+    const userText = streams[0].messages[0].content.find((b) => b.type === 'text').text;
+    assert.ok(userText.includes('OK 429 重试成功'));
+    assert.equal(value.url, 'https://example.com/429');
+  });
+});
+
+test('反爬: 重定向跳数暴露到结果元数据', async () => {
+  const { ctx } = await makeLocalHarness();
+  await withGlobalFetch(async (url) => {
+    const u = String(url);
+    if (u === 'https://a.example/start') return { status: 301, headers: { get: () => '/mid' }, ok: false, text: async () => '' };
+    return { ok: true, status: 200, url: u, headers: { get: () => 'text/plain' }, text: async () => 'FINAL' };
+  }, async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    const value = await runWebExtract(ctx.auxLlm, { url: 'https://a.example/start' }, exec);
+    assert.equal(value.url, 'https://a.example/mid');
+    assert.equal(value.redirects, 1, '应记录重定向跳数');
+  });
+});
+
+test('detectBrowserChallenge: 单元——窄匹配避免误报', () => {
+  assert.deepEqual(detectBrowserChallenge('普通页面正文,不涉挑战'), { browserRequired: false });
+  assert.equal(detectBrowserChallenge('__cf_bm cookie!').browserRequired, true);
+  assert.equal(detectBrowserChallenge('Just a moment...').browserRequired, true);
+  // "Enable JavaScript" 类提示不再误判(过于宽泛会被去掉)
+  assert.equal(detectBrowserChallenge('<noscript>请启用 JavaScript 以查看内容</noscript>').browserRequired, false);
 });

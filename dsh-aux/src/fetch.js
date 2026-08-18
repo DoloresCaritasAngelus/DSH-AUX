@@ -26,6 +26,7 @@ export async function fetchWithSsrf(service, rawUrl, label, signal) {
   // silently allowed only MAX_REDIRECTS - 1 hops (off-by-one).
   const MAX_REDIRECTS = 5;
   let currentUrl = rawUrl;
+  let hops = 0;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     await assertSafeFetchUrlForService(service, currentUrl, label);
     const response = await fetch(currentUrl, { signal, redirect: "manual" });
@@ -37,9 +38,10 @@ export async function fetchWithSsrf(service, rawUrl, label, signal) {
       // Release the redirect body before following the next hop.
       try { await response.body?.cancel(); } catch { /* best-effort */ }
       currentUrl = new URL(location, currentUrl).href;
+      hops += 1;
       continue;
     }
-    return { response, finalUrl: currentUrl };
+    return { response, finalUrl: currentUrl, hops };
   }
   throw new Error(`${label}: too many redirects`);
 }

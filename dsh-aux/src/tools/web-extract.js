@@ -80,6 +80,21 @@ export async function runWebExtract(service, args, exec) {
 
   if (followLinks === "off") {
     const page = await fetchPage(service, url, { textCap: maxChars, signal: exec.signal, label: "web_extract" });
+    if (page.challenge?.browserRequired) {
+      // JS-challenge shell: never burn tokens summarizing a bot-check page;
+      // hand the main model a structured marker it can route to a browser.
+      return {
+        url: page.finalUrl,
+        browserRequired: true,
+        challengeProvider: page.challenge.provider,
+        httpStatus: 200,
+        error: `该站使用 JS Challenge(${page.challenge.provider}) 阻止脚本抓取;需要浏览器渲染(若 DSH 配置了浏览器/渲染 provider 可重试)`,
+        summary: "该页为 JS-Challenge 拦截页,未获取到可用正文。",
+        keyPoints: [],
+        chars: page.chars,
+        truncated: false
+      };
+    }
     const result = await callSummarizer(service, webExtractUserMessage(page.text, page.finalUrl, args.question), page.chars, exec);
     const extracted = extractKeyPoints(result.text);
     return {
@@ -89,7 +104,8 @@ export async function runWebExtract(service, args, exec) {
       provider: result.provider,
       model: result.model,
       chars: page.chars,
-      truncated: page.truncated
+      truncated: page.truncated,
+      ...(page.redirects > 0 ? { redirects: page.redirects } : {})
     };
   }
 
@@ -106,6 +122,19 @@ export async function runWebExtract(service, args, exec) {
     label: "web_extract"
   });
   if (crawl.pages.length === 0) {
+    if (crawl.challengeBlocks > 0) {
+      return {
+        url,
+        browserRequired: true,
+        challengeProvider: "generic",
+        error: `目标页面均被 JS Challenge 拦截,需浏览器渲染`,
+        summary: "未获取到内容:站点页面均为 JS-Challenge 拦截页。",
+        keyPoints: [],
+        pages: [],
+        totalChars: 0,
+        truncated: false
+      };
+    }
     throw new Error("web_extract: no pages could be fetched");
   }
   const result = await callSummarizer(

@@ -139,6 +139,24 @@ export async function runWebCrawl(service, args, exec) {
     label
   });
   if (crawl.pages.length === 0) {
+    if (crawl.challengeBlocks > 0) {
+      return {
+        root: url,
+        scope,
+        browserRequired: true,
+        challengeProvider: "generic",
+        error: `目标站点页面均被 JS Challenge 拦截,需浏览器渲染`,
+        summary: "未获取到内容:站点页面均为 JS-Challenge 拦截页。",
+        keyPoints: [],
+        pages: [],
+        fetched: 0,
+        skipped: crawl.skippedByRobots + crawl.skippedByScope + crawl.skippedByHostCap,
+        blocked: crawl.challengeBlocks,
+        totalChars: 0,
+        truncated: false,
+        perPage: []
+      };
+    }
     throw new Error("web_crawl: no pages could be fetched (check scope/hosts, robots.txt, or budget)");
   }
 
@@ -146,6 +164,7 @@ export async function runWebCrawl(service, args, exec) {
   if (crawl.skippedByRobots > 0) warnings.push(`${crawl.skippedByRobots} 个路径被 robots.txt Disallow 跳过`);
   if (crawl.skippedByScope > 0) warnings.push(`${crawl.skippedByScope} 个链接超出 scope 被跳过`);
   if (crawl.skippedByHostCap > 0) warnings.push(`${crawl.skippedByHostCap} 个页面超过 maxPagesPerHost 被跳过`);
+  if (crawl.challengeBlocks > 0) warnings.push(`${crawl.challengeBlocks} 个页面为 JS Challenge 拦截页,需浏览器渲染,已跳过`);
   if (crawl.blocked > 0) warnings.push(`${crawl.blocked} 个请求失败或被 SSRF 拒绝`);
 
   let summary;

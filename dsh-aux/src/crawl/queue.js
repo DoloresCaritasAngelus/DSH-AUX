@@ -188,6 +188,7 @@ export async function crawlSite(service, rootUrl, opts = {}) {
   let skippedByScope = 0;
   let skippedByHostCap = 0;
   let blocked = 0;
+  let challengeBlocks = 0;
   const deadline = maxSeconds > 0 ? Date.now() + maxSeconds * 1000 : Number.POSITIVE_INFINITY;
 
   const robotsFor = async (origin) => {
@@ -285,6 +286,12 @@ export async function crawlSite(service, rootUrl, opts = {}) {
       blocked += 1;
       continue;
     }
+    // A JS-challenge page yields a bot-check shell, not content — count it
+    // separately and never send its text to the model.
+    if (page.challenge?.browserRequired) {
+      challengeBlocks += 1;
+      continue;
+    }
     pagesByHost.set(host, (pagesByHost.get(host) ?? 0) + 1);
     pages.push({
       url: page.finalUrl,
@@ -328,6 +335,7 @@ export async function crawlSite(service, rootUrl, opts = {}) {
     skippedByRobots,
     skippedByScope,
     skippedByHostCap,
-    blocked
+    blocked,
+    challengeBlocks
   };
 }

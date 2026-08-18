@@ -15,8 +15,10 @@ export const DEFAULT_TASK_TIMEOUT_MS = 60_000;
 export const DEFAULT_TASK_CONCURRENCY = 2;
 /** Hard upper bound for any per-task concurrency cap. */
 export const MAX_TASK_CONCURRENCY = 10;
-/** Default input size cap (code points) for web_extract page text. */
-export const DEFAULT_MAX_CHARS = 8000;
+/** Default input size cap (code points) for web_extract/web_crawl page text.
+ * Set for the cheap large-context aux-model era: deliver clean, intact page
+ * text instead of aggressively shrinking it (configurable per task/call). */
+export const DEFAULT_MAX_CHARS = 32_000;
 /** Failures in a row that put a route into cooldown. */
 export const COOLDOWN_FAILURE_THRESHOLD = 3;
 /** Cooldown TTL after the threshold is reached (ms). */

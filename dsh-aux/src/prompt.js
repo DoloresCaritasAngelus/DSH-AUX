@@ -311,8 +311,12 @@ const HTML_ENTITIES = Object.freeze({
 export function htmlToText(html) {
   if (typeof html !== "string" || html.length === 0) return "";
   let text = html;
-  // Drop whole non-content blocks (script, style, noscript, template, svg internals).
-  text = text.replace(/<(script|style|noscript|template|svg|head)[^>]*>[\s\S]*?<\/\1>/gi, " ");
+  // Drop whole non-content blocks. These subtrees carry no page semantics for
+  // text extraction: script/style (code + possible embedded fake instructions),
+  // noscript/template/head (chrome), svg/canvas (vectors — text-bearing <svg><text>
+  // may be lost, which is the accepted trade-off for media pages), iframe (embed
+  // shells whose fallback text is noise).
+  text = text.replace(/<(script|style|noscript|template|svg|head|canvas|iframe)[^>]*>[\s\S]*?<\/\1>/gi, " ");
   // Drop comments and CDATA.
   text = text.replace(/<!--[\s\S]*?-->/g, " ");
   text = text.replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, " ");

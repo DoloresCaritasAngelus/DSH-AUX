@@ -202,3 +202,26 @@
   聚合摘要、pages 清单、预算)工作正常;该站舰船内容为 JS 渲染 → 静态抓取多为导航页,
   **如实印证 F2「静态 HTML,不渲染 JS」能力边界**。
 
+### 第三轮:时代转向(清洗 + 反爬,2026-08)
+
+方向确认:面向便宜的大上下文辅助模型,网页提取从「压缩到最小」转向「**去毒后完整交付**」。
+
+- **预算**:`DEFAULT_MAX_CHARS` 8000 → **32000**(可配);主模型仍只收 aux 的摘要/回答。
+- **清洗**:`htmlToText` 块删补 `canvas`/`iframe`(零语义子树),base64 由整标签删除覆盖;
+  不采纳"按广告/analytics 域名删正文"的内容审查式清洗(反模式,会误删语义)。
+- **去毒**:维持 H5(数据块 + Question 分离),不重复增强。
+- **反爬(零依赖,全部落地 + 测试)**:
+  1. 编码:`Content-Type charset` 或 `<meta charset>` 嗅探 → `TextDecoder`(GBK/GB18030 实测),
+     fallback 路径不乱码。
+  2. JS Challenge:检测 `cf-chl/__cf_bm/"Just a moment"` 等(扫 raw HTML,因 CF 标记在
+     `<script>` 里会被 htmlToText 剥掉)→ 返回 `browserRequired/challengeProvider` 结构化
+     标记,不烧 aux token;403/503 挑战壳同样标记。
+  3. 429/502/503/504:单次重试(300ms 退避),仍失败报含 `rate limited` 提示的 HTTP 错误。
+  4. 重定向:`fetchWithSsrf` 计跳数,结果暴露 `redirects`(落地页 ≠ 请求页可见)。
+  5. 4xx:报含「可能需浏览器/登录」提示的 HTTP 错误,不让 aux 处理空内容。
+- **schema**:web_extract/web_crawl 的 `provider/model` 放宽为可选(诊断性结果无调用),
+  新增可选 `error/browserRequired/challengeProvider/httpStatus/redirects`;render 处理标记。
+- 新增测试 7 例(htmlToText canvas/iframe、charset 工具、GBK 解码、challenge 标记、
+  429 重试、redirects 元数据、detectBrowserChallenge 窄匹配)。
+- 全量 `node --test tests/*.test.js`:**261 通过**。
+

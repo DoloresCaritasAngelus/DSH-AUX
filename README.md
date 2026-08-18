@@ -103,13 +103,13 @@ dsh plugin --profile web add "file:$(pwd)"
 
 ### 设置页
 
-Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` 配置模型;其中 **`compaction` 就是会话压缩模型**,配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。`web_extract` / `web_crawl` 还可以单独配置 **`maxChars`**(页面字符预算,默认 8000;web_extract 递归时作累计预算,web_crawl 作单页预算)。还可以关闭「在对话界面显示辅助模型状态芯片」——关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 命令不受影响。
+Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` 配置模型;其中 **`compaction` 就是会话压缩模型**,配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。`web_extract` / `web_crawl` 还可以单独配置 **`maxChars`**(页面字符预算,默认 32000;web_extract 递归时作累计预算,web_crawl 作单页预算)。还可以关闭「在对话界面显示辅助模型状态芯片」——关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 命令不受影响。
 
 ### 网页提取 (web_extract)
 
 - **能力边界**:`web_extract` 是**静态 HTML 摘要代理**——只抓取静态 HTML,不执行 JavaScript(SPA/动态站可能拿到空壳);不能点击/翻页/填表。要渲染型抓取或完整浏览器行为,请使用专门的 headless/渲染 provider 或后续的深度抓取能力。
 - **参数**:
-  - `url`(必填)、`question`(可选追问)、`maxChars`(页面码点预算,默认取配置,再取 8000);
+  - `url`(必填)、`question`(可选追问)、`maxChars`(页面码点预算,默认取配置,再取 32000);
   - `followLinks: "off" | "same-origin"`:默认 `off` 单页;`same-origin` 时在同源内 BFS 递归抓取文档站;
   - `maxPages`(递归上限,默认 3)、`maxDepth`(链接深度上限,默认 1,`0` 仅根页)。
 - **输出元数据**:单页返回 `chars`(送达模型的页面正文码点,不含包装/截断标记)与 `truncated`(是否被截断);递归时返回 `pages: [{url, chars, truncated}]`、`totalChars` 与整体 `truncated`,方便感知大页面被裁。
@@ -118,11 +118,22 @@ Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `web_crawl`
 ### 站点抓取 (web_crawl)
 
 - **定位**:从种子 URL 深度抓取文档站(或白名单主机集),一次辅助调用输出**整体站点摘要** + 页面清单。设计稿见 `WEB-CRAWL-DESIGN.md`。
-- **参数**:`url`(种子,必填)、`question`、`scope`(`same-origin` 默认 / `hosts` 白名单;`domain` 未启用)、`hosts`、`seedUrls`(额外 depth-0 种子,仍 SSRF 校验并按 scope 过滤)、`maxPages`(默认 10)、`maxDepth`(默认 2)、`maxCharsPerPage`(默认配置/8000)、`maxTotalChars`(默认按 maxPages×单页推导)、`maxPagesPerHost`(每主机页数上限,默认 0=不限)、`maxSeconds`、`minIntervalMs`(默认 250)、`respectRobots`(默认 true)、`useSitemap`(默认 false,从 `<origin>/sitemap.xml` 补种,嵌套 index 跳过)、`perPageSummaries`(默认 false)、`perPageConcurrency`(默认 1)。
+- **参数**:`url`(种子,必填)、`question`、`scope`(`same-origin` 默认 / `hosts` 白名单;`domain` 未启用)、`hosts`、`seedUrls`(额外 depth-0 种子,仍 SSRF 校验并按 scope 过滤)、`maxPages`(默认 10)、`maxDepth`(默认 2)、`maxCharsPerPage`(默认配置/32000)、`maxTotalChars`(默认按 maxPages×单页推导)、`maxPagesPerHost`(每主机页数上限,默认 0=不限)、`maxSeconds`、`minIntervalMs`(默认 250)、`respectRobots`(默认 true)、`useSitemap`(默认 false,从 `<origin>/sitemap.xml` 补种,嵌套 index 跳过)、`perPageSummaries`(默认 false)、`perPageConcurrency`(默认 1)。
 - **两种摘要模式**:模式 A(默认)`perPageSummaries:false` —— 一次聚合调用输出整体摘要;模式 B `perPageSummaries:true` —— **每页一次**调用输出 `perPage:[{url, summary, keyPoints}]`,再对逐页摘要做一次轻量聚合得整体摘要(成本 ≈ 页面数+1 次调用,受 `perPageConcurrency` 控制)。`mode` 字段标注 `aggregate` / `per-page`。
 - **默认行为**:尊重 `robots.txt`(Disallow 路径不请求)、同主机请求间隔 ≥ `minIntervalMs`;每页每跳都走 SSRF 逐跳校验;静态 HTML 优先,不渲染 JS。
 - **输出**:`root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars`(模式 A=抓取正文码点,模式 B=逐页摘要码点)/ `truncated` / `summary` / `keyPoints` / `perPage`(模式 B 填充)/ `mode` / `warnings`。
 - **并发语义**:`web_crawl` 明确声明**非并发安全**(`isConcurrencySafe=false`),由 minInterval 与顺序 BFS 兜底,防止对单域扇出轰炸。
+
+### 清洗与反爬(大上下文时代转向)
+
+- **交付哲学**:面向便宜的大上下文辅助模型(1M 上下文/300K 注意力量级),`web_extract`/`web_crawl` 的目标从「压缩到最小」转向「**去毒后完整交付**」——默认交付预算已提到 **32000 码点**(可经 `maxChars`/任务配置调大),由辅助模型直接答/摘要,主模型只收结果。
+- **清洗**:`htmlToText` 整块删除 `script/style/noscript/template/svg/head/canvas/iframe`(零语义子树),标签级删除顺带清掉 `data:` base64;仅保留纯文本 + 数字/URL。**保持 H5 去毒不变**(数据块 + Question 分离 + 忽略内嵌指令)。
+- **反爬(零依赖)**:
+  - **编码**:非 UTF-8 页面按 `Content-Type charset` 或 `<meta charset>` 嗅探后用 `TextDecoder` 解码(GBK/GB18030 等不再乱码)。
+  - **JS Challenge(Cloudflare 等)**:检测到挑战壳(`cf-chl`/`__cf_bm`/「Just a moment」等)时,**不烧 aux token**,直接返回 `browserRequired:true` + `challengeProvider` 的结构化标记,主模型可据此转用浏览器/渲染 provider。
+  - **429/502/503/504**:自动重试一次(短退避),仍失败则报带 `rate limited` 提示的 HTTP 错误。
+  - **重定向**:逐跳 SSRF 跟随,并在结果里暴露 `redirects` 跳数,主模型可感知落地页 ≠ 请求页。
+  - 403 等 4xx 会报带「可能需浏览器渲染/登录」提示的 HTTP 错误,而非让 aux 处理空内容。
 
 ### 安全边界
 
