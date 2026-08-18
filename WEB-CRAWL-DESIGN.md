@@ -177,6 +177,24 @@
 - README(中/英)增 `web_crawl` 小节。
 - 全量 `node --test tests/*.test.js`:**234 通过**。
 
-### P2/P3(未开始)
+### P2 完成(模式 B + sitemap + 受控并发)
 
-模式 B 每页摘要、sitemap 引导、受控并发、设置页 UI 任务块、后续文档微调。
+- **模式 B**:`perPageSummaries:true` 时,每页一次辅助调用(`perPage:[{url,summary,keyPoints}]`),
+  再对逐页摘要做一次轻量聚合调用得整体 `summary/keyPoints`;`mode` 字段标注
+  `aggregate`/`per-page`;`perPageConcurrency` 控制并发(默认 1,顺序)。
+- **sitemap 引导**:`useSitemap:true` 时每源尝试 `<origin>/sitemap.xml`,`<loc>`
+  作为 depth-1 种子入队,仍受 scope/robots/预算约束;嵌套 sitemap index(.xml/.gz)
+  跳过(不递归);跨域 loc 计入 skipped。
+- `runWithConcurrency` 有界并发池(顺序保持)。
+
+### P3 完成(设置页 + 文档)
+
+- 设置页任务块加入 `web_crawl`(provider/model/timeout/并发 + maxChars);
+  最近调用 chip 标签补「站点」。
+- README(中/英)参数与模式说明同步。
+- 新增测试(web-crawl.test.js 共 17 例)。全量 `node --test tests/*.test.js`:
+  **240 通过**。
+
+### P4(未开始)
+
+domain/PSL、headless/渲染 provider、web_search 联动、每站资源上限。

@@ -165,6 +165,7 @@ export async function crawlSite(service, rootUrl, opts = {}) {
     minIntervalMs = CRAWL_DEFAULTS.minIntervalMs,
     maxSeconds = 0,
     respectRobots = true,
+    useSitemap = false,
     signal,
     label = "web_crawl"
   } = opts;
@@ -205,6 +206,47 @@ export async function crawlSite(service, rootUrl, opts = {}) {
     return robotsCache.get(origin);
   };
 
+  // Sitemap seeding (opt-in): fetch `<origin>/sitemap.xml` once per origin and
+  // queue its document URLs as depth-1 seeds. Nested sitemap indices (<loc>
+  // pointing at .xml/.gz) are skipped (no recursion, per design). Entries still
+  // pass scope + robots + budget when actually fetched.
+  const sitemapDone = new Set();
+  const seedSitemap = async (origin) => {
+    if (useSitemap !== true || sitemapDone.has(origin)) return;
+    sitemapDone.add(origin);
+    const sitemapUrl = `${origin}/sitemap.xml`;
+    let text;
+    try {
+      const local = await fetchWithSsrf(service, sitemapUrl, label, signal);
+      if (!local.response.ok) return;
+      const ct = local.response.headers.get("content-type") ?? "";
+      if (isBinaryContentType(ct)) return;
+      text = (await readTextCapped(local.response, 256_000)).text;
+    } catch {
+      return;
+    }
+    const locs = [...String(text).matchAll(/<loc[^>]*>([\s\S]*?)<\/loc>/gi)]
+      .map((m) => m[1].trim())
+      .filter((s) => s.length > 0);
+    for (const loc of locs) {
+      if (/\.(xml|xml\.gz|gz)([?#]|$)/i.test(loc)) continue; // nested sitemap/index — skip
+      let parsed;
+      try {
+        parsed = new URL(loc, origin + "/");
+      } catch {
+        continue;
+      }
+      if (!matchAllowed(parsed)) {
+        skippedByScope += 1;
+        continue;
+      }
+      const key = normalizePageUrl(parsed.href);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      queue.push({ url: parsed.href, depth: 1 });
+    }
+  };
+
   while (queue.length > 0 && pages.length < maxPages) {
     if (Date.now() > deadline) break;
     const { url: pageUrl, depth } = queue.shift();
@@ -224,6 +266,7 @@ export async function crawlSite(service, rootUrl, opts = {}) {
       skippedByRobots += 1;
       continue;
     }
+    await seedSitemap(origin);
     const remaining = totalBudget - totalChars;
     if (remaining <= 0) break;
     const cap = Math.min(maxCharsPerPage, remaining);

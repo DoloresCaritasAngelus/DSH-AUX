@@ -95,7 +95,10 @@ export function registerAuxTools(service) {
       maxTotalChars: { type: "integer", description: "Total code-point budget across pages; 0 (default) derives it as maxPages × maxCharsPerPage." },
       maxSeconds: { type: "integer", description: "Total time budget in seconds; 0 (default) = unlimited." },
       minIntervalMs: { type: "integer", description: "Minimum gap between requests to the same host (default 250)." },
-      respectRobots: { type: "boolean", description: "Respect robots.txt (default true); set false to ignore robots checks." }
+      respectRobots: { type: "boolean", description: "Respect robots.txt (default true); set false to ignore robots checks." },
+      useSitemap: { type: "boolean", description: "Seed URL discovery from <origin>/sitemap.xml (default false); nested sitemap indices are skipped." },
+      perPageSummaries: { type: "boolean", description: "Produce a per-page summary (mode B, default false) instead of one aggregate summary; costs one auxiliary call per page plus one aggregation call." },
+      perPageConcurrency: { type: "integer", description: "Max concurrent per-page summary calls when perPageSummaries is true (default 1)." }
     },
     output: {
       schema: {
@@ -112,14 +115,15 @@ export function registerAuxTools(service) {
           truncated: { type: "boolean", required: true },
           summary: { type: "string", required: true },
           keyPoints: { type: "array", items: { type: "string" }, required: true },
-          perPage: { type: "array", required: true },
+          perPage: { type: "array", required: true, items: { type: "object", additionalProperties: false, properties: { url: { type: "string", required: true }, summary: { type: "string", required: true }, keyPoints: { type: "array", items: { type: "string" }, required: true } } } },
           provider: { type: "string", required: true },
           model: { type: "string", required: true },
+          mode: { type: "string", description: "'aggregate' (mode A default) or 'per-page' (mode B)." },
           warnings: { type: "array", items: { type: "string" } }
         }
       },
       render: (args, value) => [
-        { type: "text", text: `已抓取 ${value.fetched} 页(跳过 ${value.skipped},失败 ${value.blocked})\n\n` + value.summary + (value.keyPoints.length > 0 ? "\n\n要点:\n- " + value.keyPoints.join("\n- ") : "") + "\n\n页面:\n" + value.pages.map((p) => "- " + p.url + (p.title ? ` (${p.title})` : "")).join("\n") }
+        { type: "text", text: (value.mode === "per-page" ? `已抓取 ${value.fetched} 页(逐页摘要 ` + value.perPage.length + " 篇)\n\n" : `已抓取 ${value.fetched} 页(跳过 ${value.skipped},失败 ${value.blocked})\n\n`) + value.summary + (value.keyPoints.length > 0 ? "\n\n要点:\n- " + value.keyPoints.join("\n- ") : "") + "\n\n页面:\n" + value.pages.map((p) => "- " + p.url + (p.title ? ` (${p.title})` : "")).join("\n") + (value.perPage.length > 0 ? "\n\n逐页摘要:\n" + value.perPage.map((p) => "### " + p.url + "\n" + p.summary).join("\n\n") : "") }
       ]
     },
     timeoutMs: 180_000,

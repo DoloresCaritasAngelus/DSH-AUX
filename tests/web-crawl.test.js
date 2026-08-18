@@ -1,13 +1,10 @@
 /**
- * web_crawl(P1)验收测试(node:test,零依赖)。
+ * web_crawl(P1+P2)验收测试(node:test,零依赖)。
  *
- * 覆盖 WEB-CRAWL-DESIGN.md 的 P1 范围:
- *  - robots.txt 策略(前缀匹配/最长规则/404 放行)
- *  - scope: same-origin / hosts 白名单与跨域计数
- *  - minIntervalMs 每主机限速
- *  - 预算(单页/总量)、渲染边界 description 未做、isConcurrencySafe=false
- *  - runWebCrawl 模式 A 全流程 + 配置默认 maxChars
- *  - 路由/注册联动(AUX_TASKS 含 web_crawl)
+ * 覆盖 WEB-CRAWL-DESIGN.md:
+ *  P1: robots.txt、scope(same-origin/hosts)、minIntervalMs、预算、
+ *      runWebCrawl 模式 A、注册/路由联动
+ *  P2: sitemap 引导(含嵌套 index 跳过、跨域计数)、模式 B 逐页摘要、受控并发
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -247,4 +244,105 @@ test('路由: AUX_TASKS 含 web_crawl,resolveConfig 允许 web_crawl.maxChars', 
   const resolved = resolveConfig({ tasks: { web_crawl: { maxChars: 1234 } } });
   assert.equal(resolved.tasks.web_crawl.maxChars, 1234);
   assert.throws(() => resolveConfig({ tasks: { vision: { maxChars: 1 } } }), /unknown key\(s\) maxChars/);
+});
+
+// ── P2: sitemap 引导 ──────────────────────────────────────────────────────
+
+test('crawlSite: useSitemap 把 sitemap.xml 的 loc 加入队列', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/sitemap.xml': '<?xml version="1.0"?><urlset><url><loc>https://a.example/alpha</loc></url><url><loc>https://a.example/beta</loc></url></urlset>',
+    'https://a.example/root': '<html><body>ROOT(无链接)</body></html>',
+    'https://a.example/alpha': '<html><body>ALPHA</body></html>',
+    'https://a.example/beta': '<html><body>BETA</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 5, maxDepth: 1, useSitemap: true });
+    assert.equal(crawl.fetched, 3, '应抓取 root + sitemap 里的 alpha/beta');
+    assert.ok(crawl.pages.some((p) => p.url === 'https://a.example/alpha'));
+    assert.ok(crawl.pages.some((p) => p.url === 'https://a.example/beta'));
+  });
+});
+
+test('crawlSite: 默认不启用 sitemap,useSitemap=false 时不请求 sitemap.xml', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/sitemap.xml': '<?xml version="1.0"?><urlset><url><loc>https://a.example/alpha</loc></url></urlset>',
+    'https://a.example/root': '<html><body>ROOT</body></html>',
+    'https://a.example/alpha': '<html><body>ALPHA</body></html>'
+  };
+  await withFetchMap(map, async (calls) => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 5, maxDepth: 1 });
+    assert.equal(crawl.fetched, 1);
+    assert.ok(!calls.includes('https://a.example/sitemap.xml'), '默认不应请求 sitemap');
+  });
+});
+
+test('crawlSite: sitemap 嵌套 index(.xml/.gz)跳过,跨域 loc 计数', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/sitemap.xml': '<?xml version="1.0"?><sitemapindex><sitemap><loc>https://a.example/sitemap-children.xml</loc></sitemap></sitemapindex>',
+    'https://a.example/root': '<html><body>ROOT</body></html>',
+    'https://other.example/z': '<html><body>Z</body></html>'
+  };
+  await withFetchMap(map, async (calls) => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 5, maxDepth: 1, useSitemap: true });
+    assert.equal(crawl.fetched, 1, '嵌套 sitemap index 不应被当作页面抓取');
+    assert.ok(!calls.includes('https://a.example/sitemap-children.xml'), '嵌套 sitemap 不应被请求');
+  });
+});
+
+// ── P2: 模式 B 逐页摘要 ───────────────────────────────────────────────────
+
+test('runWebCrawl: perPageSummaries=true 逐一页调用 + 一次聚合,输出 perPage', async () => {
+  const { ctx, streams } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/root': '<html><body>ROOT TXT<a href="/child">c</a></body></html>',
+    'https://a.example/child': '<html><body>CHILD TXT</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    const value = await runWebCrawl(ctx.auxLlm, { url: 'https://a.example/root', maxPages: 3, maxDepth: 2, perPageSummaries: true }, exec);
+    assert.equal(value.mode, 'per-page');
+    assert.equal(value.perPage.length, 2);
+    assert.deepEqual(value.perPage.map((p) => p.url), ['https://a.example/root', 'https://a.example/child']);
+    assert.ok(value.perPage.every((p) => typeof p.summary === 'string' && Array.isArray(p.keyPoints)));
+    assert.equal(typeof value.summary, 'string', '模式 B 仍应有整体摘要(聚合调用)');
+    assert.equal(value.provider, 'opencode-go');
+    // 2 个逐页调用 + 1 个聚合调用
+    assert.equal(streams.length, 3, '模式 B 应产生 逐页×N + 聚合 共 N+1 次辅助调用');
+  });
+});
+
+test('runWebCrawl: perPageConcurrency 参数合法且不影响结果', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/root': '<html><body>ROOT</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    const value = await runWebCrawl(ctx.auxLlm, { url: 'https://a.example/root', maxPages: 1, maxDepth: 0, perPageSummaries: true, perPageConcurrency: 2 }, exec);
+    assert.equal(value.perPage.length, 1);
+    assert.equal(value.mode, 'per-page');
+  });
+  await assert.rejects(
+    () => runWebCrawl(ctx.auxLlm, { url: 'https://a.example/root', maxPages: 1, perPageConcurrency: 0 }, { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'p', model: 'm' } } }),
+    /perPageConcurrency/
+  );
+});
+
+test('注册: web_crawl 新增 P2 参数与 perPage 条目 schema', async () => {
+  const { tools } = await makeLocalHarness();
+  const tool = tools.find((t) => t.name === 'web_crawl');
+  assert.ok(tool.parameters.properties.useSitemap !== void 0);
+  assert.ok(tool.parameters.properties.perPageSummaries !== void 0);
+  assert.ok(tool.parameters.properties.perPageConcurrency !== void 0);
+  const perPageSchema = tool.output?.schema?.properties?.perPage;
+  assert.ok(perPageSchema?.items?.properties?.summary !== void 0, 'perPage 条目应声明 summary 字段');
+  assert.ok(tool.output.schema.properties.mode !== void 0);
 });

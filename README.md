@@ -118,9 +118,10 @@ Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `web_crawl`
 ### 站点抓取 (web_crawl)
 
 - **定位**:从种子 URL 深度抓取文档站(或白名单主机集),一次辅助调用输出**整体站点摘要** + 页面清单。设计稿见 `WEB-CRAWL-DESIGN.md`。
-- **参数**:`url`(种子,必填)、`question`、`scope`(`same-origin` 默认 / `hosts` 白名单;`domain` 未启用)、`hosts`、`maxPages`(默认 10)、`maxDepth`(默认 2)、`maxCharsPerPage`(默认配置/8000)、`maxTotalChars`(默认按 maxPages×单页推导)、`maxSeconds`、`minIntervalMs`(默认 250)、`respectRobots`(默认 true)。
+- **参数**:`url`(种子,必填)、`question`、`scope`(`same-origin` 默认 / `hosts` 白名单;`domain` 未启用)、`hosts`、`maxPages`(默认 10)、`maxDepth`(默认 2)、`maxCharsPerPage`(默认配置/8000)、`maxTotalChars`(默认按 maxPages×单页推导)、`maxSeconds`、`minIntervalMs`(默认 250)、`respectRobots`(默认 true)、`useSitemap`(默认 false,从 `<origin>/sitemap.xml` 补种,嵌套 index 跳过)、`perPageSummaries`(默认 false)、`perPageConcurrency`(默认 1)。
+- **两种摘要模式**:模式 A(默认)`perPageSummaries:false` —— 一次聚合调用输出整体摘要;模式 B `perPageSummaries:true` —— **每页一次**调用输出 `perPage:[{url, summary, keyPoints}]`,再对逐页摘要做一次轻量聚合得整体摘要(成本 ≈ 页面数+1 次调用,受 `perPageConcurrency` 控制)。`mode` 字段标注 `aggregate` / `per-page`。
 - **默认行为**:尊重 `robots.txt`(Disallow 路径不请求)、同主机请求间隔 ≥ `minIntervalMs`;每页每跳都走 SSRF 逐跳校验;静态 HTML 优先,不渲染 JS。
-- **输出**:`root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars` / `truncated` / `summary` / `keyPoints` / `perPage`(v1 为空)/ `warnings`。
+- **输出**:`root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars` / `truncated` / `summary` / `keyPoints` / `perPage`(模式 B 填充)/ `mode` / `warnings`。
 - **并发语义**:`web_crawl` 明确声明**非并发安全**(`isConcurrencySafe=false`),由 minInterval 与顺序 BFS 兜底,防止对单域扇出轰炸。
 
 ### 安全边界
