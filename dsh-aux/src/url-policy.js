@@ -42,7 +42,7 @@ const IPV4_BLOCKED = [
 ];
 
 /** Parse an IPv4 dotted-quad string into octets, or null. */
-function ipv4Octets(ip) {
+export function ipv4Octets(ip) {
   const parts = ip.split(".");
   if (parts.length !== 4) return null;
   const octets = parts.map((part) => {

@@ -225,3 +225,45 @@
   429 重试、redirects 元数据、detectBrowserChallenge 窄匹配)。
 - 全量 `node --test tests/*.test.js`:**261 通过**。
 
+### 第四轮:18-URL 线上/提取层测试矩阵 + 代理支持(2026-08)
+
+**测试方式**:6 个并行子代理用真实 `web_extract`(活线 seam + 真实 aux)测 18 个 URL,
+按成功标准(PASS/PARTIAL/FAIL/BLOCKED)评分;另用 `tests/fetch-page-probe.mjs`
+(提取层探针)对同 18 个 URL 做直连+代理回退的可达性交叉验证。
+
+| # | 目标 | 判定 | 备注 |
+|---|---|---|---|
+| 1 | BBC 新闻 | BLOCKED | 本服务器 IP/TLS 被拦(站点层) |
+| 2 | 澎湃(中文) | **PASS** | 无乱码;正文/导航分离;引语+数据保留 |
+| 3 | Reuters | BLOCKED | DataDome/反爬(需浏览器) |
+| 4 | Wikipedia | BLOCKED | 本服务器环境不可达(curl 可),非工具 bug |
+| 5 | BiliWiki 企业页 | **PASS** | InfoBox 白鹰/CV/SSR + 台词触发→文本映射保留 |
+| 6 | 萌娘 初音 | **PASS** | 本名/别号干净,超大页诚实截断说明未取得栏目 |
+| 7 | MDN Promise | **PASS** | 代码示例 + then/catch/finally + 构造语法 |
+| 8 | Python asyncio | **PASS** | 事件循环 + await/async/create_task/gather + 代码 |
+| 9 | GitHub vscode README | **PASS** | 简介/功能/快速开始命令 |
+| 10 | StackOverflow | BLOCKED(检测✓) | 我们的 JS-Challenge 检测:`HTTP 403—需浏览器渲染` |
+| 11 | V2EX | BLOCKED | 反爬 HTTP 400(CF 指纹) |
+| 12 | Hacker News | BLOCKED | 反爬 HTTP 400 |
+| 13 | Steam | **PASS** | 年龄门,诚实降级"内容不足",非乱编 |
+| 14 | Product Hunt | BLOCKED(检测✓) | JS-Challenge 检测准确 |
+| 15 | PG essay | **PASS** | 段落+核心论点+例子 |
+| 16 | 阮一峰周刊 | **PASS** | 中文无乱码,要点+工具推荐 |
+| 17 | arXiv | **PASS** | 标题/作者/摘要/arXiv ID/PDF 链接完整 |
+| 18 | PubMed | BLOCKED | 本服务器环境不可达 |
+
+**结论**:10 个真实 PASS(含诚实降级)、2 个反爬检测正确信号(SO/PH)、6 个环境级阻断
+(本服务器 IP/代理 TLS 指纹,curl 亦多不可达/被反爬)。**无提取层 bug**。
+
+**顺带定位并修复一个现象**:V2EX/HN/Wikipedia/PubMed 在子代理活线测试中 `fetch failed`
+而 curl 200 → 根因是 **Node `fetch`(undici)不读 `HTTP(S)_PROXY`,本沙箱出站必须走代理**。
+修复:
+- `fetch.js` 新增**零依赖代理支持**:`fetchViaProxy` 读 `HTTP(S)_PROXY`/`ALL_PROXY`,
+  尊重 `NO_PROXY`(通配/后缀/IP/CIDR),CONNECT 隧道;`fetchWithSsrf` **直连优先,
+  传输失败才回退代理**;并带浏览器 UA/Accept 头(补 Low#10)。
+- `fetchPage` seam 抛传输类错误时回退到本地(代理感知)路径。
+- 代理环境该段使部分 host 从 timeout 变成"到达服务器"(HTTP/挑战信号),剩余
+  BBC/Wikipedia/Steam/PubMed 属服务器侧 TLS/反爬,标记 BLOCKED 而非工具缺陷。
+- 新增单元测试 4 例(NO_PROXY 通配/后缀/IP/CIDR、proxyForUrl env、via=direct、
+  无代理直连)。全量 `node --test tests/*.test.js`:**265 通过**。
+

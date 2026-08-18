@@ -28,7 +28,7 @@ import {
   wrapUntrustedPageData
 } from '../dsh-aux/src/prompt.js';
 import { codePointCount, resolveMaxChars, truncateByChars, runWebExtract } from '../dsh-aux/src/tools/web-extract.js';
-import { fetchWithSsrf } from '../dsh-aux/src/fetch.js';
+import { fetchViaProxy, fetchWithSsrf, matchesNoProxy, proxyForUrl } from '../dsh-aux/src/fetch.js';
 import { charsetFromContentType, detectBrowserChallenge, readTextCapped, sniffMetaCharset } from '../dsh-aux/src/crawl/fetch-page.js';
 import { mergeTaskConfig, resolveConfig, taskMaxChars } from '../dsh-aux/src/route.js';
 import { isPrivateIp } from '../dsh-aux/src/url-policy.js';
@@ -695,4 +695,58 @@ test('detectBrowserChallenge: 单元——窄匹配避免误报', () => {
   assert.equal(detectBrowserChallenge('Just a moment...').browserRequired, true);
   // "Enable JavaScript" 类提示不再误判(过于宽泛会被去掉)
   assert.equal(detectBrowserChallenge('<noscript>请启用 JavaScript 以查看内容</noscript>').browserRequired, false);
+});
+
+// ── 代理支持(直连优先 + HTTP(S)_PROXY/NO_PROXY 回退)────────────────────
+
+test('代理: NO_PROXY 匹配(通配/后缀/IP/CIDR)', () => {
+  assert.equal(matchesNoProxy('example.com', ''), false);
+  assert.equal(matchesNoProxy('example.com', '*'), true);
+  assert.equal(matchesNoProxy('api.example.com', 'example.com'), true);
+  assert.equal(matchesNoProxy('example.com', 'example.com'), true);
+  assert.equal(matchesNoProxy('other.org', 'example.com'), false);
+  assert.equal(matchesNoProxy('127.0.0.1', '127.0.0.1'), true);
+  assert.equal(matchesNoProxy('192.168.1.5', '192.168.0.0/16'), true);
+  assert.equal(matchesNoProxy('8.8.8.8', '192.168.0.0/16'), false);
+});
+
+test('代理: proxyForUrl 尊重 env 与 NO_PROXY', () => {
+  const old = { ...process.env };
+  try {
+    process.env.HTTPS_PROXY = 'http://p.example:7890';
+    process.env.NO_PROXY = 'localhost,internal.example';
+    assert.ok(proxyForUrl(new URL('https://pub.example/x')) !== null);
+    assert.equal(proxyForUrl(new URL('https://internal.example/x')), null);
+    assert.equal(proxyForUrl(new URL('https://localhost/x')), null);
+  } finally {
+    for (const k of ['HTTPS_PROXY', 'NO_PROXY']) {
+      if (old[k] === void 0) delete process.env[k];
+      else process.env[k] = old[k];
+    }
+  }
+});
+
+test('代理: via=direct 强制全局 fetch,不触碰代理', async () => {
+  let called = 0;
+  await withGlobalFetch(async () => { called += 1; return { ok: true, status: 200, url: 'x', headers: { get: () => 'text/plain' }, text: async () => 'ok' }; }, async () => {
+    const r = await fetchViaProxy('https://example.com/', { via: 'direct' });
+    assert.equal(r.status, 200);
+    assert.equal(called, 1);
+  });
+});
+
+test('代理: 无代理 env 时 fetchWithSsrf 走全局 fetch(直连)', async () => {
+  const old = { ...process.env };
+  await withGlobalFetch(async (url) => ({ ok: true, status: 200, url: String(url), headers: { get: () => 'text/plain' }, text: async () => 'direct' }), async () => {
+    try {
+      for (const k of ['HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'https_proxy', 'http_proxy', 'all_proxy']) delete process.env[k];
+      const { response, finalUrl } = await fetchWithSsrf({ allowInternalUrls: false, _dnsLookup: async () => ({ address: '93.184.216.34' }) }, 'https://example.com/x', 'web_extract');
+      assert.equal(finalUrl, 'https://example.com/x');
+      assert.equal(response.status, 200);
+    } finally {
+      for (const k of ['HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'https_proxy', 'http_proxy', 'all_proxy']) {
+        if (old[k] !== void 0) process.env[k] = old[k];
+      }
+    }
+  });
 });

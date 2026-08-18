@@ -134,6 +134,7 @@ Web → Settings → Auxiliary Models. You can configure a model for `vision` / 
   - **429/502/503/504**: one automatic retry with a short backoff; a persistent failure surfaces as an HTTP error with a "rate limited" hint.
   - **Redirects**: followed per-hop with SSRF checks; the `redirects` hop count is exposed so the main model can see the landing page differs from the request.
   - 4xx (e.g. 403) surface as HTTP errors with a "may need browser/login" hint instead of feeding empty content to the aux model.
+  - **Proxy (zero-dependency)**: `fetchWithSsrf` is direct-first; on a transport failure it automatically falls back to a CONNECT tunnel through `HTTP(S)_PROXY`/`ALL_PROXY` (honoring `NO_PROXY` wildcard/suffix/IP/CIDR), and sends browser User-Agent/Accept headers. Works behind proxies / restricted egress without any dependency.
 
 ### Security boundaries
 

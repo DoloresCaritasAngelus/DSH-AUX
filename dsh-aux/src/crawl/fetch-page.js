@@ -232,6 +232,16 @@ export function isProviderUnavailable(error) {
   return /no usable web provider/i.test(message);
 }
 
+const TRANSPORT_RE = /fetch failed|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|getaddrinfo|socket hang up|tls|network|timeout|UND_ERR/i;
+
+/** Whether a seam/provider failure is a transport problem — the local (env-
+ * proxy-aware) path may still reach the host, so it is worth retrying there. */
+function isLikelyTransportError(error) {
+  const message = error?.message ?? String(error ?? "");
+  const code = error?.cause?.code ?? error?.code ?? "";
+  return TRANSPORT_RE.test(message) || TRANSPORT_RE.test(code);
+}
+
 /** Finish a local (fallback) fetch: status checks, challenge sniff, decode. */
 export async function finishLocalFetch(response, finalUrl, { textCap, rawCap, label, redirects = 0 }) {
   if (!response.ok) {
@@ -355,9 +365,10 @@ export async function fetchPage(service, targetUrl, { textCap, rawCap = textCap,
         charset: void 0
       };
     } catch (error) {
-      // Only provider-availability failures fall through to the local fetch;
-      // real fetch/validation errors surface to the caller.
-      if (!isProviderUnavailable(error)) throw error;
+      // Provider-availability AND transport failures fall through to the
+      // local (env-proxy-aware) fetch — the provider may not reach a host
+      // that our local path can; real validation errors surface to the caller.
+      if (!isProviderUnavailable(error) && !isLikelyTransportError(error)) throw error;
     }
   }
   let local = await fetchWithSsrf(service, targetUrl, label, signal);

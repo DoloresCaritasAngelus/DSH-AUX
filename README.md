@@ -134,6 +134,7 @@ Web → 设置 → 辅助模型,可以为 `vision` / `web_extract` / `web_crawl`
   - **429/502/503/504**:自动重试一次(短退避),仍失败则报带 `rate limited` 提示的 HTTP 错误。
   - **重定向**:逐跳 SSRF 跟随,并在结果里暴露 `redirects` 跳数,主模型可感知落地页 ≠ 请求页。
   - 403 等 4xx 会报带「可能需浏览器渲染/登录」提示的 HTTP 错误,而非让 aux 处理空内容。
+  - **代理(零依赖)**:`fetchWithSsrf` 直连优先;直连传输失败时自动回退到 `HTTP(S)_PROXY`/`ALL_PROXY` 的 CONNECT 隧道(尊重 `NO_PROXY` 通配/后缀/IP/CIDR),并携带浏览器 User-Agent/Accept 头。代理后端/受限出口环境无需任何依赖即可抓取。
 
 ### 安全边界
 
