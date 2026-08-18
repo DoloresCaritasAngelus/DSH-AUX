@@ -103,38 +103,67 @@ After restarting DSH:
 
 ### Settings
 
-Web → Settings → Auxiliary Models. You can configure a model for `vision` / `web_extract` / `web_crawl` / `compress` / `compaction`; **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. `web_extract` / `web_crawl` also expose **`maxChars`** (the page character budget, default 32000; web_extract uses it as the total budget during a crawl, web_crawl as the per-page budget). You can also disable "Show auxiliary model status chip in conversation UI" — when disabled, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
+Web → Settings → Auxiliary Models. Configure a model per `vision` / `web_extract` / `web_crawl` / `compress` / `compaction`. **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. `web_extract` / `web_crawl` also expose `maxChars` (page character budget, default 32000). You can also turn off "Show auxiliary model status chip in conversation UI" (the `aux-status` projection is then no longer exposed to Web/third-party readers; `/aux status` still works).
 
 ### web_extract
 
-- **Capability boundary**: `web_extract` is a **static-HTML summary proxy** — it fetches static HTML only and does not execute JavaScript (SPA/dynamic sites may come back as empty shells); it cannot click, paginate, or fill forms. Use a dedicated headless/rendering provider for browser-level behavior.
-- **Parameters**:
-  - `url` (required), `question` (optional follow-up), `maxChars` (page code-point budget; config default, then 32000);
-  - `followLinks: "off" | "same-origin"`: default `off` → single page; `same-origin` → BFS over same-origin document links;
-  - `maxPages` (crawl cap, default 3), `maxDepth` (link depth cap, default 1; `0` = root only).
-- **Output metadata**: single pages return `chars` (content code points sent to the model, wrappers/marker excluded) and `truncated`; crawls return `pages: [{url, chars, truncated}]`, `totalChars`, and an overall `truncated` flag so oversized documents are visible.
-- **Crawl semantics**: `followLinks` delegates to the shared crawl engine — every page and every hop runs the per-hop SSRF check, and robots.txt + per-host rate limits apply exactly as in web_crawl; only same-origin document links are followed (image/archive/media extensions are skipped); accumulated text is bounded by the shared `maxChars` budget; one auxiliary call produces the overall summary.
+Fetches a page (or crawls same-origin links with `followLinks`) and returns a **factual summary + key points** from the auxiliary model.
+
+| Parameter | Default | What it does |
+|---|---|---|
+| `url` | required | The page to fetch |
+| `question` | — | Optional follow-up to focus the answer |
+| `maxChars` | 32000 | Page character budget (configurable; total budget when crawling) |
+| `followLinks` | `off` | `same-origin` crawls same-origin document links |
+| `maxPages` / `maxDepth` | 3 / 1 | Crawl page / link-depth cap (`0` = seed only) |
+
+- **Output**: single pages return `summary`/`keyPoints` + `chars` and `truncated`; crawls additionally return `pages` and `totalChars`.
+- **Boundary**: a static-HTML summary proxy — no JS execution (SPA sites may be empty shells), no clicking/pagination/forms.
+- **Crawling**: shares web_crawl's engine — respects robots.txt, per-host rate limits and per-hop SSRF; follows only same-origin document links, skipping media/archives.
 
 ### web_crawl
 
-- **Positioning**: deep-crawls a documentation site (or a whitelisted host set) from a seed URL and produces an **overall site summary** + page index in one auxiliary call. Design: `WEB-CRAWL-DESIGN.md`.
-- **Parameters**: `url` (seed, required), `question`, `scope` (`same-origin` default / `hosts` whitelist; `domain` not enabled), `hosts`, `seedUrls` (extra depth-0 seeds; still SSRF-checked and scope-filtered), `maxPages` (default 10), `maxDepth` (default 2), `maxCharsPerPage` (config default/32000), `maxTotalChars` (default derived as maxPages × per-page), `maxPagesPerHost` (per-host page cap, default 0 = unlimited), `maxSeconds`, `minIntervalMs` (default 250), `respectRobots` (default true), `useSitemap` (default false; seeds from `<origin>/sitemap.xml`, nested indices skipped), `perPageSummaries` (default false), `perPageConcurrency` (default 1).
-- **Two summary modes**: Mode A (default, `perPageSummaries:false`) — one aggregate call for the overall summary; Mode B (`perPageSummaries:true`) — **one call per page** producing `perPage:[{url, summary, keyPoints}]`, then a lightweight aggregation over the per-page summaries for the overall summary (cost ≈ pages+1 calls, bounded by `perPageConcurrency`). The `mode` field is `aggregate` / `per-page`.
-- **Default behavior**: respects `robots.txt` (Disallow paths are not requested), enforces a per-host gap ≥ `minIntervalMs`; every page and hop runs the per-hop SSRF check; static HTML first, no JS rendering.
-- **Output**: `root` / `scope` / `pages:[{url, chars, truncated, title?}]` / `fetched` / `skipped` / `blocked` / `totalChars` (mode A = crawled page-text code points; mode B = per-page summary code points) / `truncated` / `summary` / `keyPoints` / `perPage` (filled in mode B) / `mode` / `warnings`.
-- **Concurrency semantics**: `web_crawl` explicitly declares **not concurrency-safe** (`isConcurrencySafe=false`), backed by `minIntervalMs` and the sequential BFS, so a single domain is never flooded.
+Deep-crawls a whole documentation site (or a `hosts`-whitelisted set of sub-sites) from a seed URL and returns an **overall summary + page index** in one auxiliary call. Full design: `WEB-CRAWL-DESIGN.md`.
 
-### Cleaning & anti-crawl (large-context era shift)
+| Parameter | Default | What it does |
+|---|---|---|
+| `url` | required | Starting seed page |
+| `scope` | `same-origin` | Crawl scope; `hosts` = only the listed hosts |
+| `hosts` | — | Allowed hosts when `scope=hosts` (seed must be included) |
+| `seedUrls` | — | Extra depth-0 seeds (SSRF-checked, scope-filtered) |
+| `maxPages` / `maxDepth` | 10 / 2 | Page cap / link-depth cap |
+| `maxCharsPerPage` | 32000 | Per-page character budget |
+| `respectRobots` | true | Honor robots.txt (Disallow paths are skipped) |
+| `minIntervalMs` | 250 | Minimum gap between requests to the same host |
+| `useSitemap` | false | Seed from `<origin>/sitemap.xml` (nested indices skipped) |
+| `maxPagesPerHost` | 0 (unlimited) | Per-host page cap |
+| `perPageSummaries` | false | false = aggregated summary; true = per-page summaries |
 
-- **Delivery philosophy**: for cheap large-context auxiliary models (1M context / 300K-attention scale), `web_extract`/`web_crawl` shift from "shrink to minimum" to "**deliver clean, de-toxed content whole**" — the default delivery budget is now **32000 code points** (raise via `maxChars` / per-task config); the aux model answers/summarizes directly, the main model only receives the result.
-- **Cleaning**: `htmlToText` drops whole non-content subtrees (`script/style/noscript/template/svg/head/canvas/iframe`) and tag-strip removes `data:` base64; only plain text + numbers/URLs remain. H5 de-tox stays unchanged (untrusted data block + `Question` separation).
-- **Anti-crawl (zero-dependency)**:
-  - **Encoding**: non-UTF-8 pages are decoded by charset sniffed from `Content-Type charset` or `<meta charset>` (GBK/GB18030 no longer mojibake).
-  - **JS Challenge (Cloudflare & co.)**: when a bot-check shell is detected (`cf-chl`/`__cf_bm`/"Just a moment"…), the tools **do not burn aux tokens**, returning a structured `browserRequired:true` + `challengeProvider` marker so the main model can route to a browser/rendering provider.
-  - **429/502/503/504**: one automatic retry with a short backoff; a persistent failure surfaces as an HTTP error with a "rate limited" hint.
-  - **Redirects**: followed per-hop with SSRF checks; the `redirects` hop count is exposed so the main model can see the landing page differs from the request.
-  - 4xx (e.g. 403) surface as HTTP errors with a "may need browser/login" hint instead of feeding empty content to the aux model.
-  - **Proxy (zero-dependency)**: `fetchWithSsrf` is direct-first; on a transport failure it automatically falls back to a CONNECT tunnel through `HTTP(S)_PROXY`/`ALL_PROXY` (honoring `NO_PROXY` wildcard/suffix/IP/CIDR), and sends browser User-Agent/Accept headers. Works behind proxies / restricted egress without any dependency.
+**Two summary modes**
+
+| Mode | How it summarizes | Cost |
+|---|---|---|
+| **A (default)** | One call over all pages → overall `summary`/`keyPoints` + `pages` index | 1 call |
+| **B** (`perPageSummaries:true`) | A summary per page → `perPage`, then one aggregation call | ≈ pages + 1 calls |
+
+**Behavior**: honors robots and per-host rate limits; every page and hop runs the per-hop SSRF check; static HTML, no JS rendering; explicitly **not concurrency-safe** (`isConcurrencySafe=false`), backed by sequential BFS + rate limits so a single domain is never flooded.
+
+### Cleaning & anti-crawl (large-context era)
+
+For cheap large-context auxiliary models, the goal shifts from "shrink to minimum" to "**deliver clean, de-toxed content whole**": hand the clean page to the aux model to answer/summarize directly; the main model only receives the result.
+
+**Cleaning**: `htmlToText` drops whole non-content blocks (`script/style/iframe/canvas` …) and `data:` base64, keeping plain text, numbers and URLs. **De-tox (H5) stays unchanged**: page bodies go into a random-nonce untrusted-data block, physically separated from `Question`, ignoring any embedded instructions.
+
+**Anti-crawl (zero-dependency)**
+
+| Scenario | Behavior |
+|---|---|
+| Encoding | Decodes by `Content-Type` / `<meta charset>` via `TextDecoder` (GBK/GB18030 no longer mojibake) |
+| JS Challenge | Detects CF/bot shells → returns a `browserRequired` marker, no aux tokens burned, hint to switch to a browser |
+| 429 / 502-504 | One automatic retry (short backoff); then a rate-limited HTTP error |
+| 403 etc. 4xx | HTTP error with a "may need browser/login" hint instead of feeding empty content to the aux model |
+| Redirects | Followed per-hop with SSRF checks; exposes `redirects` hop count (landing ≠ request URL) |
+| Proxy | Direct-first; on transport failure falls back to `HTTP(S)_PROXY` CONNECT tunnel (honors `NO_PROXY`), zero-dependency |
 
 ### Security boundaries
 
