@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.1(未发布)— /aux 子命令识别修复
+## 0.3.1(未发布)— /aux 子命令识别修复 + 新增溯源命令
 
 - **修复 `/aux status` / `/aux history` 等带参子命令被当成普通聊天发送**。
   根因:DSH 客户端对"未声明 `input` 提示的裸命令"只认无参裸行
@@ -11,6 +11,11 @@
   裸 `/aux` 与 `/aux <subcommand> ...` 均正确执行。
 - 依据:`deepseek-harness/master` 的
   `packages/client/ui-commands/src/client/service.ts` `matchEnter` 判定表。
+- **新增 `/aux history [N]` 与 `/aux history full [N]`**:把既有的事件溯源
+  基础设施(AUX_CALL_EVENT 会话事件)显式暴露成命令——
+  `history` 简要溯源(默认最近 10 次,新→旧),`history full` 全部溯源
+  (完整字段:路由/耗时/降级/error/输入输出 chars/purpose)。与
+  `/aux status` 里「每任务最新一次」互补。
 
 ## 0.3.0(2026-08-17)— 子代理辅助模型桥接(subagent bridge)
 

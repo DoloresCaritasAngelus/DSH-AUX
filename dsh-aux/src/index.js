@@ -231,7 +231,7 @@ export class AuxLlmService extends Service {
         // actually run. Mirror of how official /goal /plan /preset /echo
         // register their argument-taking commands.
         input: {
-          hint: "status | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory"
+          hint: "status | history [N] | history full [N] | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory"
         },
         handler: ({ agent, rawInput }) => handleAuxCommand(this, agent, rawInput)
       });

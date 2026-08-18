@@ -96,6 +96,8 @@ After restarting DSH:
 | Command | Purpose |
 |---|---|
 | `/aux status` | Show routes and recent auxiliary calls |
+| `/aux history [N]` | Brief trace: last N auxiliary calls (default 10) |
+| `/aux history full [N]` | Full trace: complete event fields (defaults to all) |
 | `/aux model <task> [provider/model]` | View/set a task's auxiliary model |
 | `/aux vision <path> <question...>` | Analyze an image from the command line |
 | `/aux test <task>` | Self-test a task route |

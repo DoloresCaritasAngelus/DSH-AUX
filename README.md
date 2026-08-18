@@ -96,6 +96,8 @@ dsh plugin --profile web add "file:$(pwd)"
 | 命令 | 作用 |
 |---|---|
 | `/aux status` | 查看各任务路由与最近调用 |
+| `/aux history [N]` | 简要溯源:最近 N 次辅助调用(默认 10) |
+| `/aux history full [N]` | 全部溯源:完整事件字段(默认全部) |
 | `/aux model <task> [provider/model]` | 查看/设置某任务的辅助模型 |
 | `/aux vision <path> <question...>` | 命令行直接看图 |
 | `/aux test <task>` | 自检某任务路由 |

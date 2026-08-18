@@ -510,6 +510,12 @@ test('装配: ctx.auxLlm 可用,三工具注册,投影与命令注册', async ()
   assert.deepEqual(projections[0].view(projections[0].init()), { tasks: {} });
   assert.equal(commands.length, 1);
   assert.equal(commands[0].name, 'aux');
+  // 带参子命令必须声明 input.hint——否则 DSH 客户端 matchEnter 把
+  // "/aux status" 这类带参整行当成普通聊天(官方 ui-commands 判定表:
+  // 无 input 且 !bare → return undefined)。锁住该注册防回归。
+  assert.ok(commands[0].input, 'aux 命令必须声明 input.hint(带参子命令才能被客户端识别)');
+  assert.match(commands[0].input.hint, /status/);
+  assert.match(commands[0].input.hint, /model/);
   // 主 agent 引导段已注册
   const guide = sections.find((s) => s.name === 'aux:tools-guide');
   assert.ok(guide, '应注册 aux:tools-guide 引导段');
@@ -1342,6 +1348,55 @@ test('/aux status 命令: 显示最近调用(事件溯源)', async () => {
   assert.ok(out.text.includes('最近辅助调用'));
   assert.ok(out.text.includes('compress: opencode-go/deepseek-v4-flash 成功 1234ms'));
   assert.ok(out.text.includes('vision: opencode-go/kimi-k2.7-code 失败 (已降级) [timeout] 56ms'));
+});
+
+test('/aux history: 简要溯源按新→旧显示最近 N 次', async () => {
+  const { commands } = await makeHarness();
+  const handler = commands[0].handler;
+  const session = makeSession();
+  session.append(AUX_CALL_EVENT, { task: 'compress', provider: 'opencode-go', model: 'deepseek-v4-flash', ok: true, durationMs: 100, fallbackUsed: false });
+  session.append(AUX_CALL_EVENT, { task: 'web_extract', provider: 'opencode-go', model: 'deepseek-v4-flash', ok: true, durationMs: 200, fallbackUsed: true });
+  session.append(AUX_CALL_EVENT, { task: 'vision', provider: 'opencode-go', model: 'kimi-k2.7-code', ok: false, durationMs: 56, errorCode: 'timeout', fallbackUsed: true });
+  const agent = { session };
+  const out = await handler({ agent, rawInput: 'history' });
+  assert.equal(out.kind, 'success');
+  assert.match(out.text, /简要溯源/);
+  assert.ok(out.text.indexOf('vision') < out.text.indexOf('compress'), '新事件应排在前面');
+  assert.ok(out.text.includes('web_extract: opencode-go/deepseek-v4-flash 成功 (已降级) 200ms'));
+  const limited = await handler({ agent, rawInput: 'history 2' });
+  assert.equal(limited.kind, 'success');
+  assert.match(limited.text, /最近 2 次/);
+  assert.ok(!limited.text.includes('compress'), 'limit=2 应截掉最旧一条');
+});
+
+test('/aux history full: 全部溯源含完整字段', async () => {
+  const { commands } = await makeHarness();
+  const handler = commands[0].handler;
+  const session = makeSession();
+  session.append(AUX_CALL_EVENT, { task: 'compress', provider: 'opencode-go', model: 'deepseek-v4-flash', ok: true, durationMs: 100, fallbackUsed: false, inputChars: 900, outputChars: 120, purpose: 'test' });
+  session.append(AUX_CALL_EVENT, { task: 'vision', provider: 'opencode-go', model: 'kimi-k2.7-code', ok: false, durationMs: 56, errorCode: 'timeout', fallbackUsed: true });
+  const agent = { session };
+  const out = await handler({ agent, rawInput: 'history full' });
+  assert.equal(out.kind, 'success');
+  assert.match(out.text, /全部溯源/);
+  assert.ok(out.text.includes('输入 900 chars'));
+  assert.ok(out.text.includes('输出 120 chars'));
+  assert.ok(out.text.includes('purpose=test'));
+  assert.ok(out.text.includes('error=timeout'));
+  assert.ok(out.text.includes('已降级'));
+  const limited = await handler({ agent, rawInput: 'history full 1' });
+  assert.equal(limited.kind, 'success');
+  assert.match(limited.text, /显示最近 1 次/);
+  assert.ok(!limited.text.includes('compress'), 'full 1 应只留最新一条 vision');
+});
+
+test('/aux history: 无记录时给出事件溯源提示', async () => {
+  const { commands } = await makeHarness();
+  const handler = commands[0].handler;
+  const agent = { session: makeSession() };
+  const out = await handler({ agent, rawInput: 'history' });
+  assert.equal(out.kind, 'success');
+  assert.ok(out.text.includes('暂无辅助调用记录'));
 });
 
 test('web_extract 工具: HTML 页面经清洗后送辅助模型,输出符合 schema', async () => {

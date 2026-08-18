@@ -40,6 +40,9 @@ export async function handleAuxCommand(service, agent, rawInput) {
   if (sub === "memory") {
     return await handleMemoryCommand(args.slice(1));
   }
+  if (sub === "history") {
+    return await handleHistoryCommand(agent, args.slice(1));
+  }
   if (sub === "status" || sub === "") {
     // Reconcile first so the status view reflects any deleted-session
     // cleanup that happened while the service was not watching.
@@ -113,8 +116,57 @@ export async function handleAuxCommand(service, agent, rawInput) {
   }
   return {
     kind: "error",
-    text: "用法: /aux status — 查看各任务路由与最近调用; /aux model <task> [provider/model] — 查看或设置任务的辅助模型"
+    text: "用法: /aux status — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux model <task> [provider/model] — 查看或设置任务的辅助模型"
   };
+}
+
+/**
+ * /aux history [N] — 简要溯源:最近 N 次辅助调用(默认 10,按时间新→旧)。
+ * /aux history full [N] — 全部溯源:完整事件字段(默认全部事件,可用 N 取
+ * 最近 N 条)。数据来自会话里每次 AUX_CALL_EVENT 事件日志(事件溯源)。
+ */
+export function handleHistoryCommand(agent, args) {
+  const full = args[0] === "full";
+  const limitArg = full ? args[1] : args[0];
+  let limit = full ? Infinity : 10;
+  if (limitArg !== void 0) {
+    limit = Number(limitArg);
+    if (!Number.isInteger(limit) || limit < 0) {
+      return { kind: "error", text: "用法: /aux history [N] | /aux history full [N] — N 为非负整数条数" };
+    }
+  }
+  const events = (agent?.session?.events ?? []).filter((event) => event?.type === AUX_CALL_EVENT);
+  if (events.length === 0) {
+    return {
+      kind: "success",
+      text: `${full ? "全部溯源" : "简要溯源"}:本会话暂无辅助调用记录。\n提示:事件溯源需要 dsh-session ignorable 补丁(见 /aux status 的\u201C会话事件记录\u201D)。`
+    };
+  }
+  const rows = events.map((event, index) => {
+    const d = event.data ?? {};
+    const seq = event.seq ?? index + 1;
+    const provider = d.provider || "(未配置)";
+    const model = d.model || "(主模型)";
+    const duration = typeof d.durationMs === "number" ? `${d.durationMs}ms` : "-";
+    if (!full) {
+      const status = d.ok ? "成功" : "失败";
+      const error = d.ok ? "" : ` [${d.errorCode ?? "error"}]`;
+      const fallback = d.fallbackUsed ? " (已降级)" : "";
+      return `  #${seq} ${d.task}: ${provider}/${model} ${status}${error}${fallback} ${duration}`;
+    }
+    const parts = [`#${seq} ${d.task}`, `路由 ${provider}/${model}`, d.ok ? "成功" : "失败", duration];
+    if (!d.ok && d.errorCode !== void 0) parts.push(`error=${d.errorCode}`);
+    if (d.fallbackUsed) parts.push("已降级");
+    if (typeof d.inputChars === "number") parts.push(`输入 ${d.inputChars} chars`);
+    if (typeof d.outputChars === "number") parts.push(`输出 ${d.outputChars} chars`);
+    if (d.purpose !== void 0) parts.push(`purpose=${d.purpose}`);
+    return `  ${parts.join(" | ")}`;
+  });
+  const chosen = Number.isFinite(limit) ? rows.slice(-limit) : rows;
+  const header = full
+    ? `全部溯源(共 ${rows.length} 次${Number.isFinite(limit) ? `,显示最近 ${chosen.length} 次` : ""}):`
+    : `简要溯源(最近 ${chosen.length} 次,共 ${rows.length} 次);完整信息用 /aux history full:`;
+  return { kind: "success", text: [header, ...chosen.reverse()].join("\n") };
 }
 
 /** Handle the /aux model subcommand: read or write one task's route. */
