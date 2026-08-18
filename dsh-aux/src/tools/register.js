@@ -97,6 +97,8 @@ export function registerAuxTools(service) {
       minIntervalMs: { type: "integer", description: "Minimum gap between requests to the same host (default 250)." },
       respectRobots: { type: "boolean", description: "Respect robots.txt (default true); set false to ignore robots checks." },
       useSitemap: { type: "boolean", description: "Seed URL discovery from <origin>/sitemap.xml (default false); nested sitemap indices are skipped." },
+      seedUrls: { type: "array", items: { type: "string" }, description: "Extra depth-0 seed URLs beyond the root seed; still SSRF-checked and scope-filtered." },
+      maxPagesPerHost: { type: "integer", description: "Max pages to fetch per host before skipping further links from it (0 = unlimited, default)." },
       perPageSummaries: { type: "boolean", description: "Produce a per-page summary (mode B, default false) instead of one aggregate summary; costs one auxiliary call per page plus one aggregation call." },
       perPageConcurrency: { type: "integer", description: "Max concurrent per-page summary calls when perPageSummaries is true (default 1)." }
     },

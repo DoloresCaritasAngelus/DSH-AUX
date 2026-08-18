@@ -342,7 +342,93 @@ test('注册: web_crawl 新增 P2 参数与 perPage 条目 schema', async () => 
   assert.ok(tool.parameters.properties.useSitemap !== void 0);
   assert.ok(tool.parameters.properties.perPageSummaries !== void 0);
   assert.ok(tool.parameters.properties.perPageConcurrency !== void 0);
+  assert.ok(tool.parameters.properties.seedUrls !== void 0);
+  assert.ok(tool.parameters.properties.maxPagesPerHost !== void 0);
   const perPageSchema = tool.output?.schema?.properties?.perPage;
   assert.ok(perPageSchema?.items?.properties?.summary !== void 0, 'perPage 条目应声明 summary 字段');
   assert.ok(tool.output.schema.properties.mode !== void 0);
+});
+
+// ── P4a: seedUrls 多种子 + maxPagesPerHost 每站上限 ────────────────────────
+
+test('crawlSite: seedUrls 作为 depth-0 种子被抓取(即使页面无链接)', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/root': '<html><body>ROOT(无链接)</body></html>',
+    'https://a.example/other': '<html><body>OTHER</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { seedUrls: ['https://a.example/other'], maxPages: 5, maxDepth: 1 });
+    assert.equal(crawl.fetched, 2);
+    assert.ok(crawl.pages.some((p) => p.url === 'https://a.example/other'));
+  });
+});
+
+test('crawlSite: 越出 scope 的 seedUrl 被跳过并计数', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/root': '<html><body>ROOT</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { seedUrls: ['https://other.example/x'], maxPages: 5, maxDepth: 1 });
+    assert.equal(crawl.fetched, 1);
+    assert.equal(crawl.skippedByScope, 1);
+  });
+});
+
+test('crawlSite: seedUrls + hosts scope 可跨主机抓取', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://docs.example.com/robots.txt': '',
+    'https://api.example.com/robots.txt': '',
+    'https://docs.example.com/root': '<html><body>DOCS ROOT</body></html>',
+    'https://api.example.com/endpoint': '<html><body>API DOC</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://docs.example.com/root', {
+      scope: 'hosts',
+      hosts: ['docs.example.com', 'api.example.com'],
+      seedUrls: ['https://api.example.com/endpoint'],
+      maxPages: 5,
+      maxDepth: 1
+    });
+    assert.equal(crawl.fetched, 2);
+    assert.ok(crawl.pages.some((p) => p.url === 'https://api.example.com/endpoint'));
+  });
+});
+
+test('crawlSite: maxPagesPerHost 限制每主机页面数', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/root': '<html><body>ROOT<a href="/a">a</a><a href="/b">b</a></body></html>',
+    'https://a.example/a': '<html><body>A</body></html>',
+    'https://a.example/b': '<html><body>B</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const crawl = await crawlSite(ctx.auxLlm, 'https://a.example/root', { maxPages: 5, maxDepth: 2, maxPagesPerHost: 1 });
+    assert.equal(crawl.fetched, 1, '只应抓取根页');
+    assert.equal(crawl.skippedByHostCap, 2, '/a 与 /b 应被每主机上限跳过');
+  });
+});
+
+test('runWebCrawl: seedUrls 参数透传并校验', async () => {
+  const { ctx } = await makeLocalHarness();
+  const map = {
+    'https://a.example/robots.txt': '',
+    'https://a.example/root': '<html><body>ROOT</body></html>',
+    'https://a.example/second': '<html><body>SECOND</body></html>'
+  };
+  await withFetchMap(map, async () => {
+    const exec = { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'opencode-go', model: 'deepseek-v4-flash' } } };
+    const value = await runWebCrawl(ctx.auxLlm, { url: 'https://a.example/root', seedUrls: ['https://a.example/second'], maxPages: 3 }, exec);
+    assert.equal(value.fetched, 2);
+    assert.ok(value.pages.some((p) => p.url === 'https://a.example/second'));
+  });
+  await assert.rejects(
+    () => runWebCrawl(ctx.auxLlm, { url: 'https://a.example/root', seedUrls: ['http://127.0.0.1:3080/x'] }, { signal: new AbortController().signal, agent: { session: undefined, options: { provider: 'p', model: 'm' } } }),
+    /blocked by default/
+  );
 });

@@ -158,6 +158,7 @@ export async function crawlSite(service, rootUrl, opts = {}) {
   const {
     scope = "same-origin",
     hosts = [],
+    seedUrls = [],
     maxPages = CRAWL_DEFAULTS.maxPages,
     maxDepth = CRAWL_DEFAULTS.maxDepth,
     maxCharsPerPage = 8000,
@@ -166,6 +167,7 @@ export async function crawlSite(service, rootUrl, opts = {}) {
     maxSeconds = 0,
     respectRobots = true,
     useSitemap = false,
+    maxPagesPerHost = 0,
     signal,
     label = "web_crawl"
   } = opts;
@@ -189,12 +191,22 @@ export async function crawlSite(service, rootUrl, opts = {}) {
   const rawCap = Math.min(LINK_SCAN_MAX, Math.max(LINK_SCAN_MIN, maxCharsPerPage * LINK_SCAN_FACTOR));
   const seen = new Set([normalizePageUrl(rootUrl)]);
   const queue = [{ url: rootUrl, depth: 0 }];
+  // Extra depth-0 seeds (e.g. user-supplied seedUrls); they still pass the
+  // scope + robots + per-host/global budget gates when popped.
+  for (const extra of Array.isArray(seedUrls) ? seedUrls : []) {
+    const key = normalizePageUrl(extra);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    queue.push({ url: extra, depth: 0 });
+  }
   const pages = [];
   const robotsCache = new Map();
   const lastFetchByHost = new Map();
+  const pagesByHost = new Map();
   let totalChars = 0;
   let skippedByRobots = 0;
   let skippedByScope = 0;
+  let skippedByHostCap = 0;
   let blocked = 0;
   const deadline = maxSeconds > 0 ? Date.now() + maxSeconds * 1000 : Number.POSITIVE_INFINITY;
 
@@ -271,8 +283,14 @@ export async function crawlSite(service, rootUrl, opts = {}) {
     if (remaining <= 0) break;
     const cap = Math.min(maxCharsPerPage, remaining);
 
-    // Per-host politeness: keep at least minIntervalMs between requests.
+    // Per-host page budget: stop fetching further pages on a host that hit its cap.
     const host = parsed.host;
+    if (maxPagesPerHost > 0 && (pagesByHost.get(host) ?? 0) >= maxPagesPerHost) {
+      skippedByHostCap += 1;
+      continue;
+    }
+
+    // Per-host politeness: keep at least minIntervalMs between requests.
     const lastAt = lastFetchByHost.get(host);
     if (lastAt !== void 0) {
       const wait = lastAt + minIntervalMs - Date.now();
@@ -287,6 +305,7 @@ export async function crawlSite(service, rootUrl, opts = {}) {
       blocked += 1;
       continue;
     }
+    pagesByHost.set(host, (pagesByHost.get(host) ?? 0) + 1);
     pages.push({
       url: page.finalUrl,
       chars: page.chars,
@@ -328,6 +347,7 @@ export async function crawlSite(service, rootUrl, opts = {}) {
     fetched: pages.length,
     skippedByRobots,
     skippedByScope,
+    skippedByHostCap,
     blocked
   };
 }

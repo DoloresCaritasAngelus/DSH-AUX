@@ -63,10 +63,12 @@
 ```jsonc
 {
   "url": "https://example.com/docs/",       // 必填,种子
-  "scope": "same-origin",                    // same-origin | domain | hosts
+  "scope": "same-origin",                    // same-origin | hosts
   "hosts": ["docs.example.com", "api.example.com"], // scope=hosts 时
+  "seedUrls": ["https://api.example.com/ref"], // 额外 depth-0 种子(SSRF+scope 过滤)
   "maxPages": 10, "maxDepth": 2,             // 预算
   "maxCharsPerPage": 8000, "maxTotalChars": 0, // 0=按 maxPages 推导
+  "maxPagesPerHost": 0,                      // 每主机页数上限,0=不限
   "maxSeconds": 60,                          // 0=不限
   "minIntervalMs": 250,
   "respectRobots": true,
@@ -195,6 +197,20 @@
 - 新增测试(web-crawl.test.js 共 17 例)。全量 `node --test tests/*.test.js`:
   **240 通过**。
 
-### P4(未开始)
+### P4(部分完成 + 明确延后)
 
-domain/PSL、headless/渲染 provider、web_search 联动、每站资源上限。
+已完成:
+- **seedUrls 多种子**:额外 depth-0 种子(SSRF 前置校验 + scope 过滤),配合
+  hosts scope 可跨主机抓取。
+- **maxPagesPerHost 每站页数上限**:单主机页数封顶,超额计入 `skippedByHostCap`/
+  `warnings`(每站资源上限的一部分;总量预算已由 maxCharsPerPage/maxTotalChars 覆盖)。
+
+明确延后(需单列设计,不在 v1 强上):
+- **domain/PSL**:项目主张「运行时零第三方依赖」;内置启发式同名注册域
+  (单标签 TLD + 常用多标签后缀表)有 `co.uk` 类误判风险。延后到引入 PSL(或
+  依赖 `tldts`)时再评估。跨子站场景当前用 `hosts` 白名单覆盖。
+- **headless/渲染 provider**:任意 JS 执行 = 信任边界抬升,需独立 SSRF 与
+  资源上限设计;当前 seam 已预留 `render` 位,未实现。
+- **web_search 联动**:搜索结果多为跨源,无 domain scope 时价值有限;
+  与 domain 一起延后评估。
+- 测试:web-crawl.test.js 扩至 22 例;全量 `node --test tests/*.test.js`:**245 通过**。

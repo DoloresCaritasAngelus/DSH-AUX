@@ -96,14 +96,26 @@ export async function runWebCrawl(service, args, exec) {
   const maxTotalChars = coerceNonNegInt(args.maxTotalChars, "maxTotalChars", 0, label);
   const maxSeconds = coerceNonNegInt(args.maxSeconds, "maxSeconds", 0, label);
   const minIntervalMs = coerceNonNegInt(args.minIntervalMs, "minIntervalMs", CRAWL_DEFAULTS.minIntervalMs, label);
+  const maxPagesPerHost = coerceNonNegInt(args.maxPagesPerHost, "maxPagesPerHost", 0, label);
   const respectRobots = args.respectRobots !== false;
   const useSitemap = args.useSitemap === true;
   const perPageSummaries = args.perPageSummaries === true;
   const perPageConcurrency = coercePositiveInt(args.perPageConcurrency, "perPageConcurrency", 1, label);
 
+  // Extra depth-0 seeds are SSRF-checked up front like the root seed; scope
+  // filtering still applies to them inside crawlSite.
+  const seedUrls = Array.isArray(args.seedUrls) ? args.seedUrls : [];
+  for (const seed of seedUrls) {
+    if (typeof seed !== "string" || seed.trim().length === 0) {
+      throw new Error("web_crawl: seedUrls must be non-empty URL strings");
+    }
+    await assertSafeFetchUrlForService(service, seed.trim(), "web_crawl");
+  }
+
   const crawl = await crawlSite(service, url, {
     scope,
     hosts,
+    seedUrls: seedUrls.map((s) => s.trim()),
     maxPages,
     maxDepth,
     maxCharsPerPage,
@@ -112,6 +124,7 @@ export async function runWebCrawl(service, args, exec) {
     maxSeconds,
     respectRobots,
     useSitemap,
+    maxPagesPerHost,
     signal: exec.signal,
     label
   });
@@ -122,6 +135,7 @@ export async function runWebCrawl(service, args, exec) {
   const warnings = [];
   if (crawl.skippedByRobots > 0) warnings.push(`${crawl.skippedByRobots} 个路径被 robots.txt Disallow 跳过`);
   if (crawl.skippedByScope > 0) warnings.push(`${crawl.skippedByScope} 个链接超出 scope 被跳过`);
+  if (crawl.skippedByHostCap > 0) warnings.push(`${crawl.skippedByHostCap} 个页面超过 maxPagesPerHost 被跳过`);
   if (crawl.blocked > 0) warnings.push(`${crawl.blocked} 个请求失败或被 SSRF 拒绝`);
 
   let summary;
@@ -179,7 +193,7 @@ export async function runWebCrawl(service, args, exec) {
       ...(p.title ? { title: p.title } : {})
     })),
     fetched: crawl.fetched,
-    skipped: crawl.skippedByRobots + crawl.skippedByScope,
+    skipped: crawl.skippedByRobots + crawl.skippedByScope + crawl.skippedByHostCap,
     blocked: crawl.blocked,
     totalChars: perPageSummaries ? perPage.reduce((sum, p) => sum + codePointCount(p.summary), 0) : crawl.totalChars,
     truncated: crawl.pages.some((p) => p.truncated),
