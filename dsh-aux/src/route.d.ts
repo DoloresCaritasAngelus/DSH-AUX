@@ -7,7 +7,7 @@
 import type { AuxRoute, AuxTaskConfigEntry } from './index.js';
 
 /** Built-in auxiliary task keys. */
-export declare const AUX_TASKS: readonly ['vision', 'web_extract', 'web_crawl', 'compress', 'compaction'];
+export declare const AUX_TASKS: readonly ['vision', 'web_extract', 'web_crawl', 'compress', 'compaction', 'skill'];
 /** Default per-task timeout (ms). */
 export declare const DEFAULT_TASK_TIMEOUT_MS: number;
 /** Default per-task concurrency cap. */

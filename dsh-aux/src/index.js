@@ -61,6 +61,7 @@ import { registerAuxTools } from "./tools/register.js";
 import { onSessionDisposed, reconcileSessionImages } from "./images/ownership.js";
 import { handleAuxCommand } from "./commands.js";
 import { prepareCompactionMessages } from "./compaction-messages.js";
+import { attachSkillBridge } from "./skill-bridge.js";
 
 export { AUX_SETTINGS_NAMESPACE, AUX_TIMEOUT_CODE, AUX_CALL_EVENT, AUX_STATUS_KEY, validateAuxSettings } from "./config.js";
 export { AuxCallError, sessionPatchCandidates } from "./events.js";
@@ -89,6 +90,12 @@ export class AuxLlmService extends Service {
         timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
         maxConcurrency: z.number().step(1).min(1)
       }),
+      web_crawl: z.object({
+        provider: z.string(),
+        model: z.string(),
+        timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
+        maxConcurrency: z.number().step(1).min(1)
+      }),
       compress: z.object({
         provider: z.string(),
         model: z.string(),
@@ -96,6 +103,12 @@ export class AuxLlmService extends Service {
         maxConcurrency: z.number().step(1).min(1)
       }),
       compaction: z.object({
+        provider: z.string(),
+        model: z.string(),
+        timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
+        maxConcurrency: z.number().step(1).min(1)
+      }),
+      skill: z.object({
         provider: z.string(),
         model: z.string(),
         timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
@@ -184,6 +197,7 @@ export class AuxLlmService extends Service {
       exposedToWeb: true
     });
     registerAuxTools(this);
+    attachSkillBridge(this);
     this._sessionImages = new Map();
     this._sessionImagesLoaded = false;
     this._sessionImagesDirty = false;
@@ -336,7 +350,7 @@ export class AuxLlmService extends Service {
       // configured at all, the main model is the only option (not a fallback),
       // so keep it usable.
       const allowMainFallback =
-        this.fallbackToMain &&
+        (request.allowMainFallback ?? this.fallbackToMain) &&
         (task !== "vision" || this.visionFallbackToMain || primary === void 0);
       if (
         allowMainFallback &&

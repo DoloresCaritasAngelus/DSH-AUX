@@ -83,8 +83,8 @@ window.__ModuleLoader__.load({
 			const [saved, setSaved] = react.useState(false);
 			if (state.status === "loading") return react.createElement("div", { className: "ax-section" }, "加载辅助模型配置…");
 			if (state.status === "error") return react.createElement("div", { className: "ax-section" }, react.createElement("span", { className: "ax-error" }, "加载失败: " + state.error));
-			const tasks = ["vision", "web_extract", "web_crawl", "compress", "compaction"];
-			const labels = { vision: "图像分析 (vision_analyze)", web_extract: "网页提取 (web_extract)", web_crawl: "站点抓取 (web_crawl)", compress: "文本压缩 (compress_text)", compaction: "会话压缩 (compaction)" };
+			const tasks = ["vision", "web_extract", "web_crawl", "compress", "compaction", "skill"];
+			const labels = { vision: "图像分析 (vision_analyze)", web_extract: "网页提取 (web_extract)", web_crawl: "站点抓取 (web_crawl)", compress: "文本压缩 (compress_text)", compaction: "会话压缩 (compaction)", skill: "技能预审 (skill)" };
 			const field = (task, key) => draft?.tasks?.[task]?.[key];
 			const setField = (task, key, value) => {
 				setSaved(false);
@@ -288,7 +288,7 @@ window.__ModuleLoader__.load({
 			if (entries.length === 0) return null;
 			const last = entries[entries.length - 1];
 			const ok = last.ok === true;
-			const taskLabel = last.task === "vision" ? "视觉" : last.task === "web_extract" ? "网页" : last.task === "web_crawl" ? "站点" : last.task === "compaction" ? "会话压缩" : "压缩";
+			const taskLabel = last.task === "vision" ? "视觉" : last.task === "web_extract" ? "网页" : last.task === "web_crawl" ? "站点" : last.task === "compaction" ? "会话压缩" : last.task === "skill" ? "技能预审" : "压缩";
 			const label = taskLabel + (ok ? " ✓" : " ✗");
 			const title = `辅助调用 ${last.task}: ${ok ? "成功" : "失败"} ${last.durationMs}ms${last.fallbackUsed ? " (已降级)" : ""}`;
 			return react.createElement("span", { className: "ax-wrap", title }, react.createElement("span", {

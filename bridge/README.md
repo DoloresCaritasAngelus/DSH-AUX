@@ -64,6 +64,22 @@ forceAuxVision = true
   (纯文本主模型行为不变,始终走 vision_analyze)
 ```
 
+## 技能预审桥接 (skill-audit)
+
+dsh-aux 还接管原生 `skill` 工具的结果,让主模型在真正执行 SKILL.md 之前先拿到
+一份辅助模型预审报告。设计见 `SUBAGENT-BRIDGE.md` 同级的技能预审设计(仓库内
+未单独成文时以 `dsh-aux/src/skill-bridge.js` 为准)。
+
+- **不劫持 catalog**:原生 `dsh-tool-skill` 仍注册,主模型照常看到可用技能列表。
+- **拦截点**:官方 `tools/post-execute` 扩展点,不改原生 execute。
+- **唯一 patch**:`dsh-tool-skill` 的 schema 增加可选 `task` 参数,让主模型能把
+  当前任务/意图显式写给辅助模型;未传时从会话 `deriveMessages()` 隐式取上下文。
+- **启用条件**:设置页或 `/aux model skill <provider>/<model>` 配置了 `skill`
+  辅助模型后才拦截;未配置时 native 直通。
+- **返回形态**:主模型同时看到原始 SKILL.md + `<aux_skill_audit>` 预审报告,
+  可对照原文辩证审视。
+- **失败降级**:辅助调用失败时返回原生 SKILL.md,不阻塞主模型。
+
 ## 前置
 
 1. DSH 0.1.0-rc.6(`@deepseek-ai/dsh-host-apiproxy`、`@deepseek-ai/dsh-agent-loop` 同版本)
@@ -73,11 +89,13 @@ forceAuxVision = true
 
 ```bash
 cd <本仓库路径>/bridge
-node apply-patch.mjs        # 自动识别状态:原始 → v2 + v3 / v1 → v2 + v3 / 已是 v2+v3 → 跳过
-                            # 三个目标:
-                            #   dsh-host-apiproxy(admit)
+node apply-patch.mjs        # 自动识别状态:原始 → 已补丁 / 中间态 → 最终态 / 已补丁 → 跳过
+                            # 目标:
+                            #   dsh-host-apiproxy(admit + selectModel)
                             #   dsh-agent-loop(buildRequest + forceAuxVision)
-                            #   dsh-host-apiproxy(selectModel)
+                            #   dsh-tool-subagent(schema + request)
+                            #   dsh-workflow-worker-thread(startChild)
+                            #   dsh-tool-skill(schema: 可选 task 参数)
 # 重启 DSH 生效(改的是 node_modules 内文件,必须重启)
 ```
 
@@ -85,7 +103,7 @@ node apply-patch.mjs        # 自动识别状态:原始 → v2 + v3 / v1 → v2 
 
 ```bash
 node apply-patch.mjs --dry-run     # 只检查,不修改
-node apply-patch.mjs --rollback    # 回滚到最近一次备份(三个目标各自回滚)
+node apply-patch.mjs --rollback    # 回滚到最近一次备份(七个目标各自回滚)
 ```
 
 ## 技术要点
@@ -112,6 +130,7 @@ node apply-patch.mjs --rollback    # 回滚到最近一次备份(三个目标各
   - `v1-block.txt`(v1 已打状态识别块,用于升级)
   - `orig-agent-loop-block.txt` / `patched-agent-loop-block.txt`(agent-loop 方法定义)
   - `orig-select-model-block.txt` / `patched-select-model-block.txt`(api-proxy selectModel 门控)
+  - `orig-skill-tool-block.txt` / `patched-skill-tool-block.txt`(skill 工具 schema 可选 task 参数)
   - 校验不匹配则跳过不打,绝不破坏文件。
 
 ## 卸载

@@ -64,6 +64,12 @@ export const AUX_SETTINGS_SCHEMA = z.object({
       model: z.string(),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1)
+    }),
+    skill: z.object({
+      provider: z.string(),
+      model: z.string(),
+      timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
+      maxConcurrency: z.number().step(1).min(1)
     })
   }),
   subagent: z.object({
@@ -155,5 +161,6 @@ export const TASK_LABELS = Object.freeze({
   web_extract: "网页提取",
   web_crawl: "站点抓取",
   compress: "文本压缩",
-  compaction: "会话压缩"
+  compaction: "会话压缩",
+  skill: "技能预审"
 });

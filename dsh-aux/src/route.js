@@ -7,7 +7,7 @@
  */
 
 /** Built-in auxiliary task keys. */
-export const AUX_TASKS = Object.freeze(["vision", "web_extract", "web_crawl", "compress", "compaction"]);
+export const AUX_TASKS = Object.freeze(["vision", "web_extract", "web_crawl", "compress", "compaction", "skill"]);
 
 /** Default per-task timeout (ms). */
 export const DEFAULT_TASK_TIMEOUT_MS = 60_000;
@@ -33,7 +33,7 @@ export function route(provider, model) {
  * Validate the plugin config shape. Unknown keys fail at load rather than
  * being ignored. Supported shape:
  *
- *   { tasks: { vision?, webExtract?, compress?, compaction? }, allowInternalUrls? }
+ *   { tasks: { vision?, webExtract?, compress?, compaction?, skill? }, allowInternalUrls? }
  *
  * Each task entry: { provider?, model?, timeoutMs?, maxConcurrency? }.
  * `allowInternalUrls` is an explicit opt-in for fetching loopback/private URLs

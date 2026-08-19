@@ -11,6 +11,7 @@ import { reconcileSessionImages } from "./images/ownership.js";
 import { imageBridgeStatus } from "./image-bridge.js";
 import { subagentBridgeStatus, workflowBridgeStatus } from "./subagent-bridge.js";
 import { isCompactionBridgeInstalled, isCompactionTaskConfigured } from "./compaction-bridge.js";
+import { isSkillTaskConfigured, skillBridgeStatus } from "./skill-bridge.js";
 import { sessionEventsSupported } from "./events.js";
 import { runVision } from "./tools/vision.js";
 import { runWebExtract } from "./tools/web-extract.js";
@@ -70,6 +71,9 @@ export async function handleAuxCommand(service, agent, rawInput) {
     const wfBridge = await workflowBridgeStatus();
     const wfPatch = wfBridge === "installed" ? "补丁已装" : wfBridge === "unknown" ? "补丁未知" : "补丁未装(请跑 bridge/apply-patch.mjs)";
     lines.push(`  - workflow-bridge: ${service.subagentIncludeWorkflow ? "includeWorkflow(workflow agent() 走 AUX 路由)" : "excluded(workflow 未纳入)"} [${wfPatch}]`);
+    const skillPatch = await skillBridgeStatus();
+    const skillBridgeLabel = skillPatch === "installed" ? "补丁已装(task 参数可用)" : skillPatch === "unknown" ? "补丁未知" : "补丁未装(请跑 bridge/apply-patch.mjs)";
+    lines.push(`  - skill-audit: ${isSkillTaskConfigured(service) ? "已启用(原生 skill 调用先走辅助模型预审)" : "未配置(原生直通)"} [${skillBridgeLabel}]`);
     // Compaction bridge status: when dsh-compaction-basic is present and a
     // dedicated `compaction` AUX route is configured, native session
     // compaction is routed through AUX.
@@ -111,6 +115,21 @@ export async function handleAuxCommand(service, agent, rawInput) {
           `  - ${call.task}: ${call.provider}/${call.model} ${status}${fallback}${error} ${call.durationMs}ms`
         );
       }
+    }
+    // 版本/补丁不匹配的醒目提示:任何集成补丁缺失或部分安装时,在状态顶部
+    // 直接建议用户运行 ./update.sh,而不是只靠分散的 [补丁未装] 小字。
+    const issues = [];
+    if (bridge === "missing" || bridge === "partial") issues.push("image-bridge 未完整安装");
+    if (subBridge === "missing") issues.push("subagent-bridge 补丁未装");
+    if (wfBridge === "missing") issues.push("workflow-bridge 补丁未装");
+    if (skillPatch === "missing") issues.push("skill-audit 补丁未装(task 参数不可用)");
+    if (!eventsSupported) issues.push("会话事件记录已停用(缺 dsh-session ignorable 补丁)");
+    if (issues.length > 0) {
+      lines.splice(1, 0,
+        "",
+        "⚠️ 检测到 dsh-aux 补丁缺失/版本不匹配,请运行 ./update.sh 或更新 dsh-aux:",
+        ...issues.map((issue) => "  - " + issue)
+      );
     }
     return { kind: "success", text: lines.join("\n") };
   }
@@ -307,6 +326,22 @@ export async function handleTestCommand(service, agent, args) {
         purpose: "compaction"
       });
       text = `会话压缩路由成功: ${result.provider}/${result.model}`;
+    } else if (task === "skill") {
+      const result = await service.call("skill", {
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Test skill audit route. Reply with a short report." }],
+            id: "aux-skill-test",
+            source: { kind: "plugin", plugin: "dsh-aux" }
+          }
+        ],
+        session: agent?.session,
+        agent,
+        signal: new AbortController().signal,
+        purpose: "skill-audit"
+      });
+      text = `技能预审路由成功: ${result.provider}/${result.model}`;
     } else {
       return { kind: "error", text: "/aux test vision 请用 /aux vision <imagePath> <question> 验证" };
     }

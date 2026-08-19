@@ -108,7 +108,7 @@ async function pollUntil(condition, { timeoutMs = 2000, intervalMs = 10 } = {}) 
 // ── route.js 纯逻辑 ──────────────────────────────────────────────────────
 
 test('resolveConfig: 空配置合法,未知键抛错', () => {
-  assert.deepEqual(resolveConfig({}), { tasks: { vision: {}, web_extract: {}, web_crawl: {}, compress: {}, compaction: {} } });
+  assert.deepEqual(resolveConfig({}), { tasks: { vision: {}, web_extract: {}, web_crawl: {}, compress: {}, compaction: {}, skill: {} } });
   assert.throws(() => resolveConfig({ nope: 1 }), /unknown key\(s\) nope/);
   assert.throws(() => resolveConfig({ tasks: { vision: { extra: 1 } } }), /unknown key\(s\) extra/);
 });
@@ -1028,6 +1028,54 @@ test('AuxCallError: 聚合所有尝试', async () => {
   // 只尝试了默认路由;主模型被冷却? 不——失败一次后直接尝试主模型
   // 这里默认辅助模型 = opencode-go/deepseek-v4-flash(与主模型相同),所以只有一跳
   assert.equal(calls.length, 1);
+});
+
+test('call: allowMainFallback=false 时配置路由失败不尝试主模型', async () => {
+  const ctx = new Context();
+  const attempts = [];
+  await ctx.plugin({
+    name: 'aux-stubs-no-fallback',
+    apply(stubCtx) {
+      stubCtx.provide('tools', { register() { return () => {}; } });
+      stubCtx.provide('systemPrompt', { section() { return () => {}; } });
+      stubCtx.provide('settings', {});
+      stubCtx.provide('web', { async fetch() { throw new Error('no'); } });
+      stubCtx.provide('fs', { async resolve(p) { return { displayPath: p }; }, async stat() { return { type: 'file' }; }, async readBytes() { return new Uint8Array(0); } });
+      stubCtx.provide('attachments', {
+        imageLimits: { maxImageBytes: 1000, maxMessageImageBytes: 1000, maxImagesPerMessage: 1, maxImagePixels: 1000, mediaTypes: ['image/png'] },
+        async validateImage() {},
+        async saveImage(input) { return { attachmentId: 'a', mediaType: input.mediaType, bytes: 0, width: 1, height: 1 }; },
+        async readImage(ref) { return { ref, data: new Uint8Array(0) }; }
+      });
+      stubCtx.provide('llm', {
+        async resolveModelInfo() { return { inputModalities: ['text'] }; },
+        stream(options) {
+          attempts.push(options.model);
+          if (options.model === 'primary-fail') throw Object.assign(new Error('boom'), { code: 'TIMEOUT', status: 408 });
+          return (async function* () {
+            yield { type: 'block-start', index: 0, blockType: 'text' };
+            yield { type: 'text-delta', index: 0, text: 'OK' };
+            yield { type: 'block-end', index: 0, block: { type: 'text', text: 'OK' } };
+            yield { type: 'finish', reason: { kind: 'stop' } };
+          })();
+        }
+      });
+      stubCtx.provide('agentDefaultModel', {
+        currentSelection() { return { provider: 'opencode-go', model: 'main-ok' }; }
+      });
+    }
+  });
+  await ctx.plugin(AuxLlmService, { tasks: { skill: { provider: 'opencode-go', model: 'primary-fail' } } });
+  await settle();
+  await assert.rejects(
+    () => ctx.auxLlm.call('skill', { messages: [], session: makeSession(), allowMainFallback: false }),
+    (error) => {
+      assert.ok(error instanceof AuxCallError);
+      assert.equal(error.attempts.length, 1);
+      return true;
+    }
+  );
+  assert.deepEqual(attempts, ['primary-fail']);
 });
 
 test('registerAuxTask: 注册自定义任务后 call 可用', async () => {

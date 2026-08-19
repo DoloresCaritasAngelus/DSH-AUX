@@ -11,6 +11,8 @@ used for patch matching and local integration:
 - `orig-agent-loop-block.txt`
 - `patched-agent-loop-block.txt`(contains both original and dsh-aux modifications)
 - `v1-block.txt`
+- `orig-skill-tool-block.txt`
+- `patched-skill-tool-block.txt`(contains both original and dsh-aux modifications)
 
 These excerpts are from DeepSeek Harness, which is licensed under the MIT License:
 

@@ -1,0 +1,12 @@
+		description: "Load the full instructions for an available skill. Call this with the exact skill name from the session skill catalog before acting on a task that names or clearly matches that skill. If you are calling the skill for a specific task, include a `task` field describing that task so the skill auditor can tailor its pre-audit report.",
+		parameters: {
+			name: {
+				type: "string",
+				required: true,
+				description: "The exact skill name from the available skills list."
+			},
+			task: {
+				type: "string",
+				description: "Optional. The task/intent that triggered this skill call; the skill auditor uses it to tailor the pre-audit report."
+			}
+		},
