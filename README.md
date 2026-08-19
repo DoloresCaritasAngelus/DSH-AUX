@@ -8,8 +8,8 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-v0.1.8-blue)
-![Tests](https://img.shields.io/badge/tests-163-brightgreen)
+![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![Tests](https://img.shields.io/badge/tests-270-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)
 
@@ -237,7 +237,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。
 - **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
-- **测试零依赖**:`node --test tests/*.test.js`(163 项,含 aux 102 / compression 35 / core-review 4 / fetch-vision 4 / images-review 7 / fs-boundary 2 / bridge-target 4 / memory 1 / bridge 4)。
+- **测试零依赖**:`node --test tests/*.test.js`(270 项;文件清单与基线见 `TESTING.md`)。
 
 ### 集成组件
 
