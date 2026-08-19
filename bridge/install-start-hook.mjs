@@ -7,7 +7,7 @@
  * 把 hook 写进用户启动脚本,避免"换机/别人安装后没有自愈"。
  *
  * 安全设计(风险可控):
- *   - 只在文件存在且含可识别 `exec npx @deepseek-ai/dsh web` 行时插入;
+ *   - 只在文件存在且含可识别的 DSH 启动行时插入(支持多种常见写法);
  *   - 带标记 `dsh-aux self-heal`,已存在则跳过(不重复);
  *   - 首次写入前备份 `start-dsh.sh.bak-<ts>`;
  *   - `--dry-run` 只报告不写;
@@ -33,9 +33,32 @@ if (!existsSync(startSh)) { log(`未找到 ${startSh},跳过(不会创建)`); pr
 const data = readFileSync(startSh, "utf8");
 if (data.includes(MARK)) { log("hook 已存在,跳过"); process.exit(0); }
 
-const EXEC_LINE = "exec npx @deepseek-ai/dsh web";
-const idx = data.lastIndexOf(EXEC_LINE);
-if (idx === -1) { log(`未找到可识别的 "${EXEC_LINE}" 行,跳过(不猜测)`); process.exit(0); }
+const LAUNCH_PATTERNS = [
+  /exec\s+npx\s+@deepseek-ai\/dsh(?:\s+web)?/,
+  /exec\s+npx\s+dsh(?:\s+web)?/,
+  /exec\s+dsh(?:\s+web)?/,
+  /npx\s+@deepseek-ai\/dsh(?:\s+web)?/,
+  /pnpm\s+(?:--?\w+\s+)*dsh(?:\s+web)?/,
+  /(?:^|\s)dsh\s+web(?:\s|$)/
+];
+
+/** Find the last non-comment line that looks like the DSH launch command. */
+function findLaunchLine(lines) {
+  let index = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.length === 0 || line.startsWith("#")) continue;
+    if (LAUNCH_PATTERNS.some((re) => re.test(line))) index = i;
+  }
+  return index;
+}
+
+const lines = data.split("\n");
+const launchIndex = findLaunchLine(lines);
+if (launchIndex === -1) {
+  log("未找到可识别的 DSH 启动行(exec npx @deepseek-ai/dsh web / dsh web 等),跳过(不猜测)");
+  process.exit(0);
+}
 
 const block =
 `\n# dsh-aux self-heal(幂等):npm 升级会清掉手工 symlink、本地补丁与自定义事件\n` +
@@ -53,7 +76,10 @@ const bak = `${startSh}.bak-${stamp}`;
 copyFileSync(startSh, bak);
 log(`备份: ${bak}`);
 
-const out = data.slice(0, idx) + block + data.slice(idx);
+const out = lines.slice(0, launchIndex).join("\n") +
+  (launchIndex > 0 ? "\n" : "") +
+  block.trimEnd() + "\n" +
+  lines.slice(launchIndex).join("\n");
 writeFileSync(startSh, out);
 log("已插入自愈 hook");
 

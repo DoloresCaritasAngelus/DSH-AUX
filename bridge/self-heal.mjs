@@ -4,14 +4,15 @@
  *
  * 背景(2026-08-19 事故):npm 重装/升级 DSH 会
  *   1) prune 手工建的插件 symlink(dsh-aux 等);
- *   2) 清掉 node_modules 里所有本地补丁(P1-P10);
+ *   2) 清掉 node_modules 里所有本地补丁(P1-P11);
  *   3) 重生成官方 KNOWN_SESSION_EVENT_TYPES(白名单),自定义事件(aux/llm-call)
  *      从打包产物中消失 → 旧会话/新事件一读就 unknown。
  * 本脚本把"检查 + 重打"固化成启动自愈(妈妈AI 建议,蓝图 §2.3 版本检测+动态补丁)。
  *
  * 职责(AUX 自持,不碰其它插件):
  *   1. dsh-aux 插件 symlink 存在(缺失重建);
- *   2. P1-P6 桥接补丁(image/subagent/workflow):重跑 bridge/apply-patch.mjs(幂等);
+ *   2. P1-P6 + P11 桥接补丁(image/subagent/workflow/skill-audit):
+ *      重跑 bridge/apply-patch.mjs(幂等);
  *   3. P7 session append ignorable 写入口:缺失时外科式补上(专用块,不做白名单整跑);
  *   4. P8 白名单:保证 lib/index.js 与 lib/types/known-event-types.js 都含
  *      "aux/llm-call"(不负责 thinking/language——那是 dsh-thinking-zh 插件的事);
@@ -61,6 +62,9 @@ function runNode(script, args = []) {
   if (DRY) argv.push("--dry-run");
   const out = execFileSync(process.execPath, argv, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   for (const line of out.split("\n")) if (line.trim()) log(`  ${line.trim()}`);
+  if (/(版本不匹配|未找到已知代码块|无法自动补|缺失块|替换失败)/.test(out)) {
+    log("⚠️ 检测到补丁/自愈不匹配——当前 DSH 版本可能与 dsh-aux 不兼容,请运行 ./update.sh 或更新 dsh-aux");
+  }
 }
 
 /** P7: 只打 session append 的 ignorable 写入口(整跑 patch-session-ignorable 会因 rc.7 白名单块不匹配失败)。 */
@@ -73,12 +77,12 @@ function ensureSessionAppendIgnorable() {
   if (data.includes("opts[1]?.ignorable")) { log("P7 已打,跳过"); return; }
   const orig = readFileSync(join(HERE, "orig-session-append.txt"), "utf8").trim();
   const patched = readFileSync(join(HERE, "patched-session-append.txt"), "utf8").trim();
-  if (!data.includes(orig)) { log("P7 无法自动补:append 原块不匹配,请人工核对 rc 版本"); return; }
+  if (!data.includes(orig)) { log("⚠️ P7 无法自动补:append 原块不匹配,请人工核对 rc 版本"); return; }
   if (DRY) { log("[dry-run] 将打 P7 session append ignorable"); return; }
   const bak = `${tgt}.bak-selfheal-${Date.now()}`;
   copyFileSync(tgt, bak);
   const out = data.replace(orig, patched);
-  if (!out.includes("opts[1]?.ignorable")) { log("P7 替换失败,已回滚"); copyFileSync(bak, tgt); return; }
+  if (!out.includes("opts[1]?.ignorable")) { log("⚠️ P7 替换失败,已回滚"); copyFileSync(bak, tgt); return; }
   writeFileSync(tgt, out);
   log(`P7 已打(备份 ${bak})`);
 }
@@ -94,7 +98,7 @@ function ensureWhitelist(root) {
     const data = readFileSync(f, "utf8");
     if (data.includes('"aux/llm-call"') || data.includes("'aux/llm-call'")) { log(`P8 已含 aux/llm-call,跳过: ${f}`); continue; }
     const marker = "const KNOWN_SESSION_EVENT_TYPES = new Set([";
-    if (!data.includes(marker)) { log(`P8 无法自动补:未找到目录声明(${f})`); continue; }
+    if (!data.includes(marker)) { log(`⚠️ P8 无法自动补:未找到目录声明(${f})`); continue; }
     if (DRY) { log(`[dry-run] 将向白名单插入 aux/llm-call: ${f}`); continue; }
     const out = data.replace(marker, `${marker}\n\t"aux/llm-call",`);
     writeFileSync(f, out);
@@ -111,7 +115,7 @@ function main() {
     try { fn(); } catch (error) { log(`${name} 失败(继续): ${error?.message ?? error}`); }
   };
   step("symlink", () => ensureSymlink(root));
-  step("P1-P6", () => { log("重跑 P1-P6 桥接补丁(幂等)..."); runNode(join(HERE, "apply-patch.mjs")); });
+  step("P1-P6/P11", () => { log("重跑 P1-P6/P11 桥接补丁(幂等)..."); runNode(join(HERE, "apply-patch.mjs")); });
   step("P7", () => ensureSessionAppendIgnorable());
   step("P8", () => ensureWhitelist(root));
   step("P9/P10", () => {
