@@ -23,8 +23,7 @@
  * 被 ~/dsh/start-dsh.sh 在启动 DSH 前调用;失败不致命(继续启动)。
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, symlinkSync } from "node:fs";
-import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deployedFile, guardTarget, readPackageVersion, isRc7OrNewer } from "./target.js";
@@ -51,6 +50,8 @@ function ensureSymlink(root) {
   const target = dshAuxTarget(root);
   if (existsSync(target)) { log(`symlink 存在,跳过: ${target}`); return; }
   if (DRY) { log(`[dry-run] 将重建 symlink: ${target} -> ${join(REPO, "dsh-aux")}`); return; }
+  // npm prune 可能连 @dolorescaritasangelus/ 目录一起删掉,先确保父目录存在。
+  mkdirSync(dirname(target), { recursive: true });
   symlinkSync(join(REPO, "dsh-aux"), target, "dir");
   log(`已重建 symlink: ${target} -> ${join(REPO, "dsh-aux")}`);
 }
@@ -105,14 +106,19 @@ function main() {
   const root = detectDshRoot();
   if (!root) { log("未找到 DSH 部署根(跳过自愈)"); return; }
   log(`DSH 根: ${root} (${DRY ? "dry-run" : "实际修复"})`);
-  ensureSymlink(root);
-  log("步骤 2: 重跑 P1-P6 桥接补丁(幂等)...");
-  runNode(join(HERE, "apply-patch.mjs"));
-  ensureSessionAppendIgnorable();
-  ensureWhitelist(root);
-  log("步骤 5: settings 补丁(rc 守卫自动决定)...");
-  runNode(join(HERE, "patch-settings-dynamic-expose.mjs"));
-  runNode(join(HERE, "patch-settings-allowlist.mjs"));
+  // 每步独立容错:某一步失败(如某个补丁目标版本不匹配)不中断后续步骤。
+  const step = (name, fn) => {
+    try { fn(); } catch (error) { log(`${name} 失败(继续): ${error?.message ?? error}`); }
+  };
+  step("symlink", () => ensureSymlink(root));
+  step("P1-P6", () => { log("重跑 P1-P6 桥接补丁(幂等)..."); runNode(join(HERE, "apply-patch.mjs")); });
+  step("P7", () => ensureSessionAppendIgnorable());
+  step("P8", () => ensureWhitelist(root));
+  step("P9/P10", () => {
+    log("settings 补丁(rc 守卫自动决定)...");
+    runNode(join(HERE, "patch-settings-dynamic-expose.mjs"));
+    runNode(join(HERE, "patch-settings-allowlist.mjs"));
+  });
   log(DRY ? "dry-run 完成(未写盘)" : "自愈完成。若本次有修复,请重启 DSH 生效。");
 }
 

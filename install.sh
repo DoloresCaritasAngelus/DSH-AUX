@@ -15,11 +15,13 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 DSH_ROOT=""
 PROFILE="web"
 DRY=false
+NO_START_HOOK=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dsh-root) DSH_ROOT="$2"; shift 2 ;;
     --profile) PROFILE="$2"; shift 2 ;;
     --dry-run) DRY=true; shift ;;
+    --no-start-hook) NO_START_HOOK=true; shift ;;
     --help|-h) sed -n '1,20p' "$0"; exit 0 ;;
     *) echo "未知参数: $1"; exit 1 ;;
   esac
@@ -100,6 +102,15 @@ echo "  [settings-dynamic-expose] 应用 dsh-settings 补丁(注册时声明 exp
 run node "$HERE/bridge/patch-settings-dynamic-expose.mjs"
 echo "  [settings-allowlist] 应用 api-proxy 动态暴露补丁(v2,从 listExposed 合并)..."
 run node "$HERE/bridge/patch-settings-allowlist.mjs"
+
+# 6. start-dsh.sh 启动自愈 hook(幂等;--no-start-hook 跳过)
+#    npm 升级会清 symlink/补丁/白名单,启动前自愈可避免重演 rc.7 事故。
+if [ "$NO_START_HOOK" = "true" ]; then
+  echo "  [start-hook] 已跳过(--no-start-hook)"
+else
+  echo "  [start-hook] 写入启动自愈 hook(幂等)..."
+  run node "$HERE/bridge/install-start-hook.mjs" "$DSH_ROOT/start-dsh.sh" "$HERE"
+fi
 
 echo
 echo "完成。请重启 DSH 生效。"

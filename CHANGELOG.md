@@ -25,6 +25,9 @@
    apply-patch 单步/未写盘缺陷;新增 `bridge/self-heal.mjs`(symlink + 补丁 +
    白名单 aux/llm-call 幂等自愈)并接入 `~/dsh/start-dsh.sh`,npm 升级后重启即
    自愈,不再丢 symlink/补丁/自定义事件白名单。
+- **推送前加固**:`install.sh` 现在会幂等把启动自愈 hook 写进 `start-dsh.sh`
+   (标记+备份+`--no-start-hook`);`self-heal.mjs` 补 symlink 父目录 mkdir 与逐步骤
+   容错;`apply-patch.mjs` 循环加 no-op 守卫;新增 `TESTING.md` 测试活文档。
 
 ## 0.3.0(2026-08-17)— 子代理辅助模型桥接(subagent bridge)
 

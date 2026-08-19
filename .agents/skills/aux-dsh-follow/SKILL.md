@@ -42,6 +42,8 @@ user-invocable: false
   symlink 重建 → P1-P6 重打 → P7 append ignorable → P8 白名单(aux/llm-call,
   不负责其它插件事件)→ P9/P10 按 rc 守卫自动跳过。升级后即使忘了手动重打,
   重启 DSH 也会自愈。
+- `install.sh` 会自动把该 hook 幂等写进 `start-dsh.sh`(标记 `dsh-aux self-heal`,
+  带备份;`--no-start-hook` 跳过);换机/别人安装后自愈随安装走。
 
 ## 官方行为变化时
 - 先回写 `03-mechanism/*`(官方机制→我们的用法→偏差→未决),再落代码;

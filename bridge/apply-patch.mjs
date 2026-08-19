@@ -184,6 +184,10 @@ async function applyOne(target, dryRun) {
       log(`${target.label} 备份: ${bak}`);
     }
     const patched = data.replace(state.block.trim(), (state.replacement ?? target.patched).trim());
+    if (patched === data) {
+      log(`${target.label} ${state.name} 步骤块未命中,停止推进(避免假成功空转)`);
+      break;
+    }
     if (!patched.includes(target.mark)) {
       log(`${target.label} 补丁块未生效(替换失败),回滚`);
       await copyFile(bak, file);
@@ -193,9 +197,13 @@ async function applyOne(target, dryRun) {
     applied += 1;
     log(`${target.label} 已应用 ${state.name} 步骤`);
   }
-  await writeFile(file, data);
-  log(`${target.label} 已打补丁(${applied} 步): ${file}`);
-  syntaxCheck(file, target.label);
+  if (applied > 0) {
+    await writeFile(file, data);
+    log(`${target.label} 已打补丁(${applied} 步): ${file}`);
+    syntaxCheck(file, target.label);
+  } else {
+    log(`${target.label} 跳过(无可应用步骤)`);
+  }
 }
 
 const dryRun = process.argv.includes("--dry-run");
