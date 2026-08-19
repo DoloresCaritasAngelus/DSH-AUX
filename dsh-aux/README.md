@@ -13,8 +13,8 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.3.0-blue)
-![Tests](https://img.shields.io/badge/tests-270-brightgreen)
+![Version](https://img.shields.io/badge/version-0.3.1-blue)
+![Tests](https://img.shields.io/badge/tests-285-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)
 
@@ -55,6 +55,7 @@
 | **四个开箱即用工具** | `vision_analyze`(图像分析)、`web_extract`(网页提取+摘要)、`web_crawl`(站点深度抓取+整体摘要)、`compress_text`(长文本压缩) |
 | **会话压缩桥接** | 配置 `compaction` 任务后,原生 DSH 自动/手动压缩会改走 AUX 辅助模型;含图会话图片缺失/纯文本路由时自动降级,压缩不失败 |
 | **子代理/工作流桥接** | 原生 `subagent` 与 `workflow` 并行 `agent()` 子代理透明走 AUX(native/manual/vision-aware);零新工具、零系统提示词改动 |
+| **技能预审桥接** | 配置 `skill` 辅助模型后,原生 `skill` 工具调用会先由辅助模型精读 SKILL.md + 当前任务,返回「如何应用 / 已知坑 / 🔻易腐烂旧断言 / 执行建议」预审报告;主模型可对照原文辩证审视 |
 | **`/aux` 命令** | 状态查看、模型切换、图片回收、视觉自检、图片记忆 |
 | **Web 设置页 + 状态 chip** | 每任务模型下拉配置;composer 实时显示最近一次辅助调用 |
 | **会话图片生命周期** | 删除会话自动清理无引用图片;共享保留、归档不误删;图片记忆跨重启可查 |
@@ -94,6 +95,25 @@ dsh plugin --profile web add "file:$(pwd)"
 2. 输入 `/aux status` 查看各任务路由;
 3. 想让视觉走专用模型?`/aux model vision <provider>/mimo-v2.5`。
 
+## 更新(GitHub 安装用户)
+
+```sh
+# 推荐:拉取最新代码 + 重新接线(幂等,会自动补新补丁/自愈 hook)
+./update.sh
+
+# 如果你已经手动 git pull 或下载 zip 解压,只重新接线:
+./update.sh --no-pull
+
+# 更新后健康检查(不修改任何文件):
+node scripts/doctor.mjs
+```
+
+> 为什么不能只 `git pull`?dsh-aux 的 bridge 补丁和启动自愈 hook 写在 DSH
+> 部署里(`node_modules` / `start-dsh.sh`),`git pull` 只更新源码。`./update.sh`
+> 会重新跑 `install.sh`,把新增补丁/自愈 hook 写进部署。自愈 hook 会在每次
+> 启动 DSH 前自动补 symlink、补丁和白名单;若你的启动脚本不是 `start-dsh.sh`,
+> 请手动运行 `./update.sh`。
+
 ## 使用指南
 
 ### 命令
@@ -111,7 +131,7 @@ dsh plugin --profile web add "file:$(pwd)"
 
 ### 设置页
 
-Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` 分别配置模型。其中 **`compaction` 就是会话压缩模型**——配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。`web_extract` / `web_crawl` 还可单独配置 `maxChars`(页面字符预算,默认 32000)。也可关闭「在对话界面显示辅助模型状态芯片」(关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 不受影响)。
+Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型。其中 **`compaction` 就是会话压缩模型**——配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。**`skill` 就是技能预审模型**——配置后原生 `skill` 工具调用会先由辅助模型出预审报告。`web_extract` / `web_crawl` 还可单独配置 `maxChars`(页面字符预算,默认 32000)。也可关闭「在对话界面显示辅助模型状态芯片」(关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 不受影响)。
 
 ### 网页提取 (web_extract)
 
@@ -200,6 +220,34 @@ aux:
 - `includeWorkflow=false` 时,即使 `mode != native`,`workflow` 的子代理也不拦截(仅 `subagent` 工具生效)。
 - 安装:本地补丁由 `install.sh`(或 `bridge/apply-patch.mjs`)安装;`/aux status` 会显示 `subagent-bridge` / `workflow-bridge` 的当前模式与补丁状态。设计细节见 `SUBAGENT-BRIDGE.md` / `WORKFLOW-BRIDGE.md`。
 
+### 技能预审桥接(skill-audit)
+
+DSH 原生流程是「主模型看到 catalog → 调 `skill` → 直接执行 SKILL.md」。dsh-aux 在中间插入一道**辅助模型尽职调查**:
+
+```
+主模型看到 catalog → 决定调用 skill("auth-flow")
+    ↓
+原生 skill 工具照常加载 SKILL.md
+    ↓
+【AUX tools/post-execute 拦截】
+    ↓
+辅助模型精读 SKILL.md + 当前任务(显式 task 参数 + 会话最近消息)
+    ↓
+返回预审报告:
+  - 如何应用 / 适用性评估
+  - 已知坑 / 🔻易腐烂旧断言标注
+  - 执行建议 / 置信度
+    ↓
+主模型同时看到「原始 SKILL.md + 预审报告」→ 辩证审视 → 接受/修改/拒绝
+    ↓
+真正执行
+```
+
+- **启用**:设置页「技能预审 (skill)」或 `/aux model skill <provider>/<model>` 配置专用辅助模型后才拦截;未配置时 native 直通。
+- **不沉淀 skill**:dsh-aux 不负责创建/管理技能,技能仍由官方原生或记忆管理插件负责。
+- **返回原文**:主模型始终能看到原始 SKILL.md,不会盲信辅助模型。
+- **失败降级**:辅助调用失败时返回原生 SKILL.md,不阻塞主模型。
+
 ### 安全边界
 
 - **SSRF 防护(默认开启)**:`web_extract` / `web_crawl` 与 `vision_analyze` 的 `imageUrl` 默认拒绝内网/环回/云元数据地址(`localhost`、`127.0.0.1`、`10.x`、`192.168.x`、`169.254.169.254`、`*.local`、Teredo/6to4 内嵌私有地址等),且只允许 `http/https`;回退抓取路径的重定向**每一跳都在请求前校验**(逐跳 DNS+地址检查),provider seam 路径也要求返回最终 URL、对该 URL 复审,并把 3xx 交给逐跳逻辑重新跟随。需要抓取本机/内网服务时,在插件配置里显式设置 `allowInternalUrls: true`。
@@ -242,7 +290,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 - **平台**:DSH ≥ 0.1.0-rc.6;Node ≥ 20。
 - **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
-- **测试零依赖**:`node --test tests/*.test.js`(270 项;文件清单与基线见 `TESTING.md`)。
+- **测试零依赖**:`node --test tests/*.test.js`(285 项;文件清单与基线见 `TESTING.md`)。
 
 ### 集成组件
 

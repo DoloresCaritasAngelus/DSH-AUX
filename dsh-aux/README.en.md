@@ -13,8 +13,8 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.3.0-blue)
-![Tests](https://img.shields.io/badge/tests-270-brightgreen)
+![Version](https://img.shields.io/badge/version-0.3.1-blue)
+![Tests](https://img.shields.io/badge/tests-285-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)
 
@@ -55,6 +55,7 @@ Conversation models are getting stronger, but "look at this image", "read this p
 | **Four ready-to-use tools** | `vision_analyze` (image analysis), `web_extract` (page extraction + summary), `web_crawl` (site deep-crawl + overall summary), `compress_text` (long-text compression) |
 | **Session compaction bridge** | Once the `compaction` task is configured, native DSH automatic/manual compaction routes through the AUX model; image degradation keeps compaction working even when attachments are missing or the route is text-only |
 | **Subagent / workflow bridge** | The native `subagent` tool and `workflow`'s parallel `agent()` children transparently route to AUX (native / manual / vision-aware); no new tools, no system-prompt changes |
+| **Skill pre-audit bridge** | Once the `skill` aux model is configured, native `skill` calls are first audited by the auxiliary model (SKILL.md + current task), returning "how to apply / known pitfalls / 🔻rot-prone assertions / execution advice"; the main model can verify against the original text |
 | **`/aux` commands** | Status, model switching, image GC, vision self-test, image memory |
 | **Web settings + status chip** | Per-task model dropdowns; composer shows the latest auxiliary call |
 | **Session image lifecycle** | Deleted sessions clean up unreferenced images; shared images are preserved; image memory survives restarts |
@@ -94,6 +95,26 @@ After restarting DSH:
 2. Run `/aux status` to see per-task routes;
 3. Want a dedicated vision model? `/aux model vision <provider>/mimo-v2.5`.
 
+## Updating (GitHub installs)
+
+```sh
+# Recommended: pull latest code and re-wire (idempotent; applies new patches / self-heal hook)
+./update.sh
+
+# If you already pulled or extracted a zip, just re-wire:
+./update.sh --no-pull
+
+# Post-update health check (does not modify anything):
+node scripts/doctor.mjs
+```
+
+> Why is `git pull` not enough? dsh-aux's bridge patches and startup self-heal
+> hook live in the DSH deployment (`node_modules` / `start-dsh.sh`); `git pull`
+> only updates the source. `./update.sh` re-runs `install.sh` to write new
+> patches/self-heal into the deployment. The self-heal hook restores symlinks,
+> patches, and the whitelist before every DSH start; if your launch script is
+> not `start-dsh.sh`, run `./update.sh` manually.
+
 ## Usage
 
 ### Commands
@@ -111,7 +132,7 @@ After restarting DSH:
 
 ### Settings
 
-Web → Settings → Auxiliary Models. Configure a model per `vision` / `web_extract` / `web_crawl` / `compress` / `compaction`. **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. `web_extract` / `web_crawl` also expose `maxChars` (page character budget, default 32000). You can also turn off "Show auxiliary model status chip in conversation UI" (the `aux-status` projection is then no longer exposed to Web/third-party readers; `/aux status` still works).
+Web → Settings → Auxiliary Models. Configure a model per `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. **`skill` is the skill pre-audit model** — once configured, native `skill` calls get an auxiliary pre-audit report. `web_extract` / `web_crawl` also expose `maxChars` (page character budget, default 32000). You can also turn off "Show auxiliary model status chip in conversation UI" (the `aux-status` projection is then no longer exposed to Web/third-party readers; `/aux status` still works).
 
 ### web_extract
 
@@ -200,6 +221,34 @@ aux:
 - `includeWorkflow=false` means that even with `mode != native`, `workflow` children are not intercepted (only the `subagent` tool is).
 - Installation: the local patches come with `install.sh` (or `bridge/apply-patch.mjs`); `/aux status` shows `subagent-bridge` / `workflow-bridge` mode + patch state. Design: `SUBAGENT-BRIDGE.md` / `WORKFLOW-BRIDGE.md`.
 
+### Skill pre-audit bridge (skill-audit)
+
+The native DSH flow is "main model sees catalog → calls `skill` → executes SKILL.md directly". dsh-aux inserts an **auxiliary-model due-diligence step** in between:
+
+```
+Main model sees catalog → decides to call skill("auth-flow")
+    ↓
+Native skill tool loads SKILL.md as usual
+    ↓
+【AUX tools/post-execute interception】
+    ↓
+Auxiliary model reads SKILL.md + current task (explicit task parameter + recent conversation)
+    ↓
+Returns pre-audit report:
+  - how to apply / applicability assessment
+  - known pitfalls / 🔻rot-prone stale assertions
+  - execution advice / confidence
+    ↓
+Main model sees both "original SKILL.md + pre-audit report" → critically reviews → accept / modify / reject
+    ↓
+Actually executes
+```
+
+- **Enable**: configure a dedicated model in the "Skill pre-audit" settings block or via `/aux model skill <provider>/<model>`. Without configuration, the native result passes through untouched.
+- **No skill management**: dsh-aux does not create or manage skills; skills stay with the official native system or memory-management plugins.
+- **Original text retained**: the main model always sees the original SKILL.md, so it is not forced to trust the auxiliary model blindly.
+- **Failure degrades**: if the auxiliary call fails, the native SKILL.md result is returned and the main model is not blocked.
+
 ### Security boundaries
 
 - **SSRF protection (on by default)**: `web_extract`, `web_crawl`, and `vision_analyze`'s `imageUrl` reject internal/loopback/cloud-metadata addresses (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.169.254`, `*.local`, Teredo/6to4-embedded private addresses, etc.) by default and only allow `http/https`; the fallback fetch path validates **every redirect hop before the request is sent** (per-hop DNS + address check), and the provider-seam path requires a final URL, re-validates it, and hands any 3xx back to the per-hop follower. To fetch local/intranet services, explicitly set `allowInternalUrls: true` in the plugin config.
@@ -242,7 +291,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 - **Platform**: DSH ≥ 0.1.0-rc.6; Node ≥ 20.
 - **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages; no `dependencies`.
-- **Zero-dependency tests**: `node --test tests/*.test.js` (270 total; see `TESTING.md` for the file inventory and baseline).
+- **Zero-dependency tests**: `node --test tests/*.test.js` (285 total; see `TESTING.md` for the file inventory and baseline).
 
 ### Integrated Components
 

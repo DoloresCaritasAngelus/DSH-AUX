@@ -13,7 +13,7 @@ user-invocable: false
 ## 铁律
 1. **改官方 lib 只走 `bridge/`**,绝不手改 `node_modules/**/*.js`。
    🔻易腐烂·脚本清单(以 `bridge/` 目录实测为准,新增补丁脚本会变化):
-   - image-bridge / subagent / workflow:`bridge/apply-patch.mjs`
+   - image-bridge / subagent / workflow / skill-audit:`bridge/apply-patch.mjs`
    - 会话事件:`bridge/patch-session-ignorable.mjs`
    - 设置暴露:`bridge/patch-settings-dynamic-expose.mjs` + `patch-settings-allowlist.mjs`
 2. 一切修改经 `install.sh` 一键装配;单个补丁支持 `--dry-run`(只查不写)、
@@ -22,7 +22,7 @@ user-invocable: false
 4. `npm update` / 重装 DSH 后补丁全部丢失 → 必须重跑 `install.sh` 并验证。
 5. 每次改动或重装后:**跑全量测试 + `/aux status` 逐项确认**各 bridge 状态
    (🔻易腐烂·枚举清单 —— *image-bridge / subagent-bridge / workflow-bridge /
-   compaction-bridge / 会话事件记录*,以 `/aux status` 当前输出为准,种类会增长)。
+   compaction-bridge / skill-audit / 会话事件记录*,以 `/aux status` 当前输出为准,种类会增长)。
 
 ## 记账
 - 新补丁 / 补丁目标变化 → 更新 `02-patch-ledger.md`(位置/为何/无它会怎样/退役判据)。

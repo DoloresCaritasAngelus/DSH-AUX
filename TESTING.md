@@ -6,11 +6,11 @@
 ## 运行
 
 ```bash
-cd "/home/ehekatl/dsh/dsh work/aux"
+cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **270**(2026-08-19)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **285**(2026-08-19)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 
@@ -28,6 +28,7 @@ node --test tests/*.test.js
 | `tests/images-review.test.js` | 图片归属/回收/记忆 |
 | `tests/memory-race.test.js` | 图片记忆并发/竞态 |
 | `tests/readme-sync.test.js` | U1:包内 README == 根 README 生成快照(防漂移) |
+| `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
 | `tests/subagent-route.test.js` | subagent 路由判定(native/manual/vision-aware) |
 | `tests/web-crawl.test.js` | web_crawl(robots/范围/hosts/seed/模式/预算) |
 | `tests/web-extract-fixes.test.js` | web_extract(编码/反爬/代理/重定向/SSRF/Teredo…) |
@@ -49,7 +50,7 @@ node --test tests/*.test.js
 ## bridge / 自愈怎么验(不写盘)
 
 ```bash
-cd "/home/ehekatl/dsh/dsh work/aux"
+cd <仓库路径>
 node bridge/self-heal.mjs --dry-run            # 应全部"已打/跳过",无"可从…升级"
 node bridge/install-start-hook.mjs <start-dsh.sh> <repo> --dry-run
 node bridge/apply-patch.mjs --dry-run
@@ -57,6 +58,8 @@ node bridge/patch-session-ignorable.mjs --dry-run
 node bridge/patch-settings-dynamic-expose.mjs --dry-run
 node bridge/patch-settings-allowlist.mjs --dry-run
 ./install.sh --dry-run                          # 一键安装流程预览
+node scripts/doctor.mjs                         # 部署健康检查(symlink/profile/补丁/白名单/版本)
+./update.sh --dry-run                           # GitHub 更新流程预览
 ```
 
 ## 变更时同步

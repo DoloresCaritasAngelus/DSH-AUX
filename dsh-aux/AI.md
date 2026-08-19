@@ -138,6 +138,12 @@ rm "$DSH_ROOT/node_modules/<NAME>"
   `workflow` 的 `agent()` 并行子代理也可走同一路由(includeWorkflow)。
   设置:设置页「子代理辅助模型」或 `aux.subagent`。补丁随 install.sh 应用,
   也可单独 `cd <repo>/bridge && node apply-patch.mjs`;`/aux status` 报告状态。
+- **skill-audit(集成组件,默认安装)**:配置 `skill` 辅助模型后,原生 `skill`
+  工具调用会先由辅助模型精读 SKILL.md + 当前任务,返回预审报告(如何应用 /
+  适用性 / 已知坑 / 🔻易腐烂旧断言 / 执行建议)。主模型同时看到原始 SKILL.md
+  与报告,可对照辩证审视;未配置时 native 直通。配套补丁:`dsh-tool-skill`
+  schema 增加可选 `task` 参数。设置:设置页「技能预审 (skill)」或
+  `/aux model skill provider/model`;`/aux test skill` 自检。
 - **会话事件注册通道(必装)**:dsh-aux 向会话写 `aux/llm-call` 事件;DSH
   持久化读链对白名单外事件拒绝整个日志(官方无插件事件注册通道)。install.sh
   中的 `bridge/patch-session-ignorable.mjs` 补齐 append 的 `ignorable` 写入

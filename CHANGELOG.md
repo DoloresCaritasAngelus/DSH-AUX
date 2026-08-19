@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.1(未发布)— /aux 子命令识别修复 + 新增溯源命令
+## 0.3.1(未发布)— /aux 子命令识别修复 + 新增溯源命令 + 技能预审桥接
 
 - **修复 `/aux status` / `/aux history` 等带参子命令被当成普通聊天发送**。
   根因:DSH 客户端对"未声明 `input` 提示的裸命令"只认无参裸行
@@ -16,10 +16,18 @@
   `history` 简要溯源(默认最近 10 次,新→旧),`history full` 全部溯源
   (完整字段:路由/耗时/降级/error/输入输出 chars/purpose)。与
   `/aux status` 里「每任务最新一次」互补。
+- **技能预审桥接(skill-audit)**:新增 `skill` 辅助任务路由,配置
+  `aux.tasks.skill.provider/model` 后,原生 `skill` 工具结果会被 `tools/post-execute`
+  桥接拦截:辅助模型精读 SKILL.md + 当前任务上下文(显式 `task` 参数 + 会话最近消息),
+  返回「如何应用 / 适用性评估 / 已知坑与🔻易腐烂旧断言 / 执行建议 / 置信度」预审报告。
+  主模型同时看到原始 SKILL.md + 报告,可对照辩证审视;未配置 skill 辅助模型时
+  native 直通不拦截;辅助调用失败时回退原生结果。
+  配套补丁:`dsh-tool-skill` schema 增加可选 `task` 参数(新增 P11 维护债),
+  设置页新增「技能预审 (skill)」区块,`/aux test skill` 可自检。
 - **README 单一真相(U1)**:npm 发布用的 `dsh-aux/README.md`(.en)不再是第二份
   人工维护文档,改为仓库根 README 的**生成快照**——新增
   `scripts/gen-package-readme.mjs`(`prepack` 自动再生成,`--check` 供 CI),并
-  加回归测试防漂移(270 项全过)。消除"两套 README"文档债。
+  加回归测试防漂移(285 项全过)。消除"两套 README"文档债。
 - **DSH rc.7 升级适配 + 启动自愈**:本地升级 rc.7 后全量重打 P1-P8(P9/P10 rc.7
    原生跳过);修复 install.sh 包名校验正则、agent-loop patched 块缺 mark、
    apply-patch 单步/未写盘缺陷;新增 `bridge/self-heal.mjs`(symlink + 补丁 +
@@ -28,6 +36,13 @@
 - **推送前加固**:`install.sh` 现在会幂等把启动自愈 hook 写进 `start-dsh.sh`
    (标记+备份+`--no-start-hook`);`self-heal.mjs` 补 symlink 父目录 mkdir 与逐步骤
    容错;`apply-patch.mjs` 循环加 no-op 守卫;新增 `TESTING.md` 测试活文档。
+- **GitHub 安装更新体验**:新增 `update.sh`(`git pull` + 重跑 `install.sh` 一键更新);
+  新增 `scripts/doctor.mjs` 健康检查(部署根/symlink/profile/补丁/P7/P8/自愈 hook/版本兼容);
+  `install-start-hook.mjs` 支持更多启动脚本写法(`dsh web`、`pnpm dsh web` 等);
+  `self-heal.mjs` 在补丁锚点不匹配/无法自愈时输出醒目 ⚠️ 提示;`/aux status`
+  在补丁缺失时顶部显示「请运行 ./update.sh」警告。
+- **DSH rc.8 支持**:已完成 rc.8 实机升级与补丁验证(P1-P8/P11 全打,P9/P10 跳过);
+  多版本支持矩阵见 `aux-notes/13-version-support-plan.md`。
 
 ## 0.3.0(2026-08-17)— 子代理辅助模型桥接(subagent bridge)
 

@@ -10,7 +10,7 @@ user-invocable: false
 > 清单、版本号**是快照,引用前以 `02-patch-ledger.md` 与 `/aux status` 实测为准。
 
 ## 立场
-- DSH 闭源、无 PR 口 → 所有补丁(🔻**易腐烂·编号清单** *P1-P10*,数量随台账增减;
+- DSH 闭源、无 PR 口 → 所有补丁(🔻**易腐烂·编号清单** *P1-P11*,数量随台账增减;
   以 `02-patch-ledger.md` 当前列表为准)是**永久维护债**;接受并管理它。
 - 机制:**版本检测 + 动态补丁**——只对缺能力/旧版本打补丁,新版(原生已有)跳过;
   "官方支持了"不等于"停补丁"。
@@ -23,23 +23,23 @@ user-invocable: false
    `@huanlin/dsh-plugin-session-delete`)——先 `ls -la` 记录,升级后自查/重建。
 2. **改 profile 的 package.json(依赖/bundles)必须 `pnpm install`**:只改配置不装
    依赖,会让 DSH 起不来(2026-08-19 事故根因之一)。
-3. 记录新 DSH 版本号;对照 `02-patch-ledger.md` 中 (🔻易腐烂·编号清单 *P1-P10*,
+3. 记录新 DSH 版本号;对照 `02-patch-ledger.md` 中 (🔻易腐烂·编号清单 *P1-P11*,
    以台账当前为准) 各补丁的 `detect` 锚点。
 4. 逐步核对:锚点匹配不中 = 该补丁目标代码已变 → 先读官方新源码,更新检测块/
    补丁块,再继续;**宁可跳过也不硬替换**。
 5. 重跑 `install.sh`(幂等;`--dry-run` 可先看)。升级后**必须重打自定义事件白名单**
    (官方 `KNOWN_SESSION_EVENT_TYPES` 是生成式打包产物,每次升级都丢 aux/llm-call)。
-6. 跑全量测试(`aux-test-baseline`,🔻易腐烂·快照*270*,以跑出 #pass 为准)与
+6. 跑全量测试(`aux-test-baseline`,🔻易腐烂·快照*285*,以跑出 #pass 为准)与
    `npm run gen-package-readme -- --check`。
 7. `/aux status` 逐项确认:(🔻易腐烂·枚举清单 *image-bridge / subagent-bridge /
-   workflow-bridge / compaction-bridge / 会话事件记录* —— bridge 种类会增长,
+   workflow-bridge / compaction-bridge / skill-audit / 会话事件记录* —— bridge 种类会增长,
    **以 `/aux status` 当前输出清单为准**)各状态。
 8. **向后兼容检查**:对仍需支持的旧版 DSH 验证"缺补丁也能降级不爆炸"
    (ignorable 缺失 → 不写事件;detect 不中 → 跳过;能力不确定 → 兜底/放行)。
 
 ## 启动自愈
 - `~/dsh/start-dsh.sh` 已在启动前调用 `bridge/self-heal.mjs`(幂等,失败不阻塞):
-  symlink 重建 → P1-P6 重打 → P7 append ignorable → P8 白名单(aux/llm-call,
+  symlink 重建 → P1-P6/P11 重打 → P7 append ignorable → P8 白名单(aux/llm-call,
   不负责其它插件事件)→ P9/P10 按 rc 守卫自动跳过。升级后即使忘了手动重打,
   重启 DSH 也会自愈。
 - `install.sh` 会自动把该 hook 幂等写进 `start-dsh.sh`(标记 `dsh-aux self-heal`,

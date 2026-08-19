@@ -10,16 +10,18 @@ user-invocable: false
 > 提交号**是快照,引用前必须重新核验当前状态,不得直接照抄。
 
 ## 基线
-1. 任何改动前先跑全量:`cd "/home/ehekatl/dsh/dsh work/aux" && node --test tests/*.test.js`
-   —— 🔻**易腐烂·快照数字** 基线 **270**(2026-08-19;随新契约增长)。**以跑出的
-   `# pass/# fail` 为准,别把 270 当硬事实**。改后必须 0 fail。
+1. 任何改动前先跑全量:`cd <仓库路径> && node --test tests/*.test.js`
+   —— 🔻**易腐烂·快照数字** 基线 **285**(2026-08-19;随新契约增长)。**以跑出的
+   `# pass/# fail` 为准,别把 285 当硬事实**。改后必须 0 fail。
 2. 若进程因挂起定时器不自动退出(测试类),以 `# pass / # fail` 计数为准。
 
 ## 新契约必带回归断言(蓝图 §5#8)
 3. 每个"新契约/修复"配一个回归断言的先例:
    - `commands[0].input.hint` 含 status/model → 锁住命令注册契约(A3-4);
    - `tests/readme-sync.test.js` → 锁住 README 单一真相(U1);
-   - `/aux history` 简述/全量/空记录 → 锁住溯源视图语义。
+   - `/aux history` 简述/全量/空记录 → 锁住溯源视图语义;
+   - `tests/skill-bridge.test.js` 的 `buildSkillAuditUserMessage` / `attachSkillBridge`
+     → 锁住技能预审的上下文构造与 post-execute 拦截/失败回退。
 4. **断言指向语义,不是实现字符串**(避免脆断言);但能用"该在的文案"时用包含式。
 
 ## 测试只调实现、不重复逻辑
