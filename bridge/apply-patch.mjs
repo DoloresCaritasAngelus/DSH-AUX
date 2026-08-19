@@ -157,29 +157,44 @@ async function rollbackOne(target) {
 async function applyOne(target, dryRun) {
   const file = target.file;
   if (!existsSync(file)) { log(`${target.label} 未找到: ${file}`); return; }
-  const data = await readFile(file, "utf8");
-  let state;
-  for (const candidate of target.states) {
-    if (candidate.detect(data)) { state = candidate; break; }
+  let data = await readFile(file, "utf8");
+  let bak;
+  let applied = 0;
+  for (let i = 0; i < target.states.length + 3; i++) {
+    const state = target.states.find((candidate) => candidate.detect(data));
+    if (state === void 0) {
+      log(`${target.label} 跳过(版本不匹配,未找到已知代码块): ${file}`);
+      return;
+    }
+    if (state.action === "skip") {
+      if (applied > 0) {
+        await writeFile(file, data);
+        log(`${target.label} 已打补丁(${applied} 步): ${file}`);
+        syntaxCheck(file, target.label);
+      } else {
+        log(`${target.label} 已是 v2,跳过: ${file}`);
+      }
+      return;
+    }
+    if (dryRun) { log(`[dry-run] ${target.label} 可从 ${state.name} 升级: ${file}`); return; }
+    if (bak === void 0) {
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      bak = join(dirname(file), `${target.backupPrefix}${stamp}`);
+      await copyFile(file, bak);
+      log(`${target.label} 备份: ${bak}`);
+    }
+    const patched = data.replace(state.block.trim(), (state.replacement ?? target.patched).trim());
+    if (!patched.includes(target.mark)) {
+      log(`${target.label} 补丁块未生效(替换失败),回滚`);
+      await copyFile(bak, file);
+      process.exit(1);
+    }
+    data = patched;
+    applied += 1;
+    log(`${target.label} 已应用 ${state.name} 步骤`);
   }
-  if (state === void 0) {
-    log(`${target.label} 跳过(版本不匹配,未找到已知代码块): ${file}`);
-    return;
-  }
-  if (state.action === "skip") { log(`${target.label} 已是 v2,跳过: ${file}`); return; }
-  if (dryRun) { log(`[dry-run] ${target.label} 可从 ${state.name} 升级: ${file}`); return; }
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const bak = join(dirname(file), `${target.backupPrefix}${stamp}`);
-  await copyFile(file, bak);
-  log(`${target.label} 备份: ${bak}`);
-  const patched = data.replace(state.block.trim(), (state.replacement ?? target.patched).trim());
-  if (!patched.includes(target.mark)) {
-    log(`${target.label} 补丁块未生效(替换失败),回滚`);
-    await copyFile(bak, file);
-    process.exit(1);
-  }
-  await writeFile(file, patched);
-  log(`${target.label} 已打补丁(v2): ${file}`);
+  await writeFile(file, data);
+  log(`${target.label} 已打补丁(${applied} 步): ${file}`);
   syntaxCheck(file, target.label);
 }
 

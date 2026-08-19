@@ -20,6 +20,11 @@
   人工维护文档,改为仓库根 README 的**生成快照**——新增
   `scripts/gen-package-readme.mjs`(`prepack` 自动再生成,`--check` 供 CI),并
   加回归测试防漂移(270 项全过)。消除"两套 README"文档债。
+- **DSH rc.7 升级适配 + 启动自愈**:本地升级 rc.7 后全量重打 P1-P8(P9/P10 rc.7
+   原生跳过);修复 install.sh 包名校验正则、agent-loop patched 块缺 mark、
+   apply-patch 单步/未写盘缺陷;新增 `bridge/self-heal.mjs`(symlink + 补丁 +
+   白名单 aux/llm-call 幂等自愈)并接入 `~/dsh/start-dsh.sh`,npm 升级后重启即
+   自愈,不再丢 symlink/补丁/自定义事件白名单。
 
 ## 0.3.0(2026-08-17)— 子代理辅助模型桥接(subagent bridge)
 

@@ -1,5 +1,6 @@
 	/**
-	* image-bridge v2+v3 (local patch): at the model-input boundary, rewrite
+	* image-bridge v2 (local patch): at the model-input boundary, rewrite
+	* (v3 features: forceAuxVision routes image-capable main models too.)
 	* image blocks to local-path text for text-only models (the UI still
 	* renders the original image because the session log keeps the blocks).
 	* Multimodal models — resolveModelInfo declares "image" input — keep

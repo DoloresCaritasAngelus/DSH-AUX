@@ -43,8 +43,10 @@ fi
 
 PACKAGE_NAME="$(node -p "require('$HERE/dsh-aux/package.json').name")"
 # 包名必须符合 npm scoped 包格式,防止注入到 profile 补丁。
+# 注意:bash case glob 里 `+` 是字面量,不能用 `+` 当量词;
+# 用两段 `[...][...]*` 表达"每段至少一个字符"。
 case "$PACKAGE_NAME" in
-  @[A-Za-z0-9_-]+/[A-Za-z0-9_-]+) ;;
+  @[A-Za-z0-9_-][A-Za-z0-9_-]*/[A-Za-z0-9_-][A-Za-z0-9_-]*) ;;
   *) echo "错误: 包名格式不合法: $PACKAGE_NAME" >&2; exit 1 ;;
 esac
 NODE_MODULES="$DSH_ROOT/node_modules"
