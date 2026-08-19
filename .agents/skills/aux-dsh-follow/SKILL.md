@@ -52,3 +52,9 @@ user-invocable: false
 - 升级后不重跑 install.sh → 补丁静默缺失。
 - npm 升级后没自查 symlink → 插件静默缺失(启动自愈已兜底)。
 - 升级后不重打白名单 → 旧会话/事件一读 unknown(启动自愈已兜底)。
+
+## rc.7 接口应用决策(🔻易腐烂·随版本演进,2026-08-19)
+- 设置动态暴露/设置卡片:**rc.7 采用原生**(settings.describe 已含 aux,live 验证),
+  rc.6 保留 P9/P10 补丁;插件代码不变。
+- 子代理 Job Panel 字段(job/jobId/jobs):**不采用**(UI 展示,与 AUX 路由无关)。
+- 其它 rc.7 接口:不需要不采用。
