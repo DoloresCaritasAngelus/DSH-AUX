@@ -165,6 +165,7 @@ window.__ModuleLoader__.load({
 			"patch.failed": "补丁失败",
 			"status.refresh": "刷新状态",
 			"status.loading": "正在获取平台状态…",
+			"status.loadHint": "点击刷新加载平台状态",
 			"status.error": "无法获取平台状态: ",
 			"status.commandFailed": "状态命令失败",
 			"status.invalid": "状态数据异常,请刷新重试",
@@ -289,6 +290,7 @@ window.__ModuleLoader__.load({
 			"patch.failed": "Patch failed",
 			"status.refresh": "Refresh",
 			"status.loading": "Loading platform status…",
+			"status.loadHint": "Click refresh to load status",
 			"status.error": "Failed to load status: ",
 			"status.commandFailed": "Status command failed",
 			"status.invalid": "Status data is invalid; refresh to retry",
@@ -444,7 +446,7 @@ window.__ModuleLoader__.load({
 				};
 			}, []);
 			const [status, setStatus] = react.useState(null);
-			const [statusLoading, setStatusLoading] = react.useState(true);
+			const [statusLoading, setStatusLoading] = react.useState(false);
 			const [statusError, setStatusError] = react.useState(null);
 			const loadStatus = react.useCallback(() => {
 				let alive = true;
@@ -478,7 +480,6 @@ window.__ModuleLoader__.load({
 					});
 				return () => { alive = false; };
 			}, [runAuxCommand]);
-			react.useEffect(loadStatus, [loadStatus]);
 			if (state.status === "loading") return react.createElement("div", { className: "ax-section" }, t("settings.loading"));
 			if (state.status === "error") return react.createElement("div", { className: "ax-section" }, react.createElement("span", { className: "ax-error" }, t("settings.loadError") + state.error));
 			const tasks = ["vision", "web_extract", "web_crawl", "compress", "compaction", "skill"];
@@ -656,7 +657,7 @@ window.__ModuleLoader__.load({
 			};
 			const select = (task, key, options, placeholder) => react.createElement("select", {
 				value: field(task, key) ?? "",
-				disabled: !state.writable || options.length === 0,
+				disabled: options.length === 0,
 				onChange: (e) => {
 					const value = e.target.value;
 					setField(task, key, value);
@@ -673,7 +674,7 @@ window.__ModuleLoader__.load({
 						field(task, key) !== void 0 && field(task, key) !== "" ? react.createElement("button", {
 							type: "button",
 							className: "ax-reset",
-							disabled: !state.writable,
+							disabled: false,
 							onClick: () => resetField(task, key)
 						}, t("settings.reset")) : null
 					),
@@ -688,17 +689,17 @@ window.__ModuleLoader__.load({
 						fieldRow(task, "provider", t("field.provider"), select(task, "provider", providerOptions, t("placeholder.inheritModel"))),
 						fieldRow(task, "model", t("field.model"), select(task, "model", modelOptionsFor(task).map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
 						fieldRow(task, "timeoutMs", t("field.timeout"), react.createElement("input", {
-							type: "number", value: field(task, "timeoutMs") ?? "", placeholder: "60000", disabled: !state.writable, onChange: (e) => setField(task, "timeoutMs", e.target.value)
+							type: "number", value: field(task, "timeoutMs") ?? "", placeholder: "60000", disabled: false, onChange: (e) => setField(task, "timeoutMs", e.target.value)
 						})),
 						fieldRow(task, "maxConcurrency", t("field.concurrency"), react.createElement("input", {
-							type: "number", value: field(task, "maxConcurrency") ?? "", placeholder: "2", disabled: !state.writable, onChange: (e) => setField(task, "maxConcurrency", e.target.value)
+							type: "number", value: field(task, "maxConcurrency") ?? "", placeholder: "2", disabled: false, onChange: (e) => setField(task, "maxConcurrency", e.target.value)
 						})),
 						(task === "web_extract" || task === "web_crawl") ? fieldRow(task, "maxChars", t("field.maxChars"), react.createElement("input", {
-							type: "number", min: "1", value: field(task, "maxChars") ?? "", placeholder: "8000", disabled: !state.writable, onChange: (e) => setField(task, "maxChars", e.target.value)
+							type: "number", min: "1", value: field(task, "maxChars") ?? "", placeholder: "8000", disabled: false, onChange: (e) => setField(task, "maxChars", e.target.value)
 						})) : null,
 						fieldRow(task, "reasoningEffort", t("field.reasoningEffort"), react.createElement("select", {
 							value: field(task, "reasoningEffort") ?? "",
-							disabled: !state.writable || effortOptions.length === 0,
+							disabled: false || effortOptions.length === 0,
 							onChange: (e) => setField(task, "reasoningEffort", e.target.value)
 						}, react.createElement("option", { value: "" }, t("placeholder.inheritDefault")),
 							effortOptions.map((o) => react.createElement("option", { key: o.id, value: o.id }, o.name ?? o.id))))
@@ -730,7 +731,7 @@ window.__ModuleLoader__.load({
 			const subGroupSelect = (group, key, options, placeholder) => react.createElement("select", {
 				id: "ax-sub-" + group + "-" + key,
 				value: subField(group, key) ?? "",
-				disabled: !state.writable || options.length === 0,
+				disabled: options.length === 0,
 				onChange: (e) => { const value = e.target.value; setSubGroup(group, key, value); if (key === "provider") setSubGroup(group, "model", ""); }
 			}, react.createElement("option", { value: "" }, placeholder),
 				options.map((o) => react.createElement("option", { key: o.value, value: o.value }, o.label)));
@@ -741,7 +742,7 @@ window.__ModuleLoader__.load({
 				return [...new Set(ids)];
 			};
 			const switchRow = (label, checked, disabled, onChange) => react.createElement("label", { className: "ax-switch" },
-				react.createElement("input", { type: "checkbox", checked, disabled: disabled || !state.writable, onChange }), label);
+				react.createElement("input", { type: "checkbox", checked, disabled: disabled, onChange }), label);
 			const setEnabled = (key, value) => {
 				setSaved(false);
 				setSaveError(null);
@@ -848,7 +849,7 @@ window.__ModuleLoader__.load({
 					react.createElement("select", {
 						"aria-label": label,
 						value: draft?.enabled?.[key] ?? "aux",
-						disabled: !state.writable,
+						disabled: false,
 						onChange: (e) => setEnabled(key, e.target.value)
 					},
 						react.createElement("option", { value: "native" }, t("mode.native")),
@@ -867,7 +868,13 @@ window.__ModuleLoader__.load({
 						react.createElement("button", { type: "button", className: "ax-repair-button", onClick: loadStatus }, t("status.refresh"))
 					);
 				}
-				if (status === null || typeof status !== "object" || !Array.isArray(status.items)) {
+				if (status === null) {
+					return react.createElement("div", { className: "ax-status-head" },
+						react.createElement("span", { className: "ax-status-summary" }, t("status.loadHint")),
+						react.createElement("button", { type: "button", className: "ax-repair-button", onClick: loadStatus }, t("status.refresh"))
+					);
+				}
+				if (typeof status !== "object" || !Array.isArray(status.items)) {
 					return react.createElement("div", { className: "ax-status-head" },
 						react.createElement("span", { className: "ax-status-summary ax-error", role: "alert" }, t("status.invalid")),
 						react.createElement("button", { type: "button", className: "ax-repair-button", onClick: loadStatus }, t("status.refresh"))
@@ -936,7 +943,7 @@ window.__ModuleLoader__.load({
 				group("subagent", t("group.subagent"), t("group.subagent.desc"),
 					react.createElement("div", { className: "ax-grid" },
 						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.mode")), react.createElement("select", {
-							value: sub.mode ?? "native", disabled: !state.writable, onChange: (e) => setSub({ mode: e.target.value })
+							value: sub.mode ?? "native", disabled: false, onChange: (e) => setSub({ mode: e.target.value })
 						},
 							react.createElement("option", { value: "native" }, t("subagent.native")),
 							react.createElement("option", { value: "manual" }, t("subagent.manual")),
@@ -947,7 +954,7 @@ window.__ModuleLoader__.load({
 						react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-vision-provider" }, t("subagent.visionProvider")), subGroupSelect("vision", "provider", providerOptions, t("placeholder.inheritModel"))),
 						react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-vision-model" }, t("subagent.visionModel")), subGroupSelect("vision", "model", subModelOptionsFor("vision").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
 						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.visionKeywords")), react.createElement("input", {
-							type: "text", value: Array.isArray(sub.visionKeywords) ? sub.visionKeywords.join(",") : "", placeholder: "图片,image,截图", disabled: !state.writable, onChange: (e) => setSub({ visionKeywords: e.target.value === "" ? [] : e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
+							type: "text", value: Array.isArray(sub.visionKeywords) ? sub.visionKeywords.join(",") : "", placeholder: "图片,image,截图", disabled: false, onChange: (e) => setSub({ visionKeywords: e.target.value === "" ? [] : e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
 						}))
 					),
 					switchRow(t("subagent.includeWorkflow"), sub.includeWorkflow !== false, false, (e) => setSub({ includeWorkflow: e.target.checked })),
@@ -974,7 +981,7 @@ window.__ModuleLoader__.load({
 							react.createElement("label", null, t("skill.mode.label")),
 							react.createElement("select", {
 								value: draft?.skill?.mode ?? "audit",
-								disabled: !state.writable,
+								disabled: false,
 								onChange: (e) => setSkillMode(e.target.value)
 							},
 								react.createElement("option", { value: "native" }, t("skill.mode.native")),
@@ -989,7 +996,7 @@ window.__ModuleLoader__.load({
 					react.createElement("div", { className: "ax-row" },
 						react.createElement("label", null, t("debug.maxDebugEventBytes")),
 						react.createElement("input", {
-							type: "number", min: "1024", value: draft?.debug?.maxDebugEventBytes ?? 65536, disabled: !state.writable,
+							type: "number", min: "1024", value: draft?.debug?.maxDebugEventBytes ?? 65536, disabled: false,
 							onChange: (e) => setDebug("maxDebugEventBytes", e.target.value === "" ? "" : Number(e.target.value))
 						})
 					),
