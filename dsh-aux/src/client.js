@@ -1048,7 +1048,7 @@ window.__ModuleLoader__.load({
 				const items = listResponse?.result?.value?.items ?? [];
 				if (items.length === 0) throw new Error(__t("command.noSession"));
 				const sessionId = items[0].sessionId;
-				const result = await ctx.remote.commands.execute(sessionId, line);
+				const result = await ctx.remote.commands.execute(sessionId, line, []);
 				if (!result.ok) throw new Error(__t("command.failed") + (result.error?.code ?? "") + ": " + (result.error?.message ?? ""));
 				if (result.value === void 0) throw new Error(__t("command.unknown") + line);
 				return result.value.result;
