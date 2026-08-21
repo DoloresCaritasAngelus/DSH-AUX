@@ -2,11 +2,14 @@
  * dsh-aux browser half: the auxiliary-model settings page plus a composer
  * status chip.
  *
- * Settings page (settings.section "aux"): per-task provider/model/timeout/
- * concurrency plus the global main-model fallback switch, read and written
- * through the settings wire (`settings.describe` / `settings.mutate` on
- * `aux`). The chip (conversation.input.left seat) renders the latest
- * auxiliary call from the `aux-status` projection.
+ * Settings page (settings.section "aux"): grouped collapsible cards for
+ * tool/bridge/subagent/global settings, per-task provider/model/timeout/
+ * concurrency/maxChars/reasoningEffort, global save, and per-field reset.
+ * The page is bilingual (zh/en) and follows the DSH locale service when
+ * present.
+ *
+ * The chip (conversation.input.left seat) renders the latest auxiliary call
+ * from the `aux-status` projection.
  *
  * Bundle format mirrors the shipped client plugins: `window.__ModuleLoader__`
  * factory returning { apply, inject }.
@@ -19,7 +22,42 @@ window.__ModuleLoader__.load({
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let react = require("react");
 		// Package-owned stylesheet, deduplicated by tag id and cleaned up with the run.
-		const css = ".ax-wrap{display:inline-flex;align-items:center;gap:6px;min-width:0}.ax-chip{display:inline-flex;align-items:center;gap:4px;border:none;border-radius:999px;padding:2px 8px;font-size:13px;font-weight:500;line-height:20px;cursor:default;font-family:inherit}.ax-ok{color:var(--dsw-alias-state-success-primary);background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 10%,transparent)}.ax-fail{color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent)}.ax-none{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-2)}.ax-section{display:flex;flex-direction:column;gap:16px;padding:16px;max-width:560px}.ax-task{border:1px solid var(--dsw-alias-border-strong);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}.ax-task h3{margin:0;font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}.ax-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dsw-alias-label-secondary)}.ax-row input{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-strong);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}.ax-row input:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:1px}.ax-row select{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-strong);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}.ax-row select:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:1px}.ax-switch{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dsw-alias-label-secondary)}.ax-actions{display:flex;gap:8px;align-items:center}.ax-save{border:none;border-radius:4px;padding:4px 12px;font-size:13px;font-weight:500;cursor:pointer;color:#fff;background:var(--dsw-alias-state-success-primary)}.ax-save:disabled{opacity:.6;cursor:default}.ax-status{font-size:12px;line-height:18px}.ax-error{color:var(--dsw-alias-state-error-primary)}.ax-ok-text{color:var(--dsw-alias-state-success-primary)}";
+		const css = [
+			".ax-wrap{display:inline-flex;align-items:center;gap:6px;min-width:0}",
+			".ax-chip{display:inline-flex;align-items:center;gap:4px;border:none;border-radius:999px;padding:2px 8px;font-size:13px;font-weight:500;line-height:20px;cursor:default;font-family:inherit}",
+			".ax-ok{color:var(--dsw-alias-state-success-primary);background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 10%,transparent)}",
+			".ax-fail{color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent)}",
+			".ax-none{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-2)}",
+			".ax-section{display:flex;flex-direction:column;gap:12px;padding:16px;max-width:760px}",
+			".ax-group{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);border-radius:12px;list-style:none;transition:border-color .16s,background .16s}",
+			".ax-group-open{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-label-dimmed)}",
+			".ax-group-header{appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:12px;align-items:center;gap:12px;padding:14px 16px;display:flex}",
+			".ax-group-header:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}",
+			".ax-group-headText{flex-direction:column;flex:1;gap:4px;min-width:0;display:flex}",
+			".ax-group-title{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:600;line-height:1.4}",
+			".ax-group-desc{color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:1.5}",
+			".ax-group-chevron{color:var(--dsw-alias-label-tertiary);flex:none;transition:transform .16s}",
+			".ax-group-chevronOpen{transform:rotate(180deg)}",
+			".ax-group-body{border-top:1px solid var(--dsw-alias-border-l2);margin:0 16px;padding:8px 0 12px}",
+			".ax-task{border:1px solid var(--dsw-alias-border-strong);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-top:10px}",
+			".ax-task h3{margin:0;font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}",
+			".ax-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 16px}",
+			".ax-row{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--dsw-alias-label-secondary);min-width:0}",
+			".ax-row label{font-size:12px;color:var(--dsw-alias-label-tertiary)}",
+			".ax-row input,.ax-row select{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-strong);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}",
+			".ax-row input:focus-visible,.ax-row select:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:1px}",
+			".ax-field-head{display:flex;align-items:center;gap:6px;min-width:0}",
+			".ax-reset{font:inherit;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;padding:0;font-size:11px;line-height:1.5}",
+			".ax-reset:hover:not(:disabled){color:var(--dsw-alias-label-primary)}",
+			".ax-reset:disabled{cursor:default}",
+			".ax-switch{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dsw-alias-label-secondary)}",
+			".ax-actions{display:flex;gap:8px;align-items:center}",
+			".ax-save{border:none;border-radius:4px;padding:4px 12px;font-size:13px;font-weight:500;cursor:pointer;color:#fff;background:var(--dsw-alias-state-success-primary)}",
+			".ax-save:disabled{opacity:.6;cursor:default}",
+			".ax-status{font-size:12px;line-height:18px}",
+			".ax-error{color:var(--dsw-alias-state-error-primary)}",
+			".ax-ok-text{color:var(--dsw-alias-state-success-primary)}"
+		].join("");
 		const tagId = "@dolorescaritasangelus/dsh-aux/Aux.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -28,16 +66,166 @@ window.__ModuleLoader__.load({
 			tag.textContent = css;
 			document.head.appendChild(tag);
 		}
+
+		const NS = "@dolorescaritasangelus/dsh-aux";
+		const zhDict = {
+			"settings.title": "辅助模型",
+			"settings.intro": "配置辅助模型的路由、超时、并发与思考档位。",
+			"settings.save": "保存",
+			"settings.saving": "保存中…",
+			"settings.saved": "已保存",
+			"settings.loading": "加载辅助模型配置…",
+			"settings.loadError": "加载失败: ",
+			"settings.reset": "重置",
+			"group.tools": "工具任务",
+			"group.tools.desc": "图像、网页提取、长文本压缩等辅助工具。",
+			"group.bridges": "桥接任务",
+			"group.bridges.desc": "会话压缩与技能预审。",
+			"group.subagent": "子代理",
+			"group.subagent.desc": "子代理辅助模型路由与工具注入。",
+			"group.global": "全局",
+			"group.global.desc": "降级策略与界面显示。",
+			"task.vision": "图像分析 (vision_analyze)",
+			"task.web_extract": "网页提取 (web_extract)",
+			"task.web_crawl": "站点抓取 (web_crawl)",
+			"task.compress": "文本压缩 (compress_text)",
+			"task.compaction": "会话压缩 (compaction)",
+			"task.skill": "技能预审 (skill)",
+			"field.provider": "Provider",
+			"field.model": "Model",
+			"field.timeout": "超时 (ms)",
+			"field.concurrency": "并发上限",
+			"field.maxChars": "maxChars (页面字符上限)",
+			"field.reasoningEffort": "思考档位",
+			"placeholder.inheritModel": "(继承主模型)",
+			"placeholder.inheritDefault": "(继承默认)",
+			"subagent.mode": "模式",
+			"subagent.native": "native (原生,不拦截)",
+			"subagent.manual": "manual (统一用 general)",
+			"subagent.visionAware": "vision-aware (按需 vision / general)",
+			"subagent.generalProvider": "general provider",
+			"subagent.generalModel": "general model",
+			"subagent.visionProvider": "vision provider",
+			"subagent.visionModel": "vision model",
+			"subagent.visionKeywords": "视觉关键词 (逗号分隔)",
+			"subagent.includeWorkflow": "workflow 并行子代理也走此路由 (includeWorkflow)",
+			"subagent.prepareTools": "给子代理注入 AUX 工具作兜底 (prepareTools)",
+			"global.fallbackToMain": "失败时降级到主模型 (fallbackToMain)",
+			"global.forceAuxVision": "强制原生图片也走 AUX 视觉 (forceAuxVision)",
+			"global.visionFallbackToMain": "视觉辅助失败时降级到主模型 (visionFallbackToMain)",
+			"global.showStatusChip": "在对话界面显示辅助模型状态芯片",
+			"chip.vision": "视觉",
+			"chip.web_extract": "网页",
+			"chip.web_crawl": "站点",
+			"chip.compaction": "会话压缩",
+			"chip.skill": "技能预审",
+			"chip.compress": "压缩",
+			"chip.success": "成功",
+			"chip.fail": "失败",
+			"chip.fallback": " (已降级)"
+		};
+		const enDict = {
+			"settings.title": "Auxiliary Models",
+			"settings.intro": "Configure auxiliary model routes, timeouts, concurrency, and reasoning effort.",
+			"settings.save": "Save",
+			"settings.saving": "Saving…",
+			"settings.saved": "Saved",
+			"settings.loading": "Loading auxiliary model config…",
+			"settings.loadError": "Failed to load: ",
+			"settings.reset": "Reset",
+			"group.tools": "Tool Tasks",
+			"group.tools.desc": "Vision, web extraction, long-text compression, and other auxiliary tools.",
+			"group.bridges": "Bridge Tasks",
+			"group.bridges.desc": "Session compaction and skill pre-audit.",
+			"group.subagent": "Subagents",
+			"group.subagent.desc": "Subagent auxiliary model routing and tool injection.",
+			"group.global": "Global",
+			"group.global.desc": "Fallback policy and interface display.",
+			"task.vision": "Vision (vision_analyze)",
+			"task.web_extract": "Web Extract (web_extract)",
+			"task.web_crawl": "Web Crawl (web_crawl)",
+			"task.compress": "Compress (compress_text)",
+			"task.compaction": "Compaction (compaction)",
+			"task.skill": "Skill Pre-audit (skill)",
+			"field.provider": "Provider",
+			"field.model": "Model",
+			"field.timeout": "Timeout (ms)",
+			"field.concurrency": "Max concurrency",
+			"field.maxChars": "maxChars (page char limit)",
+			"field.reasoningEffort": "Reasoning effort",
+			"placeholder.inheritModel": "(Inherit main model)",
+			"placeholder.inheritDefault": "(Inherit default)",
+			"subagent.mode": "Mode",
+			"subagent.native": "native (no interception)",
+			"subagent.manual": "manual (always use general)",
+			"subagent.visionAware": "vision-aware (vision/general on demand)",
+			"subagent.generalProvider": "general provider",
+			"subagent.generalModel": "general model",
+			"subagent.visionProvider": "vision provider",
+			"subagent.visionModel": "vision model",
+			"subagent.visionKeywords": "Vision keywords (comma separated)",
+			"subagent.includeWorkflow": "Route workflow parallel subagents through this too (includeWorkflow)",
+			"subagent.prepareTools": "Inject AUX tools into subagents as fallback (prepareTools)",
+			"global.fallbackToMain": "Fall back to main model on failure (fallbackToMain)",
+			"global.forceAuxVision": "Force native images through AUX vision (forceAuxVision)",
+			"global.visionFallbackToMain": "Fall back to main model when vision fails (visionFallbackToMain)",
+			"global.showStatusChip": "Show auxiliary model status chip in conversation UI",
+			"chip.vision": "Vision",
+			"chip.web_extract": "Web",
+			"chip.web_crawl": "Crawl",
+			"chip.compaction": "Compaction",
+			"chip.skill": "Skill",
+			"chip.compress": "Compress",
+			"chip.success": "OK",
+			"chip.fail": "FAIL",
+			"chip.fallback": " (fallback)"
+		};
+
+		var __locale = null;
+		function localeFallbackLang() {
+			if (typeof navigator === "undefined") return "zh";
+			for (const tag of (navigator.languages || []).concat([navigator.language])) {
+				const primary = String(tag || "").toLowerCase().split("-")[0];
+				if (primary === "zh" || primary === "en") return primary;
+			}
+			return "zh";
+		}
+		function __t(key) {
+			if (__locale && typeof __locale.translate === "function") {
+				const text = __locale.translate(NS, key);
+				if (typeof text === "string" && text !== key) return text;
+			}
+			return (localeFallbackLang() === "en" ? enDict : zhDict)[key] || key;
+		}
+		function useLocaleRevision() {
+			const [, setRev] = react.useState(0);
+			react.useEffect(() => {
+				if (!__locale || typeof __locale.subscribe !== "function") return undefined;
+				return __locale.subscribe(() => setRev((v) => v + 1));
+			}, []);
+		}
+		function adoptLocale(locale, ctx) {
+			if (!locale) return;
+			__locale = locale;
+			try {
+				if (typeof locale.register === "function") {
+					ctx.effect(() => locale.register(NS, { zh: zhDict, en: enDict }));
+				}
+			} catch { /* namespace already registered: keep existing copy */ }
+		}
+
 		/**
-		 * Auxiliary-model settings page: one block per task with provider,
-		 * model, timeout (ms) and concurrency fields, plus the fallback switch.
+		 * Auxiliary-model settings page: grouped collapsible cards.
 		 * Reads the `aux` namespace through settings.describe; writes through
 		 * settings.mutate with the revision read at load.
 		 */
 		function AuxSettingsPage(props) {
 			const { api } = props;
+			const t = (props && props.t) || __t;
+			useLocaleRevision();
 			const [state, setState] = react.useState({ status: "loading", error: null, value: null, revision: 0, writable: true });
-			const [catalog, setCatalog] = react.useState({ providers: [], models: [] });
+			const [catalog, setCatalog] = react.useState({ providers: [], models: [], reasoning: {} });
+			const [openGroups, setOpenGroups] = react.useState({ tools: true, bridges: false, subagent: false, global: false });
 			const load = react.useCallback(() => {
 				let alive = true;
 				Promise.all([
@@ -53,21 +241,24 @@ window.__ModuleLoader__.load({
 					const view = settingsResponse.result.value.namespaces.find((n) => n.ns === "aux");
 					const value = view?.value ?? {};
 					setState({ status: "ready", error: null, value, revision: view?.revision ?? 0, writable: settingsResponse.result.value.writable });
-					// provider/model catalog for the selects: only ACTIVE providers
-					// (routes the user actually configured) — dormant directory entries
-					// (amazon-bedrock, openai, … without credentials) are noise.
 					const providers = providersResponse.result.ok
 						? (providersResponse.result.value.providers ?? []).filter((p) => p.active === true)
 						: [];
 					const groups = modelsResponse.result.ok ? (modelsResponse.result.value.groups ?? []) : [];
 					const models = [];
+					const reasoning = {};
 					for (const group of groups) {
 						const pid = group.id ?? group.provider ?? "";
 						for (const model of (group.models ?? [])) {
-							models.push({ provider: pid, id: model.id, name: model.name ?? model.id });
+							const mid = model.id;
+							models.push({ provider: pid, id: mid, name: model.name ?? model.id });
+							const efforts = model?.reasoning?.efforts ?? group?.reasoning?.efforts;
+							if (Array.isArray(efforts) && efforts.length > 0) {
+								reasoning[pid + "\u0000" + mid] = efforts;
+							}
 						}
 					}
-					setCatalog({ providers, models });
+					setCatalog({ providers, models, reasoning });
 				}).catch((error) => {
 					if (alive) setState({ status: "error", error: error instanceof Error ? error.message : String(error), value: null, revision: 0, writable: true });
 				});
@@ -81,10 +272,9 @@ window.__ModuleLoader__.load({
 			const [saving, setSaving] = react.useState(false);
 			const [saveError, setSaveError] = react.useState(null);
 			const [saved, setSaved] = react.useState(false);
-			if (state.status === "loading") return react.createElement("div", { className: "ax-section" }, "加载辅助模型配置…");
-			if (state.status === "error") return react.createElement("div", { className: "ax-section" }, react.createElement("span", { className: "ax-error" }, "加载失败: " + state.error));
+			if (state.status === "loading") return react.createElement("div", { className: "ax-section" }, t("settings.loading"));
+			if (state.status === "error") return react.createElement("div", { className: "ax-section" }, react.createElement("span", { className: "ax-error" }, t("settings.loadError") + state.error));
 			const tasks = ["vision", "web_extract", "web_crawl", "compress", "compaction", "skill"];
-			const labels = { vision: "图像分析 (vision_analyze)", web_extract: "网页提取 (web_extract)", web_crawl: "站点抓取 (web_crawl)", compress: "文本压缩 (compress_text)", compaction: "会话压缩 (compaction)", skill: "技能预审 (skill)" };
 			const field = (task, key) => draft?.tasks?.[task]?.[key];
 			const setField = (task, key, value) => {
 				setSaved(false);
@@ -95,6 +285,15 @@ window.__ModuleLoader__.load({
 					next.tasks[task] = next.tasks[task] ?? {};
 					if (value === "") delete next.tasks[task][key];
 					else next.tasks[task][key] = value;
+					return next;
+				});
+			};
+			const resetField = (task, key) => {
+				setSaved(false);
+				setSaveError(null);
+				setDraft((d) => {
+					const next = structuredClone(d ?? {});
+					if (next.tasks?.[task]?.[key] !== void 0) delete next.tasks[task][key];
 					return next;
 				});
 			};
@@ -111,8 +310,6 @@ window.__ModuleLoader__.load({
 						ops.push({ op: "set", path: [...base, "provider"], value: entry.provider });
 						ops.push({ op: "set", path: [...base, "model"], value: entry.model });
 					} else {
-						// Keep provider/model paired: never persist a half-configured task
-						// (the settings namespace validator would reject it).
 						ops.push({ op: "unset", path: [...base, "provider"] });
 						ops.push({ op: "unset", path: [...base, "model"] });
 					}
@@ -128,6 +325,10 @@ window.__ModuleLoader__.load({
 						if (val !== void 0 && val !== "") ops.push({ op: "set", path, value: Number(val) });
 						else ops.push({ op: "unset", path });
 					}
+					const effort = entry.reasoningEffort;
+					const effortPath = [...base, "reasoningEffort"];
+					if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
+					else ops.push({ op: "unset", path: effortPath });
 				}
 				const sub = draft?.subagent ?? {};
 				if (sub.mode !== void 0 && sub.mode !== "native") ops.push({ op: "set", path: ["subagent", "mode"], value: sub.mode });
@@ -187,6 +388,12 @@ window.__ModuleLoader__.load({
 				const ids = catalog.models.filter((m) => m.provider === pid).map((m) => m.id);
 				return [...new Set(ids)];
 			};
+			const reasoningOptionsFor = (task) => {
+				const pid = field(task, "provider") ?? "";
+				const mid = field(task, "model") ?? "";
+				if (!pid || !mid) return [];
+				return catalog.reasoning[pid + "\u0000" + mid] ?? [];
+			};
 			const select = (task, key, options, placeholder) => react.createElement("select", {
 				value: field(task, key) ?? "",
 				disabled: !state.writable || options.length === 0,
@@ -197,7 +404,61 @@ window.__ModuleLoader__.load({
 				}
 			}, react.createElement("option", { value: "" }, placeholder),
 				options.map((o) => react.createElement("option", { key: o.value, value: o.value }, o.label)));
-			// Subagent bridge settings (aux.subagent).
+			const fieldRow = (task, key, label, control) => react.createElement("div", { className: "ax-row" },
+				react.createElement("div", { className: "ax-field-head" },
+					react.createElement("label", null, label),
+					field(task, key) !== void 0 && field(task, key) !== "" ? react.createElement("button", {
+						type: "button",
+						className: "ax-reset",
+						disabled: !state.writable,
+						onClick: () => resetField(task, key)
+					}, t("settings.reset")) : null
+				),
+				control
+			);
+			const taskCard = (task) => {
+				const effortOptions = reasoningOptionsFor(task);
+				return react.createElement("div", { key: task, className: "ax-task" },
+					react.createElement("h3", null, t("task." + task)),
+					react.createElement("div", { className: "ax-grid" },
+						fieldRow(task, "provider", t("field.provider"), select(task, "provider", providerOptions, t("placeholder.inheritModel"))),
+						fieldRow(task, "model", t("field.model"), select(task, "model", modelOptionsFor(task).map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
+						fieldRow(task, "timeoutMs", t("field.timeout"), react.createElement("input", {
+							type: "number", value: field(task, "timeoutMs") ?? "", placeholder: "60000", disabled: !state.writable, onChange: (e) => setField(task, "timeoutMs", e.target.value)
+						})),
+						fieldRow(task, "maxConcurrency", t("field.concurrency"), react.createElement("input", {
+							type: "number", value: field(task, "maxConcurrency") ?? "", placeholder: "2", disabled: !state.writable, onChange: (e) => setField(task, "maxConcurrency", e.target.value)
+						})),
+						(task === "web_extract" || task === "web_crawl") ? fieldRow(task, "maxChars", t("field.maxChars"), react.createElement("input", {
+							type: "number", min: "1", value: field(task, "maxChars") ?? "", placeholder: "8000", disabled: !state.writable, onChange: (e) => setField(task, "maxChars", e.target.value)
+						})) : null,
+						fieldRow(task, "reasoningEffort", t("field.reasoningEffort"), react.createElement("select", {
+							value: field(task, "reasoningEffort") ?? "",
+							disabled: !state.writable || effortOptions.length === 0,
+							onChange: (e) => setField(task, "reasoningEffort", e.target.value)
+						}, react.createElement("option", { value: "" }, t("placeholder.inheritDefault")),
+							effortOptions.map((o) => react.createElement("option", { key: o.id, value: o.id }, o.name ?? o.id))))
+					)
+				);
+			};
+			const group = (id, title, desc, children) => {
+				const open = openGroups[id] === true;
+				return react.createElement("div", { className: "ax-group" + (open ? " ax-group-open" : "") },
+					react.createElement("button", {
+						type: "button",
+						className: "ax-group-header",
+						"aria-expanded": open,
+						onClick: () => setOpenGroups((s) => ({ ...s, [id]: !s[id] }))
+					},
+						react.createElement("span", { className: "ax-group-headText" },
+							react.createElement("span", { className: "ax-group-title" }, title),
+							react.createElement("span", { className: "ax-group-desc" }, desc)
+						),
+						react.createElement("span", { className: "ax-group-chevron" + (open ? " ax-group-chevronOpen" : "") }, "▾")
+					),
+					open ? react.createElement("div", { className: "ax-group-body" }, children) : null
+				);
+			};
 			const sub = draft?.subagent ?? {};
 			const subField = (group, key) => sub?.[group]?.[key];
 			const setSub = (patch) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.subagent = { ...(next.subagent ?? {}), ...patch }; return next; }); };
@@ -214,73 +475,56 @@ window.__ModuleLoader__.load({
 				const ids = catalog.models.filter((m) => m.provider === pid).map((m) => m.id);
 				return [...new Set(ids)];
 			};
-			return react.createElement("div", { className: "ax-section" }, tasks.map((task) => react.createElement("div", { key: task, className: "ax-task" },
-				react.createElement("h3", null, labels[task]),
-				react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "provider"), select(task, "provider", providerOptions, "(继承主模型)")),
-				react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "model"), select(task, "model", modelOptionsFor(task).map((id) => ({ value: id, label: id })), "(继承主模型)")),
-				react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "timeout (ms)"), react.createElement("input", {
-					type: "number", value: field(task, "timeoutMs") ?? "", placeholder: "60000", disabled: !state.writable, onChange: (e) => setField(task, "timeoutMs", e.target.value)
-				})),
-				react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "并发上限"), react.createElement("input", {
-					type: "number", value: field(task, "maxConcurrency") ?? "", placeholder: "2", disabled: !state.writable, onChange: (e) => setField(task, "maxConcurrency", e.target.value)
-				})),
-				task === "web_extract" || task === "web_crawl" ? react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "maxChars (页面字符上限)"), react.createElement("input", {
-					type: "number", min: "1", value: field(task, "maxChars") ?? "", placeholder: "8000", disabled: !state.writable, onChange: (e) => setField(task, "maxChars", e.target.value)
-				})) : null
-			)),
-				react.createElement("div", { key: "subagent", className: "ax-task ax-subagent" },
-					react.createElement("h3", null, "子代理辅助模型 (subagent)"),
-					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "模式"), react.createElement("select", {
-						value: sub.mode ?? "native", disabled: !state.writable, onChange: (e) => setSub({ mode: e.target.value })
-					},
-						react.createElement("option", { value: "native" }, "native (原生,不拦截)"),
-						react.createElement("option", { value: "manual" }, "manual (统一用 general)"),
-						react.createElement("option", { value: "vision-aware" }, "vision-aware (按需 vision / general)")
-					)),
-					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "general provider"), subGroupSelect("general", "provider", providerOptions, "(继承主模型)")),
-					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "general model"), subGroupSelect("general", "model", subModelOptionsFor("general").map((id) => ({ value: id, label: id })), "(继承主模型)")),
-					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "vision provider"), subGroupSelect("vision", "provider", providerOptions, "(继承主模型)")),
-					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "vision model"), subGroupSelect("vision", "model", subModelOptionsFor("vision").map((id) => ({ value: id, label: id })), "(继承主模型)")),
-					react.createElement("div", { className: "ax-row" }, react.createElement("label", null, "视觉关键词 (逗号分隔)"), react.createElement("input", {
-						type: "text", value: Array.isArray(sub.visionKeywords) ? sub.visionKeywords.join(",") : "", placeholder: "图片,image,截图", disabled: !state.writable, onChange: (e) => setSub({ visionKeywords: e.target.value === "" ? [] : e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
-					})),
-					react.createElement("label", { className: "ax-switch" },
-						react.createElement("input", { type: "checkbox", checked: sub.includeWorkflow !== false, disabled: !state.writable, onChange: (e) => setSub({ includeWorkflow: e.target.checked }) }),
-						"workflow 并行子代理也走此路由 (includeWorkflow)"
+			const switchRow = (label, checked, disabled, onChange) => react.createElement("label", { className: "ax-switch" },
+				react.createElement("input", { type: "checkbox", checked, disabled: disabled || !state.writable, onChange }), label);
+			return react.createElement("div", { className: "ax-section" },
+				group("tools", t("group.tools"), t("group.tools.desc"),
+					tasks.filter((x) => ["vision", "web_extract", "web_crawl", "compress"].includes(x)).map(taskCard)
+				),
+				group("bridges", t("group.bridges"), t("group.bridges.desc"),
+					tasks.filter((x) => ["compaction", "skill"].includes(x)).map(taskCard)
+				),
+				group("subagent", t("group.subagent"), t("group.subagent.desc"),
+					react.createElement("div", { className: "ax-grid" },
+						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.mode")), react.createElement("select", {
+							value: sub.mode ?? "native", disabled: !state.writable, onChange: (e) => setSub({ mode: e.target.value })
+						},
+							react.createElement("option", { value: "native" }, t("subagent.native")),
+							react.createElement("option", { value: "manual" }, t("subagent.manual")),
+							react.createElement("option", { value: "vision-aware" }, t("subagent.visionAware"))
+						)),
+						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.generalProvider")), subGroupSelect("general", "provider", providerOptions, t("placeholder.inheritModel"))),
+						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.generalModel")), subGroupSelect("general", "model", subModelOptionsFor("general").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
+						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.visionProvider")), subGroupSelect("vision", "provider", providerOptions, t("placeholder.inheritModel"))),
+						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.visionModel")), subGroupSelect("vision", "model", subModelOptionsFor("vision").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
+						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.visionKeywords")), react.createElement("input", {
+							type: "text", value: Array.isArray(sub.visionKeywords) ? sub.visionKeywords.join(",") : "", placeholder: "图片,image,截图", disabled: !state.writable, onChange: (e) => setSub({ visionKeywords: e.target.value === "" ? [] : e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
+						}))
 					),
-					react.createElement("label", { className: "ax-switch" },
-						react.createElement("input", { type: "checkbox", checked: sub.prepareTools !== false, disabled: !state.writable, onChange: (e) => setSub({ prepareTools: e.target.checked }) }),
-						"给子代理注入 AUX 工具作兜底 (prepareTools)"
-					)
+					switchRow(t("subagent.includeWorkflow"), sub.includeWorkflow !== false, false, (e) => setSub({ includeWorkflow: e.target.checked })),
+					switchRow(t("subagent.prepareTools"), sub.prepareTools !== false, false, (e) => setSub({ prepareTools: e.target.checked }))
 				),
-				react.createElement("label", { className: "ax-switch" },
-					react.createElement("input", { type: "checkbox", checked: draft?.fallbackToMain !== false, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.fallbackToMain = e.target.checked; return next; }); } }),
-					"失败时降级到主模型 (fallbackToMain)"
-				),
-				react.createElement("label", { className: "ax-switch" },
-					react.createElement("input", { type: "checkbox", checked: draft?.forceAuxVision === true, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.forceAuxVision = e.target.checked; return next; }); } }),
-					"强制原生图片也走 AUX 视觉 (forceAuxVision)"
-				),
-				react.createElement("label", { className: "ax-switch" },
-					react.createElement("input", { type: "checkbox", checked: draft?.visionFallbackToMain !== false, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.visionFallbackToMain = e.target.checked; return next; }); } }),
-					"视觉辅助失败时降级到主模型 (visionFallbackToMain)"
-				),
-				react.createElement("label", { className: "ax-switch" },
-					react.createElement("input", { type: "checkbox", checked: draft?.showStatusChip !== false, disabled: !state.writable, onChange: (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.showStatusChip = e.target.checked; return next; }); } }),
-					"在对话界面显示辅助模型状态芯片"
+				group("global", t("group.global"), t("group.global.desc"),
+					switchRow(t("global.fallbackToMain"), draft?.fallbackToMain !== false, false, (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.fallbackToMain = e.target.checked; return next; }); }),
+					switchRow(t("global.forceAuxVision"), draft?.forceAuxVision === true, false, (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.forceAuxVision = e.target.checked; return next; }); }),
+					switchRow(t("global.visionFallbackToMain"), draft?.visionFallbackToMain !== false, false, (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.visionFallbackToMain = e.target.checked; return next; }); }),
+					switchRow(t("global.showStatusChip"), draft?.showStatusChip !== false, false, (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.showStatusChip = e.target.checked; return next; }); })
 				),
 				react.createElement("div", { className: "ax-actions" },
-					react.createElement("button", { type: "button", className: "ax-save", disabled: saving || !state.writable, onClick: save }, saving ? "保存中…" : "保存"),
+					react.createElement("button", { type: "button", className: "ax-save", disabled: saving || !state.writable, onClick: save }, saving ? t("settings.saving") : t("settings.save")),
 					saveError !== null && react.createElement("span", { className: "ax-status ax-error", role: "alert" }, saveError),
-					saved && react.createElement("span", { className: "ax-status ax-ok-text" }, "已保存")
+					saved && react.createElement("span", { className: "ax-status ax-ok-text" }, t("settings.saved"))
 				)
 			);
 		}
+
 		/**
 		 * Composer status chip: latest auxiliary call from the `aux-status`
 		 * projection. Renders only while the projection key exists.
 		 */
 		function AuxStatusChip(props) {
+			const t = (props && props.t) || __t;
+			useLocaleRevision();
 			const projection = props.useProjection("aux-status");
 			if (projection === void 0) return null;
 			const tasks = projection.tasks ?? {};
@@ -288,14 +532,16 @@ window.__ModuleLoader__.load({
 			if (entries.length === 0) return null;
 			const last = entries[entries.length - 1];
 			const ok = last.ok === true;
-			const taskLabel = last.task === "vision" ? "视觉" : last.task === "web_extract" ? "网页" : last.task === "web_crawl" ? "站点" : last.task === "compaction" ? "会话压缩" : last.task === "skill" ? "技能预审" : "压缩";
+			const chipKey = "chip." + last.task;
+			const taskLabel = (zhDict[chipKey] || enDict[chipKey]) ? t(chipKey) : last.task;
 			const label = taskLabel + (ok ? " ✓" : " ✗");
-			const title = `辅助调用 ${last.task}: ${ok ? "成功" : "失败"} ${last.durationMs}ms${last.fallbackUsed ? " (已降级)" : ""}`;
+			const title = `aux ${last.task}: ${ok ? t("chip.success") : t("chip.fail")} ${last.durationMs}ms${last.fallbackUsed ? t("chip.fallback") : ""}`;
 			return react.createElement("span", { className: "ax-wrap", title }, react.createElement("span", {
 				className: "ax-chip " + (ok ? "ax-ok" : "ax-fail"),
 				"aria-label": title
 			}, label));
 		}
+
 		/** Required client services. */
 		const inject = ["slots", "connection"];
 		/**
@@ -303,18 +549,25 @@ window.__ModuleLoader__.load({
 		 * @param ctx - client root context.
 		 */
 		function apply(ctx) {
+			adoptLocale(ctx.get("locale"), ctx);
+			if (!__locale) {
+				ctx.inject(["locale"], (sub) => {
+					adoptLocale(sub.locale, ctx);
+				});
+			}
 			const connection = ctx.get("connection");
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
 				id: "aux",
 				order: 30,
-				label: () => "辅助模型",
+				label: () => __t("settings.title"),
+				locale: NS,
 				inject: () => ({ api: connection.api })
 			}, AuxSettingsPage));
 			ctx.slots.inject("conversation.input.left", () => ctx.slots.register({
 				name: "conversation.input.left",
 				id: "aux-status",
-				locale: "@dolorescaritasangelus/dsh-aux"
+				locale: NS
 			}, AuxStatusChip));
 		}
 		exports.apply = apply;

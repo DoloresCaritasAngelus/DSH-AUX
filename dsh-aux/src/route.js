@@ -54,7 +54,7 @@ export function resolveConfig(config) {
       throw new Error(`AuxConfig tasks.${task} must be an object`);
     }
     const entry = {};
-    const allowedKeys = ["provider", "model", "timeoutMs", "maxConcurrency"];
+    const allowedKeys = ["provider", "model", "timeoutMs", "maxConcurrency", "reasoningEffort"];
     // maxChars (deployment-level page-text cap) is meaningful for web_extract
     // and web_crawl; kept task-scoped so a stray vision.maxChars is refused
     // rather than silently ignored.
@@ -96,6 +96,12 @@ export function resolveConfig(config) {
       }
       entry.maxChars = raw.maxChars;
     }
+    if (raw.reasoningEffort !== void 0) {
+      if (typeof raw.reasoningEffort !== "string" || raw.reasoningEffort.length === 0) {
+        throw new Error(`AuxConfig tasks.${task}.reasoningEffort must be a non-empty string`);
+      }
+      entry.reasoningEffort = raw.reasoningEffort;
+    }
     tasks[task] = entry;
   }
   if (source.guideText !== void 0 && typeof source.guideText !== "string") {
@@ -118,7 +124,8 @@ export function mergeTaskConfig(pluginEntry, settingsEntry) {
     model: settingsEntry.model ?? pluginEntry.model,
     timeoutMs: settingsEntry.timeoutMs ?? pluginEntry.timeoutMs,
     maxConcurrency: settingsEntry.maxConcurrency ?? pluginEntry.maxConcurrency,
-    maxChars: settingsEntry.maxChars ?? pluginEntry.maxChars
+    maxChars: settingsEntry.maxChars ?? pluginEntry.maxChars,
+    reasoningEffort: settingsEntry.reasoningEffort ?? pluginEntry.reasoningEffort
   };
 }
 

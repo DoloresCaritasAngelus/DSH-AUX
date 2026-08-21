@@ -534,6 +534,7 @@ export class AuxLlmService extends Service {
       callDeadline[Symbol.dispose]();
       throw error;
     }
+    const reasoningEffort = request.reasoningEffort ?? definition.reasoningEffort;
     const options = deepFreeze({
       provider: target.provider,
       model: target.model,
@@ -542,6 +543,7 @@ export class AuxLlmService extends Service {
       ...(request.tools === void 0 ? {} : { tools: [...request.tools] }),
       ...(request.temperature !== void 0 ? { temperature: request.temperature } : {}),
       ...(request.maxTokens !== void 0 ? { maxTokens: request.maxTokens } : {}),
+      ...(reasoningEffort !== void 0 ? { reasoningEffort } : {}),
       sessionId: request.session?.id,
       signal: callDeadline.signal
     });

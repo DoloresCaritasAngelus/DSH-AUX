@@ -138,6 +138,23 @@ test('mergeTaskConfig: settings 覆盖插件配置,缺省继承', () => {
   assert.equal(merged.maxConcurrency, 4);
 });
 
+test('resolveConfig: reasoningEffort 接受非空字符串,拒绝空/非字符串', () => {
+  const resolved = resolveConfig({ tasks: { vision: { provider: 'opencode-go', model: 'glm-5.2', reasoningEffort: 'high' } } });
+  assert.equal(resolved.tasks.vision.reasoningEffort, 'high');
+  assert.throws(() => resolveConfig({ tasks: { vision: { reasoningEffort: '' } } }), /reasoningEffort must be a non-empty string/);
+  assert.throws(() => resolveConfig({ tasks: { vision: { reasoningEffort: 42 } } }), /reasoningEffort must be a non-empty string/);
+});
+
+test('mergeTaskConfig: reasoningEffort settings 覆盖插件配置,缺省继承', () => {
+  const merged = mergeTaskConfig(
+    { provider: 'opencode-go', model: 'glm-5.2', reasoningEffort: 'low' },
+    { model: 'kimi-k2.7-code', reasoningEffort: 'high' }
+  );
+  assert.equal(merged.reasoningEffort, 'high');
+  const inherited = mergeTaskConfig({ reasoningEffort: 'medium' }, {});
+  assert.equal(inherited.reasoningEffort, 'medium');
+});
+
 test('_semaphoreFor: 并发上限变更时复用同一 semaphore 对象', async () => {
   const { ctx } = await makeHarness();
   const a = ctx.auxLlm._semaphoreFor('x', 2);
@@ -755,6 +772,22 @@ test('call: 显式配置走配置模型', async () => {
   assert.equal(streams[0].provider, 'volcengine-ark');
 });
 
+test('call: 任务配置 reasoningEffort 透传到 llm.stream', async () => {
+  const { ctx, streams } = await makeHarness({
+    tasks: { compress: { provider: 'volcengine-ark', model: 'glm-5.2', reasoningEffort: 'high' } }
+  });
+  await ctx.auxLlm.call('compress', { messages: [], session: makeSession() });
+  assert.equal(streams[0].reasoningEffort, 'high');
+});
+
+test('call: request.reasoningEffort 覆盖任务配置', async () => {
+  const { ctx, streams } = await makeHarness({
+    tasks: { compress: { provider: 'volcengine-ark', model: 'glm-5.2', reasoningEffort: 'high' } }
+  });
+  await ctx.auxLlm.call('compress', { messages: [], session: makeSession(), reasoningEffort: 'low' });
+  assert.equal(streams[0].reasoningEffort, 'low');
+});
+
 test('call: compaction 任务可显式配置并记录事件', async () => {
   const { ctx, streams } = await makeHarness({
     tasks: { compaction: { provider: 'volcengine-ark', model: 'doubao-seed-2.1-turbo' } }
@@ -1176,6 +1209,12 @@ test('projectSettings: 暴露 forceAuxVision / visionFallbackToMain 默认值', 
   const custom = projectSettings({ forceAuxVision: true, visionFallbackToMain: false });
   assert.equal(custom.forceAuxVision, true);
   assert.equal(custom.visionFallbackToMain, false);
+});
+
+test('projectSettings: reasoningEffort 透传', () => {
+  const projected = projectSettings({ tasks: { vision: { reasoningEffort: 'high' } } });
+  assert.equal(projected.tasks.vision.reasoningEffort, 'high');
+  assert.equal(projected.tasks.skill.reasoningEffort, void 0);
 });
 
 test('projectSettings: subagent 段透传', () => {
