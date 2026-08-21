@@ -115,6 +115,8 @@ function makeHarness(overrides = {}) {
       logger: { warn() {} }
     },
     _merged: { skill: overrides.configured === false ? {} : { provider: 'opencode-go', model: 'glm-5.2' } },
+    _enabled: overrides.enabled ?? { skillAudit: 'aux' },
+    skillMode: overrides.skillMode ?? 'audit',
     async call(task, request) {
       calls.push({ task, request });
       if (overrides.failCall) throw new Error('aux failed');
@@ -203,4 +205,39 @@ test('attachSkillBridge: 已失败的工具结果不拦截', async () => {
   const decision = await handler(skillExec(), { ...skillResult(), isError: true }, async () => ({ kind: 'accept' }));
   assert.deepEqual(decision, { kind: 'accept' });
   assert.equal(calls.length, 0);
+});
+
+test('attachSkillBridge: skillAudit=native 或 skillMode=native 时直通', async () => {
+  for (const overrides of [
+    { enabled: { skillAudit: 'native' }, skillMode: 'audit' },
+    { enabled: { skillAudit: 'aux' }, skillMode: 'native' }
+  ]) {
+    const { handler, calls } = makeHarness(overrides);
+    const decision = await handler(skillExec(), skillResult(), async () => ({ kind: 'accept' }));
+    assert.deepEqual(decision, { kind: 'accept' });
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('attachSkillBridge: report 模式只返回报告并带原文提示', async () => {
+  const { handler, calls } = makeHarness({ skillMode: 'report' });
+  const decision = await handler(skillExec(), skillResult(), async () => ({ kind: 'accept' }));
+  const text = decision.content.map((b) => b.text).join('\n');
+  assert.match(text, /AUDIT_REPORT/);
+  assert.match(text, /includeOriginal: true/);
+  assert.ok(!text.includes('# Auth Flow'), 'report 模式不应包含原始 SKILL');
+  assert.equal(calls.length, 1);
+});
+
+test('attachSkillBridge: report-ondemand 默认只返回报告,includeOriginal 返回原文', async () => {
+  const { handler } = makeHarness({ skillMode: 'report-ondemand' });
+  const reportDecision = await handler(skillExec(), skillResult(), async () => ({ kind: 'accept' }));
+  const reportText = reportDecision.content.map((b) => b.text).join('\n');
+  assert.match(reportText, /AUDIT_REPORT/);
+  assert.ok(!reportText.includes('# Auth Flow'), '默认不应包含原始 SKILL');
+
+  const originalDecision = await handler(skillExec({ arguments: { name: 'auth-flow', task: 'x', includeOriginal: true } }), skillResult(), async () => ({ kind: 'accept' }));
+  const originalText = originalDecision.content.map((b) => b.text).join('\n');
+  assert.match(originalText, /# Auth Flow/);
+  assert.ok(!originalText.includes('AUDIT_REPORT'), 'includeOriginal 应只返回原文');
 });

@@ -27,6 +27,11 @@ const MARK = "dsh-aux self-heal";
 
 function log(msg) { console.log(`[dsh-aux-install-start-hook] ${msg}`); }
 
+/** POSIX shell single-quote escaping; safe for paths containing quotes/$/etc. */
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
 if (!startSh || !repo) { log("用法: node install-start-hook.mjs <start-dsh.sh> <repo> [--dry-run]"); process.exit(2); }
 
 if (!existsSync(startSh)) { log(`未找到 ${startSh},跳过(不会创建)`); process.exit(0); }
@@ -60,10 +65,11 @@ if (launchIndex === -1) {
   process.exit(0);
 }
 
+const selfHealPath = join(repo, "bridge", "self-heal.mjs");
 const block =
 `\n# dsh-aux self-heal(幂等):npm 升级会清掉手工 symlink、本地补丁与自定义事件\n` +
 `# 白名单(aux/llm-call),启动前自动检查并重打;失败不阻塞启动。\n` +
-`AUX_SELF_HEAL="${repo}/bridge/self-heal.mjs"\n` +
+`AUX_SELF_HEAL=${shellQuote(selfHealPath)}\n` +
 `if [ -f "$AUX_SELF_HEAL" ]; then\n` +
 `  node "$AUX_SELF_HEAL" >> "$HOME/dsh/dsh-web.log" 2>&1 || echo "WARN: dsh-aux self-heal failed (non-fatal)"\n` +
 `fi\n`;

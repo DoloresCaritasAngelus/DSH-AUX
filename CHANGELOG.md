@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — 平台化开关 + SKILL 模式
+
+- **工具/桥接三态开关**:`native` / `aux` / `compat`(compat 预留);关闭时工具从模型目录隐藏,桥接走原生;补丁不受开关影响。
+- **SKILL 模式**:`native` / `audit` / `report` / `report-ondemand`;`report-ondemand` 支持 `includeOriginal` 取原文;`auto` 预留。
+- **配置 schema**:新增 `aux.enabled`、`aux.skill.mode`、`aux.debug`(fullToolTrace / maxDebugEventBytes / debugEventsInHistory / redactSecrets),默认保守。
+- **imageBridge 运行时门控**:补丁仍在,但 `imageBridge=native` 时不改写图片/不建硬链接。
+- **内容真相/debug**:`fullToolTrace=true` 时,辅助调用写入 `aux/debug` 会话事件(ignorable,不进模型上下文);新增 `/aux debug [N]` 查看,并支持 `/aux debug <目标>` 跨会话读取(@this / session id / id 前缀 / cwd 片段)。
+- **一键打补丁**:新增 `/aux patch` 命令(重跑 apply-patch + self-heal);设置页「平台开关」组提供“一键打补丁”按钮,通过 `/aux patch` 触发。
+- **状态图标 UI / host→client 状态通道**:新增 `/aux status --json` 结构化状态(工具/桥接逐项 mode/state/reason/patch/action + 核心保护 + 事件记录 + restartRequired);设置页新增「诊断与修复」面板、状态点、补丁徽标与悬停原因。
+- **设置页补丁状态展示**:每个工具/桥接显示可用状态与补丁状态;`unavailable` 项列出原因,可一键打补丁或提示配置。
+- **重启生效提示**:运行中打补丁后,`/aux status --json` 返回 `restartRequired:true`;设置页「诊断与修复」面板显示“补丁已写入,重启 DSH 后生效”。
+- **非标准安装路径补丁检测**:新增 `dsh-aux/src/bridge-locate.js`,统一用 `require.resolve` + 多级相对路径解析 DSH 包;修复源码树/自定义布局下 bridge 状态误报 `unknown` 的问题;`unknown` 文案改为“请运行 install.sh 或确认安装方式”。
+- **一键安装全部补丁 + 结构化失败信息**:`/aux patch --json` 返回 `{ ok, restartRequired, steps[] }`;设置页按钮改为“一键安装当前 DSH 所需全部补丁”,失败时展示每个步骤的错误输出;补丁后自动刷新状态。
+- **状态命令只读化**:`/aux status` 不再触发 `reconcileSessionImages`,避免持久化列表暂时不可用时状态查看变成删附件副作用。
+- **状态图标最终交互**:`unavailable` 行可点击跳转到「诊断与修复」并高亮对应 issue;修复中显示 `fixing`;失败后保留 `unavailable` 并在 issue 内展示错误。
+- **`/aux status` 统一重构**:人类可读输出改为消费 `collectPlatformStatus()`,消除两套状态推导,降低漂移风险。
+- **低优先级打磨**:`configure` issue 改为可点击跳转对应设置组;任务字段/子代理字段补齐 `label htmlFor` + 控件 `id`;状态命令失败文案中英文化。
+- **补丁未装强制 native**:补丁缺失时 `aux` 选项禁用,UI 显示“当前按 native 处理”,保存时也会把 `aux` 落成 `native`。
+- **非命令状态通道**:新增 `aux/platform-status` 隐藏事件 + `aux-platform` 投影;设置页通过 `sessions.history` 只读读取状态,不再执行 `/aux status --json`,消除会话命令卡片污染。
+- **子代理设置优化**:general / vision 分为独立卡片排版;子代理 general/vision 新增 `reasoningEffort`(思考强度)配置,并透传到子代理路由。
+- **PR 前审查修复**:修复同进程打补丁后写入非 ignorable 事件的风险、强制 native 保存、任务 reasoningEffort 孤立、redactSecrets 开关、group 渲染等问题;新增 README 命令表与投影/路由测试。
+- 测试基线更新为 304。
+
 ## 0.3.3(2026-08-21)— 设置页 UI 重构 + reasoningEffort + 双语
 
 - **设置页 UI 重构**:分组可折叠卡片(工具任务 / 桥接任务 / 子代理 / 全局),每个任务两列网格布局。

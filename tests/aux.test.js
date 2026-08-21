@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import fsPromises from 'node:fs/promises';
 import { Context } from '@deepseek-ai/cordis';
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic';
-import { projectSettings } from '../dsh-aux/src/config.js';
+import { AUX_DEBUG_EVENT, AUX_PLATFORM_EVENT, AUX_PLATFORM_KEY, projectSettings } from '../dsh-aux/src/config.js';
 import AuxLlmService, {
   AUX_CALL_EVENT,
   AUX_SETTINGS_NAMESPACE,
@@ -55,6 +55,7 @@ import {
   isPrivateIpv6
 } from '../dsh-aux/src/url-policy.js';
 import { syncAuxStatusProjection } from '../dsh-aux/src/projection.js';
+import { handleDebugCommand } from '../dsh-aux/src/commands.js';
 import {
   auxPreStepReminderText,
   auxToolsGuide,
@@ -68,6 +69,7 @@ import {
   recordAttachmentOwnership
 } from '../dsh-aux/src/images/ownership.js';
 import { runWebExtract } from '../dsh-aux/src/tools/web-extract.js';
+import { resolvePackageFile } from '../dsh-aux/src/bridge-locate.js';
 import { fetchWithSsrf } from '../dsh-aux/src/fetch.js';
 import { resolveImageRef } from '../dsh-aux/src/images/resolve.js';
 import { imageBridgeStatus } from '../dsh-aux/src/image-bridge.js';
@@ -521,10 +523,12 @@ test('装配: ctx.auxLlm 可用,三工具注册,投影与命令注册', async ()
   assert.ok(ctx.auxLlm instanceof AuxLlmService);
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, ['compress_text', 'vision_analyze', 'web_crawl', 'web_extract']);
-  assert.equal(projections.length, 1);
-  assert.equal(projections[0].key, AUX_STATUS_KEY);
-  assert.deepEqual(projections[0].init(), { tasks: {} });
-  assert.deepEqual(projections[0].view(projections[0].init()), { tasks: {} });
+  assert.equal(projections.length, 2);
+  assert.ok(projections.some((p) => p.key === AUX_STATUS_KEY), '应注册 aux-status 投影');
+  assert.ok(projections.some((p) => p.key === AUX_PLATFORM_KEY), '应注册 aux-platform 投影');
+  const statusProj = projections.find((p) => p.key === AUX_STATUS_KEY);
+  assert.deepEqual(statusProj.init(), { tasks: {} });
+  assert.deepEqual(statusProj.view(statusProj.init()), { tasks: {} });
   assert.equal(commands.length, 1);
   assert.equal(commands[0].name, 'aux');
   // 带参子命令必须声明 input.hint——否则 DSH 客户端 matchEnter 把
@@ -704,20 +708,22 @@ test('投影: aux/llm-call 事件折叠为每任务最近记录', async () => {
   assert.equal(state.tasks.vision.outputChars, void 0);
 });
 
-test('隐私: showStatusChip=false 时注销 aux-status 投影,重新开启后恢复', async () => {
+test('隐私: showStatusChip=false 时注销 aux-status 投影,aux-platform 保留', async () => {
   const { ctx, projections } = await makeHarness();
-  assert.equal(projections.length, 1, '默认应注册 aux-status 投影');
-  assert.equal(projections[0].key, AUX_STATUS_KEY);
+  assert.equal(projections.length, 2, '默认应注册 aux-status 与 aux-platform 投影');
+  assert.ok(projections.some((p) => p.key === AUX_STATUS_KEY));
+  assert.ok(projections.some((p) => p.key === AUX_PLATFORM_KEY));
 
-  // 关闭状态芯片 → 注销投影
+  // 关闭状态芯片 → 注销 aux-status,但 aux-platform 仍保留给设置页
   ctx.auxLlm.showStatusChip = false;
   syncAuxStatusProjection(ctx.auxLlm);
-  assert.equal(projections.length, 0, '关闭后不应暴露 aux-status 投影');
+  assert.equal(projections.length, 1, '关闭后应只剩 aux-platform');
+  assert.equal(projections[0].key, AUX_PLATFORM_KEY);
 
-  // 重新开启 → 重新注册
+  // 重新开启 → 恢复 aux-status
   ctx.auxLlm.showStatusChip = true;
   syncAuxStatusProjection(ctx.auxLlm);
-  assert.equal(projections.length, 1, '重新开启后应恢复 aux-status 投影');
+  assert.equal(projections.length, 2, '重新开启后应恢复 aux-status 投影');
 });
 
 test('投影: DSH 0.1.1-rc.1 新 API 使用 stateSchema/wire', () => {
@@ -741,6 +747,15 @@ test('投影: DSH 0.1.1-rc.1 新 API 使用 stateSchema/wire', () => {
   assert.ok(captured.wire.viewSchema, 'wire 应提供 viewSchema');
   assert.equal(captured.schema, void 0, '新 API 不应再使用旧 schema 字段');
   assert.deepEqual(captured.wire.view(captured.init()), { tasks: {} });
+});
+
+test('投影: aux-platform 折叠 aux/platform-status 整值事件', async () => {
+  const { projections } = await makeHarness();
+  const def = projections.find((p) => p.key === AUX_PLATFORM_KEY);
+  assert.ok(def, '应注册 aux-platform');
+  const status = { items: [{ key: 'vision_analyze', state: 'enabled' }], issues: [] };
+  const state = def.apply({}, { type: AUX_PLATFORM_EVENT, data: status });
+  assert.deepEqual(state, status);
 });
 
 test('call: 未配置任务用默认辅助模型,成功返回文本与路由', async () => {
@@ -786,6 +801,62 @@ test('call: request.reasoningEffort 覆盖任务配置', async () => {
   });
   await ctx.auxLlm.call('compress', { messages: [], session: makeSession(), reasoningEffort: 'low' });
   assert.equal(streams[0].reasoningEffort, 'low');
+});
+
+test('call: fullToolTrace=true 时写入 aux/debug 事件', async () => {
+  const { ctx } = await makeHarness();
+  ctx.auxLlm.debugConfig = { fullToolTrace: true, maxDebugEventBytes: 65536, debugEventsInHistory: false, redactSecrets: true };
+  const session = makeSession();
+  await ctx.auxLlm.call('compress', { messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }], id: 'm1', source: { kind: 'plugin', plugin: 'test' } }], session });
+  const debugEvents = session.events.filter((e) => e.type === AUX_DEBUG_EVENT);
+  assert.equal(debugEvents.length, 1);
+  assert.equal(debugEvents[0].data.task, 'compress');
+  assert.equal(debugEvents[0].data.ok, true);
+  assert.ok(debugEvents[0].data.output.includes('OUTPUT_TEXT'));
+});
+
+test('/aux debug: 展示当前会话 debug 事件', async () => {
+  const session = {
+    id: 'sess-current',
+    events: [
+      { seq: 1, type: AUX_DEBUG_EVENT, data: { kind: 'call', task: 'compress', ok: true, output: 'OUTPUT' } }
+    ]
+  };
+  const service = { ctx: { get() { return void 0; } } };
+  const result = await handleDebugCommand(service, { session }, []);
+  assert.equal(result.kind, 'success');
+  assert.match(result.text, /AUX debug/);
+  assert.match(result.text, /compress/);
+  assert.match(result.text, /OUTPUT/);
+});
+
+test('/aux debug: 指定会话 id 读取另一会话 debug 事件', async () => {
+  const service = {
+    ctx: {
+      get(name) {
+        if (name === 'sessionPersistence') {
+          return {
+            async list() {
+              return [{ id: 'sess-abc', cwd: '/workspace/abc' }];
+            },
+            async inspect(id) {
+              if (id === 'sess-abc') {
+                return { events: [{ seq: 1, type: AUX_DEBUG_EVENT, data: { kind: 'call', task: 'vision', ok: true, output: 'VISION' } }] };
+              }
+              return { events: [] };
+            }
+          };
+        }
+        return void 0;
+      }
+    }
+  };
+  const agent = { session: { id: 'sess-current', events: [] } };
+  const result = await handleDebugCommand(service, agent, ['sess-abc']);
+  assert.equal(result.kind, 'success');
+  assert.match(result.text, /sess-abc/);
+  assert.match(result.text, /vision/);
+  assert.match(result.text, /VISION/);
 });
 
 test('call: compaction 任务可显式配置并记录事件', async () => {
@@ -1206,6 +1277,9 @@ test('projectSettings: 暴露 forceAuxVision / visionFallbackToMain 默认值', 
   assert.equal(projected.visionFallbackToMain, true);
   assert.equal(projected.subagent.mode, 'native');
   assert.equal(projected.subagent.includeWorkflow, true);
+  assert.equal(projected.subagent.prepareTools, true);
+  assert.equal(projected.subagent.retryVisionWithAux, false);
+  assert.deepEqual(projected.subagent.visionKeywords, []);
   const custom = projectSettings({ forceAuxVision: true, visionFallbackToMain: false });
   assert.equal(custom.forceAuxVision, true);
   assert.equal(custom.visionFallbackToMain, false);
@@ -1215,6 +1289,29 @@ test('projectSettings: reasoningEffort 透传', () => {
   const projected = projectSettings({ tasks: { vision: { reasoningEffort: 'high' } } });
   assert.equal(projected.tasks.vision.reasoningEffort, 'high');
   assert.equal(projected.tasks.skill.reasoningEffort, void 0);
+});
+
+test('projectSettings: enabled/skill/debug 默认值及透传', () => {
+  const projected = projectSettings({});
+  assert.equal(projected.enabled.vision_analyze, 'aux');
+  assert.equal(projected.enabled.skillAudit, 'aux');
+  assert.equal(projected.skill.mode, 'audit');
+  assert.equal(projected.debug.fullToolTrace, false);
+  assert.equal(projected.debug.maxDebugEventBytes, 65536);
+  assert.equal(projected.debug.redactSecrets, true);
+  const custom = projectSettings({
+    enabled: { vision_analyze: 'native', subagentBridge: 'native' },
+    skill: { mode: 'report' },
+    debug: { fullToolTrace: true, maxDebugEventBytes: 4096, debugEventsInHistory: true, redactSecrets: false }
+  });
+  assert.equal(custom.enabled.vision_analyze, 'native');
+  assert.equal(custom.enabled.subagentBridge, 'native');
+  assert.equal(custom.enabled.web_extract, 'aux');
+  assert.equal(custom.skill.mode, 'report');
+  assert.equal(custom.debug.fullToolTrace, true);
+  assert.equal(custom.debug.maxDebugEventBytes, 4096);
+  assert.equal(custom.debug.debugEventsInHistory, true);
+  assert.equal(custom.debug.redactSecrets, false);
 });
 
 test('projectSettings: subagent 段透传', () => {
@@ -1248,6 +1345,10 @@ test('validateAuxSettings: 拒绝 subagent.general/vision 半配置', () => {
     /subagent\.vision provider and model must be supplied together/
   );
   validateAuxSettings({ subagent: { general: { provider: 'p', model: 'm' } } });
+  assert.throws(
+    () => validateAuxSettings({ subagent: { general: { reasoningEffort: 'high' } } }),
+    /subagent\.general reasoningEffort requires provider and model/
+  );
 });
 
 test('subagentRoute: native / manual / vision-aware 服务方法', async () => {
@@ -1269,6 +1370,13 @@ test('subagentRoute: native / manual / vision-aware 服务方法', async () => {
   assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: '描述 imagePath=/tmp/a.png', requiresVision: 'auto' }).agentOptions, { provider: 'opencode-go', model: 'kimi-k2.7-code' });
 });
 
+test('平台开关: subagentBridge=native 时 subagentRoute 直接原生', async () => {
+  const { ctx } = await makeHarness();
+  ctx.auxLlm._enabled = { ...ctx.auxLlm._enabled, subagentBridge: 'native' };
+  ctx.auxLlm._subagentSettings = { mode: 'manual', general: { provider: 'opencode-go', model: 'glm-5.2' } };
+  assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: 'x' }), { settled: false });
+});
+
 test('settings source 接线: forceAuxVision / visionFallbackToMain / subagent 联动', async () => {
   const { ctx } = await makeHarness();
   ctx.auxLlm._source = () => ({
@@ -1286,6 +1394,10 @@ test('settings source 接线: forceAuxVision / visionFallbackToMain / subagent �
   ctx.auxLlm._source = () => ({ subagent: { mode: 'native' } });
   ctx.auxLlm._recomputeMerged();
   assert.equal(ctx.auxLlm.subagentIncludeWorkflow, true);
+  // workflowBridge=native → includeWorkflow 强制 false
+  ctx.auxLlm._source = () => ({ enabled: { workflowBridge: 'native' } });
+  ctx.auxLlm._recomputeMerged();
+  assert.equal(ctx.auxLlm.subagentIncludeWorkflow, false);
 });
 
 test('visionFallbackToMain=false 且未配置 vision 主路线 → 主模型仍作为唯一路线可用', async () => {
@@ -1458,6 +1570,25 @@ test('/aux status 命令: 显示最近调用(事件溯源)', async () => {
   assert.ok(out.text.includes('最近辅助调用'));
   assert.ok(out.text.includes('compress: opencode-go/deepseek-v4-flash 成功 1234ms'));
   assert.ok(out.text.includes('vision: opencode-go/kimi-k2.7-code 失败 (已降级) [timeout] 56ms'));
+});
+
+test('/aux status --json 命令: 返回结构化平台状态', async () => {
+  const { commands } = await makeHarness();
+  const handler = commands[0].handler;
+  const out = await handler({ agent: void 0, rawInput: 'status --json' });
+  assert.equal(out.kind, 'success');
+  const data = JSON.parse(out.text);
+  assert.ok(Array.isArray(data.items), '应返回 items 数组');
+  assert.ok(data.items.length >= 9, '应覆盖 4 个工具 + 5 个桥接');
+  for (const entry of data.items) {
+    assert.ok(['native', 'aux', 'compat'].includes(entry.mode), `mode 非法: ${entry.mode}`);
+    assert.ok(['enabled', 'disabled', 'unavailable', 'fixing', 'unknown'].includes(entry.state), `state 非法: ${entry.state}`);
+    assert.equal(typeof entry.reason, 'string');
+  }
+  assert.ok(Array.isArray(data.issues), '应返回 issues 数组');
+  assert.ok(data.core.count >= 4, '核心保护数量应 >= 4');
+  assert.equal(typeof data.eventsSupported, 'boolean');
+  assert.equal(typeof data.restartRequired, 'boolean', '应返回是否需要重启 DSH');
 });
 
 test('/aux history: 简要溯源按新→旧显示最近 N 次', async () => {
@@ -2059,16 +2190,23 @@ test('/aux gc-images: 跳过符号链接,绝不跟随到外部目录', async () 
 });
 
 
-test('image-bridge 状态: 源码树运行(无核心包)时返回 unknown', async () => {
+test('image-bridge 状态: 通过 Node 解析能给出明确状态(不再因源码树误报 unknown)', async () => {
   const { ctx } = await makeHarness();
-  // 测试环境从源码树加载,../dsh-host-apiproxy 不存在 → unknown
+  // 以前源码树运行会因相对路径少一级而误报 unknown;现在 bridge-locate 用
+  // require.resolve 解析真实部署,测试环境有 DSH 包时应返回明确状态。
   const status = await imageBridgeStatus();
-  assert.equal(status, 'unknown');
+  assert.ok(['v3', 'v2', 'v1', 'partial', 'missing'].includes(status), `应返回明确状态而非 unknown,实际: ${status}`);
 });
 
-test('workflow-bridge 状态: 源码树运行(无核心包)时返回 unknown', async () => {
+test('workflow-bridge 状态: 通过 Node 解析能给出明确状态(不再因源码树误报 unknown)', async () => {
   const status = await workflowBridgeStatus();
-  assert.equal(status, 'unknown');
+  assert.ok(['installed', 'missing'].includes(status), `应返回明确状态而非 unknown,实际: ${status}`);
+});
+
+test('bridge-locate: require.resolve 能解析 @deepseek-ai 包主入口', () => {
+  const target = resolvePackageFile('dsh-host-apiproxy');
+  assert.ok(target !== void 0, '应能解析 dsh-host-apiproxy');
+  assert.ok(target.endsWith('/lib/index.js'), `应指向 lib/index.js,实际: ${target}`);
 });
 
 

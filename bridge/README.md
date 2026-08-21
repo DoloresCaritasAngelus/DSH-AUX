@@ -104,7 +104,7 @@ node apply-patch.mjs        # 自动识别状态:原始 → 已补丁 / 中间�
 
 ```bash
 node apply-patch.mjs --dry-run     # 只检查,不修改
-node apply-patch.mjs --rollback    # 回滚到最近一次备份(七个目标各自回滚)
+node apply-patch.mjs --rollback    # 回滚到最近一次备份(各目标各自回滚)
 ```
 
 ## 技术要点

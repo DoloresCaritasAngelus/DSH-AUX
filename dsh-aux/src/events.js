@@ -4,8 +4,8 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/events
  */
-import { readFile as readFileText } from "node:fs/promises";
-import { AUX_CALL_EVENT } from "./config.js";
+import { AUX_CALL_EVENT, AUX_DEBUG_EVENT, AUX_PLATFORM_EVENT } from "./config.js";
+import { readPackageFile } from "./bridge-locate.js";
 
 /** One auxiliary call outcome. */
 export class AuxCallError extends Error {
@@ -68,19 +68,8 @@ export function sessionPatchCandidates(baseUrl) {
  */
 export async function sessionEventsSupported(service) {
   if (service._sessionEventsSupportedCache !== void 0) return service._sessionEventsSupportedCache;
-  const candidates = sessionPatchCandidates(import.meta.url);
-  for (const candidate of candidates) {
-    try {
-      const src = await readFileText(candidate);
-      if (src.includes("dsh-aux ignorable (local patch)")) {
-        service._sessionEventsSupportedCache = true;
-        return true;
-      }
-    } catch {
-      /* try the next candidate */
-    }
-  }
-  service._sessionEventsSupportedCache = false;
+  const src = await readPackageFile("dsh-session");
+  service._sessionEventsSupportedCache = src?.includes("dsh-aux ignorable (local patch)") === true;
   return service._sessionEventsSupportedCache;
 }
 
@@ -117,5 +106,104 @@ export async function recordAuxEvent(service, session, data) {
     session.append(AUX_CALL_EVENT, clean, void 0, { ignorable: true });
   } catch {
     /* event logging must never fail the call */
+  }
+}
+
+/** Key names treated as sensitive when recording debug payloads. */
+const SECRET_KEY_RE = /\b(?:pass(?:word|phrase)?|secret|token|api[_-]?key|auth(?:orization)?|cookie|session[_-]?id|private[_-]?key|access[_-]?key|credential|pwd|bearer)\b/i;
+
+/** Common inline secret shapes found inside strings (JSON, headers, logs). */
+const SECRET_VALUE_PATTERNS = [
+  /(Bearer\s+)[A-Za-z0-9._~+/-]+=*/gi,
+  /\b(sk|pk|rk)-[A-Za-z0-9_-]{12,}\b/gi,
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
+  /("?(?:pass(?:word|phrase)?|secret|token|api[_-]?key|authorization|cookie|credential)"?\s*[=:]\s*")[^"]*/gi,
+  /(password|passwd|secret|token|api[_-]?key|authorization)(\s*[=:]\s*)[^\s,;]+/gi
+];
+
+const REDACTED = "[REDACTED]";
+
+function redactDebugValue(value, key) {
+  if (typeof value === "string") {
+    if (SECRET_KEY_RE.test(key)) return REDACTED;
+    let out = value;
+    for (const pattern of SECRET_VALUE_PATTERNS) {
+      out = out.replace(pattern, (_match, prefix, separator) => {
+        if (prefix === void 0) return REDACTED;
+        // For single-capture patterns the third callback argument is the match
+        // offset (a number); for two-capture patterns it is the second capture.
+        return typeof separator === "string"
+          ? `${prefix}${separator}${REDACTED}`
+          : `${prefix}${REDACTED}`;
+      });
+    }
+    return out;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => redactDebugValue(entry, key));
+  }
+  if (value !== null && typeof value === "object") {
+    const out = {};
+    for (const [entryKey, entryValue] of Object.entries(value)) {
+      out[entryKey] = redactDebugValue(entryValue, entryKey);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Basic recursive redaction for debug payloads. Replaces values under
+ * secret-looking keys and common inline secret patterns (Bearer tokens,
+ * `sk-...` keys, PEM private keys, `key=value` credentials).
+ *
+ * This is intentionally basic, not a full PII/secret scanner. It protects the
+ * most common accidental leaks in fullToolTrace records without trying to be
+ * a complete redaction engine.
+ */
+export function redactDebugData(data, enabled = true) {
+  if (!enabled) return data;
+  return redactDebugValue(data, "");
+}
+
+/**
+ * Log one debug/content-truth event. Used when `aux.debug.fullToolTrace` is
+ * enabled or for explicit diagnostic records. The event is `ignorable` and
+ * non-surface by convention: it stays in the session log for `/aux debug`
+ * but never enters the model context.
+ */
+export async function recordDebugEvent(service, session, data) {
+  if (session === void 0) return;
+  if (!await sessionEventsSupported(service)) return;
+  try {
+    const redacted = service?.debugConfig?.redactSecrets !== false ? redactDebugData(data) : data;
+    const clean = {};
+    for (const [key, value] of Object.entries(redacted)) {
+      if (value !== void 0) clean[key] = value;
+    }
+    session.append(AUX_DEBUG_EVENT, clean, void 0, { ignorable: true });
+  } catch {
+    /* debug logging must never fail the call */
+  }
+}
+
+/**
+ * Log one full platform-status snapshot as an ignorable, non-surface session
+ * event. The settings page reads this through the `aux-platform` projection,
+ * so it never needs to execute a slash command (which would pollute the
+ * conversation with command cards).
+ */
+export async function recordPlatformEvent(service, session, data) {
+  if (session === void 0) return;
+  if (!await sessionEventsSupported(service)) return;
+  try {
+    const clean = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== void 0) clean[key] = value;
+    }
+    session.append(AUX_PLATFORM_EVENT, clean, void 0, { ignorable: true });
+  } catch {
+    /* platform status logging must never fail */
   }
 }

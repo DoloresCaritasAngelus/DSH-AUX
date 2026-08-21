@@ -15,8 +15,14 @@ export const AUX_SETTINGS_NAMESPACE = settingsNamespace("aux");
 export const AUX_TIMEOUT_CODE = "AUX_TIMEOUT";
 /** Session event type recording one auxiliary call. */
 export const AUX_CALL_EVENT = "aux/llm-call";
+/** Session event type recording debug/content-truth details (ignorable, not in model context). */
+export const AUX_DEBUG_EVENT = "aux/debug";
+/** Session event type carrying a full platform-status snapshot (ignorable, non-surface). */
+export const AUX_PLATFORM_EVENT = "aux/platform-status";
 /** Projection key exposing the latest per-task aux call snapshot. */
 export const AUX_STATUS_KEY = "aux-status";
+/** Projection key exposing the latest platform status snapshot for settings UI. */
+export const AUX_PLATFORM_KEY = "aux-platform";
 /** Tool names registered by dsh-aux (hidden from the `minimal` preset). */
 export const AUX_TOOL_NAMES = Object.freeze(["vision_analyze", "web_extract", "web_crawl", "compress_text"]);
 /** Interval (ms) for reconciling the session-to-image ownership map against
@@ -34,45 +40,45 @@ export const AUX_SETTINGS_SCHEMA = z.object({
   showStatusChip: z.boolean().default(true),
   tasks: z.object({
     vision: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
     }),
     web_extract: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       maxChars: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
     }),
     web_crawl: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       maxChars: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
     }),
     compress: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
     }),
     compaction: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
     }),
     skill: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
@@ -82,16 +88,38 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     mode: z.union([z.const("native"), z.const("manual"), z.const("vision-aware")]).default("native"),
     includeWorkflow: z.boolean().default(true),
     general: z.object({
-      provider: z.string(),
-      model: z.string()
+      provider: z.string().min(1),
+      model: z.string().min(1),
+      reasoningEffort: z.string().min(1)
     }),
     vision: z.object({
-      provider: z.string(),
-      model: z.string()
+      provider: z.string().min(1),
+      model: z.string().min(1),
+      reasoningEffort: z.string().min(1)
     }),
     prepareTools: z.boolean().default(true),
     retryVisionWithAux: z.boolean().default(false),
     visionKeywords: z.array(z.string()).default([])
+  }),
+  enabled: z.object({
+    vision_analyze: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    web_extract: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    web_crawl: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    compress_text: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    imageBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    subagentBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    workflowBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    compactionBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    skillAudit: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux")
+  }),
+  skill: z.object({
+    mode: z.union([z.const("native"), z.const("audit"), z.const("report"), z.const("report-ondemand"), z.const("auto")]).default("audit")
+  }),
+  debug: z.object({
+    fullToolTrace: z.boolean().default(false),
+    maxDebugEventBytes: z.number().step(1).min(1024).default(65536),
+    debugEventsInHistory: z.boolean().default(false),
+    redactSecrets: z.boolean().default(true)
   })
 });
 
@@ -120,17 +148,40 @@ export function projectSettings(settings) {
   const subagent = {
     mode: rawSub.mode ?? "native",
     includeWorkflow: rawSub.includeWorkflow !== false,
+    prepareTools: rawSub.prepareTools !== false,
+    retryVisionWithAux: rawSub.retryVisionWithAux === true,
+    visionKeywords: Array.isArray(rawSub.visionKeywords) ? [...rawSub.visionKeywords] : [],
     ...(rawSub.general !== void 0 && (rawSub.general.provider !== void 0 || rawSub.general.model !== void 0)
       ? { general: { ...rawSub.general } }
       : {}),
     ...(rawSub.vision !== void 0 && (rawSub.vision.provider !== void 0 || rawSub.vision.model !== void 0)
       ? { vision: { ...rawSub.vision } }
-      : {}),
-    ...(rawSub.prepareTools !== void 0 ? { prepareTools: rawSub.prepareTools } : {}),
-    ...(rawSub.retryVisionWithAux !== void 0 ? { retryVisionWithAux: rawSub.retryVisionWithAux } : {}),
-    ...(Array.isArray(rawSub.visionKeywords) ? { visionKeywords: [...rawSub.visionKeywords] } : {})
+      : {})
   };
-  return { fallbackToMain, forceAuxVision, visionFallbackToMain, showStatusChip, tasks, subagent };
+  const defaultEnabled = {
+    vision_analyze: "aux",
+    web_extract: "aux",
+    web_crawl: "aux",
+    compress_text: "aux",
+    imageBridge: "aux",
+    subagentBridge: "aux",
+    workflowBridge: "aux",
+    compactionBridge: "aux",
+    skillAudit: "aux"
+  };
+  const rawEnabled = settings?.enabled ?? {};
+  const enabled = { ...defaultEnabled, ...rawEnabled };
+  const skill = {
+    mode: settings?.skill?.mode ?? "audit"
+  };
+  const rawDebug = settings?.debug ?? {};
+  const debug = {
+    fullToolTrace: rawDebug.fullToolTrace ?? false,
+    maxDebugEventBytes: rawDebug.maxDebugEventBytes ?? 65536,
+    debugEventsInHistory: rawDebug.debugEventsInHistory ?? false,
+    redactSecrets: rawDebug.redactSecrets ?? true
+  };
+  return { fallbackToMain, forceAuxVision, visionFallbackToMain, showStatusChip, tasks, subagent, enabled, skill, debug };
 }
 
 /**
@@ -157,6 +208,11 @@ export function validateAuxSettings(value) {
     if (hasProvider !== hasModel) {
       throw new Error(
         `aux settings: subagent.${group} provider and model must be supplied together`
+      );
+    }
+    if (!hasProvider && entry?.reasoningEffort !== void 0) {
+      throw new Error(
+        `aux settings: subagent.${group} reasoningEffort requires provider and model`
       );
     }
   }

@@ -8,5 +8,9 @@
 			task: {
 				type: "string",
 				description: "Optional. The task/intent that triggered this skill call; the skill auditor uses it to tailor the pre-audit report."
+			},
+			includeOriginal: {
+				type: "boolean",
+				description: "Optional. When the skill bridge is in report-ondemand mode, set true to receive the original SKILL.md content instead of the audit report."
 			}
 		},

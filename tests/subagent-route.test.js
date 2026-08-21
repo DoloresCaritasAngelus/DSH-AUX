@@ -30,10 +30,28 @@ test('manual 模式:统一使用 general', () => {
   assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'glm-5.2' })
 })
 
+test('manual 模式: general.reasoningEffort 透传到 agentOptions', () => {
+  const r = resolveSubagentRoute(
+    { mode: 'manual', general: { provider: 'opencode-go', model: 'glm-5.2', reasoningEffort: 'high' }, vision: { provider: 'opencode-go', model: 'kimi-k2.7-code' } },
+    { prompt: '写个脚本' }
+  )
+  assert.equal(r.settled, true)
+  assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'glm-5.2', reasoningEffort: 'high' })
+})
+
 test('vision-aware + 显式 true → vision', () => {
   const r = resolveSubagentRoute(visionAwareSettings, { prompt: '随便', requiresVision: true })
   assert.equal(r.settled, true)
   assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'kimi-k2.7-code' })
+})
+
+test('vision-aware + vision.reasoningEffort 透传到 agentOptions', () => {
+  const r = resolveSubagentRoute(
+    { mode: 'vision-aware', general: { provider: 'opencode-go', model: 'glm-5.2' }, vision: { provider: 'opencode-go', model: 'kimi-k2.7-code', reasoningEffort: 'high' } },
+    { prompt: '随便', requiresVision: true }
+  )
+  assert.equal(r.settled, true)
+  assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'kimi-k2.7-code', reasoningEffort: 'high' })
 })
 
 test('vision-aware + 显式 false → general', () => {
@@ -136,3 +154,7 @@ test('includeWorkflow 不进入纯函数(仅 workflow 调用点门控,保护 sub
   assert.equal(r.settled, true)
   assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'glm-5.2' })
 })
+
+// 注:/aux patch --json 的运行时行为由 commands.js 内部的 collectPlatformStatus
+// 校验覆盖;这里不保留依赖 child_process 全局桩的测试,避免并行测试进程下
+// 导入顺序/执行顺序差异导致 CI 偶发失败。

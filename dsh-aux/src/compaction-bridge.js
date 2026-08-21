@@ -121,6 +121,7 @@ async function install() {
  */
 export function isCompactionTaskConfigured(aux) {
   try {
+    if (aux._enabled?.compactionBridge === "native") return false;
     const status = aux.describe().find((entry) => entry.task === "compaction");
     return status?.configured === true && status.primary !== null && status.primary !== void 0;
   } catch {

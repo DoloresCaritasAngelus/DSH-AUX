@@ -48,8 +48,9 @@ import {
   projectSettings,
   validateAuxSettings
 } from "./config.js";
-import { AuxCallError, finishError, recordAuxEvent, sessionPatchCandidates } from "./events.js";
-import { syncAuxStatusProjection } from "./projection.js";
+import { AuxCallError, finishError, recordAuxEvent, recordDebugEvent, redactDebugData, sessionPatchCandidates } from "./events.js";
+import { syncAuxPlatformProjection, syncAuxStatusProjection } from "./projection.js";
+import { publishPlatformStatus, publishPlatformStatusToSession } from "./status.js";
 import {
   auxPreStepReminderText,
   auxToolsGuide,
@@ -65,6 +66,27 @@ import { attachSkillBridge } from "./skill-bridge.js";
 
 export { AUX_SETTINGS_NAMESPACE, AUX_TIMEOUT_CODE, AUX_CALL_EVENT, AUX_STATUS_KEY, validateAuxSettings } from "./config.js";
 export { AuxCallError, sessionPatchCandidates } from "./events.js";
+
+/** Truncate a debug payload to a bounded size for session-event storage. */
+function truncateForDebug(value, max) {
+  let text;
+  try {
+    text = typeof value === "string" ? value : JSON.stringify(value);
+  } catch {
+    text = String(value);
+  }
+  if (text.length > max) return text.slice(0, max) + "…[truncated]";
+  return text;
+}
+
+/**
+ * Prepare one fullToolTrace field: redact first (so truncation cannot split a
+ * secret pattern), then bound the stored size.
+ */
+function debugField(service, value, max) {
+  const redacted = service.debugConfig?.redactSecrets === false ? value : redactDebugData(value);
+  return truncateForDebug(redacted, max);
+}
 
 /**
  * `ctx.auxLlm`: the unified auxiliary-model router. Owns task definitions,
@@ -159,6 +181,7 @@ export class AuxLlmService extends Service {
     this._customTasks = new Map();
     this._projectionCtx = void 0;
     this._auxStatusProjectionDispose = void 0;
+    this._toolsInitialized = false;
     this._recomputeMerged();
     // Main-agent guidance: tell the chat model the auxiliary tools exist and
     // are executed by a separate auxiliary LLM, so it uses vision_analyze
@@ -184,10 +207,12 @@ export class AuxLlmService extends Service {
         this._source = current;
         this._recomputeMerged();
         syncAuxStatusProjection(this);
+        publishPlatformStatus(this).catch(() => {});
       },
       onChange: () => {
         this._recomputeMerged();
         syncAuxStatusProjection(this);
+        publishPlatformStatus(this).catch(() => {});
       },
       validate: validateAuxSettings,
       // The settings page is a first-class capability of this plugin:
@@ -197,6 +222,7 @@ export class AuxLlmService extends Service {
       exposedToWeb: true
     });
     registerAuxTools(this);
+    this._toolsInitialized = true;
     attachSkillBridge(this);
     this._sessionImages = new Map();
     this._sessionImagesLoaded = false;
@@ -230,6 +256,13 @@ export class AuxLlmService extends Service {
     ctx.inject(["sessionProjections"], (projectionCtx) => {
       this._projectionCtx = projectionCtx;
       syncAuxStatusProjection(this);
+      syncAuxPlatformProjection(this);
+      // Seed the projection for already-attached sessions so the settings
+      // page can read status without executing a slash command.
+      publishPlatformStatus(this).catch(() => {});
+    });
+    ctx.on("session/created", (session) => {
+      publishPlatformStatusToSession(this, session).catch(() => {});
     });
     ctx.inject(["commands"], (commandCtx) => {
       commandCtx.commands.register({
@@ -245,7 +278,7 @@ export class AuxLlmService extends Service {
         // actually run. Mirror of how official /goal /plan /preset /echo
         // register their argument-taking commands.
         input: {
-          hint: "status | history [N] | history full [N] | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory"
+          hint: "status [--json] | history [N] | history full [N] | debug [N] | patch [--json] | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory"
         },
         handler: ({ agent, rawInput }) => handleAuxCommand(this, agent, rawInput)
       });
@@ -301,13 +334,50 @@ export class AuxLlmService extends Service {
     }
     this._merged = merged;
     this._subagentSettings = settings.subagent ?? {};
-    this.subagentMode = this._subagentSettings.mode ?? "native";
-    this.subagentPrepareTools = this._subagentSettings.prepareTools !== false;
-    this.subagentIncludeWorkflow = this._subagentSettings.includeWorkflow !== false;
     this.fallbackToMain = settings.fallbackToMain ?? true;
     this.forceAuxVision = settings.forceAuxVision ?? false;
     this.visionFallbackToMain = settings.visionFallbackToMain ?? true;
     this.showStatusChip = settings.showStatusChip ?? true;
+    const defaultEnabled = {
+      vision_analyze: "aux",
+      web_extract: "aux",
+      web_crawl: "aux",
+      compress_text: "aux",
+      imageBridge: "aux",
+      subagentBridge: "aux",
+      workflowBridge: "aux",
+      compactionBridge: "aux",
+      skillAudit: "aux"
+    };
+    this._enabled = { ...defaultEnabled, ...(settings.enabled ?? {}) };
+    this.subagentMode = this._enabled.subagentBridge === "native"
+      ? "native"
+      : (this._subagentSettings.mode ?? "native");
+    this.subagentPrepareTools = this._subagentSettings.prepareTools !== false;
+    this.subagentIncludeWorkflow = this._enabled.workflowBridge !== "native" && this._subagentSettings.includeWorkflow !== false;
+    this.skillMode = settings.skill?.mode ?? "audit";
+    this.debugConfig = {
+      fullToolTrace: settings.debug?.fullToolTrace ?? false,
+      maxDebugEventBytes: settings.debug?.maxDebugEventBytes ?? 65536,
+      debugEventsInHistory: settings.debug?.debugEventsInHistory ?? false,
+      redactSecrets: settings.debug?.redactSecrets ?? true
+    };
+    if (this._toolsInitialized) this.syncTools();
+  }
+
+  /** Mode of one tool/bridge switch: 'native' | 'aux' | 'compat'. */
+  toolBridgeMode(name) {
+    return this._enabled?.[name] ?? "aux";
+  }
+
+  /** Whether a tool should be exposed to the model catalog (only aux exposes). */
+  isToolExposed(name) {
+    return this.toolBridgeMode(name) === "aux";
+  }
+
+  /** Re-mount AUX tools according to the current enabled switches (hot update). */
+  syncTools() {
+    registerAuxTools(this);
   }
 
   /** Settings schema snapshot for UIs. */
@@ -400,6 +470,21 @@ export class AuxLlmService extends Service {
             outputChars: output.length,
             purpose: request.purpose
           });
+          if (this.debugConfig?.fullToolTrace === true) {
+            const max = this.debugConfig.maxDebugEventBytes ?? 65536;
+            await recordDebugEvent(this, request.session, {
+              task,
+              kind: "call",
+              ok: true,
+              provider: candidate.provider,
+              model: candidate.model,
+              input: debugField(this, request.messages, max),
+              output: debugField(this, output, max),
+              purpose: request.purpose,
+              reasoningEffort: request.reasoningEffort ?? definition.reasoningEffort,
+              durationMs: Date.now() - startedAt
+            });
+          }
           return { text: output, provider: candidate.provider, model: candidate.model };
         } catch (error) {
           const kind = classifyFailure(error, request.signal);
@@ -425,6 +510,22 @@ export class AuxLlmService extends Service {
         fallbackUsed: attempts.length > 1,
         purpose: request.purpose
       });
+      if (this.debugConfig?.fullToolTrace === true) {
+        const max = this.debugConfig.maxDebugEventBytes ?? 65536;
+        await recordDebugEvent(this, request.session, {
+          task,
+          kind: "call",
+          ok: false,
+          provider: attempts[0]?.provider ?? "",
+          model: attempts[0]?.model ?? "",
+          input: debugField(this, request.messages, max),
+          error: debugField(this, lastError?.message ?? String(lastError ?? ""), max),
+          attempts: debugField(this, attempts.map((a) => ({ provider: a.provider, model: a.model, kind: a.kind, error: a.error?.message })), max),
+          purpose: request.purpose,
+          reasoningEffort: request.reasoningEffort ?? definition.reasoningEffort,
+          durationMs: Date.now() - startedAt
+        });
+      }
       throw new AuxCallError(task, attempts);
     } finally {
       release();
@@ -639,6 +740,9 @@ export class AuxLlmService extends Service {
    * @param payload { prompt?, requiresVision?, existingAllow?, existingDeny? }
    */
   subagentRoute(payload) {
+    if (this._enabled?.subagentBridge === "native") {
+      return { settled: false };
+    }
     return resolveSubagentRoute(this._subagentSettings, payload ?? {});
   }
 
