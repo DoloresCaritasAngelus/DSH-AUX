@@ -98,6 +98,7 @@ window.__ModuleLoader__.load({
 			"settings.saved": "已保存",
 			"settings.loading": "加载辅助模型配置…",
 			"settings.loadError": "加载失败: ",
+			"settings.readonly": "当前设置为只读,请在 settings.yaml 中直接修改",
 			"settings.reset": "重置",
 			"group.tools": "工具任务",
 			"group.tools.desc": "图像、网页提取、长文本压缩等辅助工具。",
@@ -221,6 +222,7 @@ window.__ModuleLoader__.load({
 			"settings.saved": "Saved",
 			"settings.loading": "Loading auxiliary model config…",
 			"settings.loadError": "Failed to load: ",
+			"settings.readonly": "Settings are read-only; edit settings.yaml directly",
 			"settings.reset": "Reset",
 			"group.tools": "Tool Tasks",
 			"group.tools.desc": "Vision, web extraction, long-text compression, and other auxiliary tools.",
@@ -923,6 +925,7 @@ window.__ModuleLoader__.load({
 				);
 			};
 			return react.createElement("div", { className: "ax-section" },
+				!state.writable ? react.createElement("div", { className: "ax-status-summary ax-error", role: "alert" }, t("settings.readonly")) : null,
 				statusPanel(),
 				group("tools", t("group.tools"), t("group.tools.desc"),
 					tasks.filter((x) => ["vision", "web_extract", "web_crawl", "compress"].includes(x)).map(taskCard)
