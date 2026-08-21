@@ -32,6 +32,11 @@ export interface AuxSettingsPageProps {
             }>;
         };
     };
+    /** Run one `/aux` command on the first available session and return its command result. */
+    runAuxCommand: (line: string) => Promise<{
+        kind: 'success' | 'error';
+        text?: string;
+    }>;
     /** Close the settings panel (shell-owned). */
     close: () => void;
 }
@@ -54,4 +59,4 @@ export interface AuxStatusChipProps {
 /** The client plugin entry: registered slot contributions. */
 export declare function apply(ctx: unknown): void;
 /** Required client services. */
-export declare const inject: readonly ['slots', 'connection'];
+export declare const inject: readonly ['slots', 'connection', 'remote', 'remote.commands'];

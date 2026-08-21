@@ -18,6 +18,7 @@ import { subagentBridgeStatus, workflowBridgeStatus } from "./subagent-bridge.js
 import { isCompactionBridgeInstalled, isCompactionTaskConfigured } from "./compaction-bridge.js";
 import { isSkillTaskConfigured, skillBridgeStatus } from "./skill-bridge.js";
 import { sessionEventsSupported } from "./events.js";
+import { collectPlatformStatus } from "./status.js";
 import { runVision } from "./tools/vision.js";
 import { runWebExtract } from "./tools/web-extract.js";
 import { runWebCrawl } from "./tools/web-crawl.js";
@@ -59,6 +60,10 @@ export async function handleAuxCommand(service, agent, rawInput) {
     // Reconcile first so the status view reflects any deleted-session
     // cleanup that happened while the service was not watching.
     await reconcileSessionImages(service);
+    if (args.includes("--json")) {
+      const status = await collectPlatformStatus(service);
+      return { kind: "success", text: JSON.stringify(status) };
+    }
     const lines = ["辅助模型系统状态:"];
     lines.push("  🔒 核心保护:图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计(不可关闭)");
     // Integrated image-bridge status: report it so a fresh install knows
@@ -147,7 +152,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
   }
   return {
     kind: "error",
-    text: "用法: /aux status — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux model <task> [provider/model] — 查看或设置任务的辅助模型"
+    text: "用法: /aux status [--json] — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux debug [N] — 查看内容真相; /aux patch — 重打补丁; /aux model <task> [provider/model] — 查看或设置任务的辅助模型"
   };
 }
 

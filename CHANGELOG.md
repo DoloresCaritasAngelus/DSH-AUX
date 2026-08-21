@@ -8,7 +8,9 @@
 - **imageBridge 运行时门控**:补丁仍在,但 `imageBridge=native` 时不改写图片/不建硬链接。
 - **内容真相/debug**:`fullToolTrace=true` 时,辅助调用写入 `aux/debug` 会话事件(ignorable,不进模型上下文);新增 `/aux debug [N]` 查看,并支持 `/aux debug <目标>` 跨会话读取(@this / session id / id 前缀 / cwd 片段)。
 - **一键打补丁**:新增 `/aux patch` 命令(重跑 apply-patch + self-heal);设置页「平台开关」组提供“一键打补丁”按钮,通过 `/aux patch` 触发。
-- 测试基线更新为 299。
+- **状态图标 UI / host→client 状态通道**:新增 `/aux status --json` 结构化状态(工具/桥接逐项 mode/state/reason/patch/action + 核心保护 + 事件记录);设置页新增「诊断与修复」面板、状态点、补丁徽标与悬停原因。
+- **设置页补丁状态展示**:每个工具/桥接显示可用状态与补丁状态;`unavailable` 项列出原因,可一键打补丁或提示配置。
+- 测试基线更新为 300。
 
 ## 0.3.3(2026-08-21)— 设置页 UI 重构 + reasoningEffort + 双语
 

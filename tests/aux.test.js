@@ -1551,6 +1551,24 @@ test('/aux status 命令: 显示最近调用(事件溯源)', async () => {
   assert.ok(out.text.includes('vision: opencode-go/kimi-k2.7-code 失败 (已降级) [timeout] 56ms'));
 });
 
+test('/aux status --json 命令: 返回结构化平台状态', async () => {
+  const { commands } = await makeHarness();
+  const handler = commands[0].handler;
+  const out = await handler({ agent: void 0, rawInput: 'status --json' });
+  assert.equal(out.kind, 'success');
+  const data = JSON.parse(out.text);
+  assert.ok(Array.isArray(data.items), '应返回 items 数组');
+  assert.ok(data.items.length >= 9, '应覆盖 4 个工具 + 5 个桥接');
+  for (const entry of data.items) {
+    assert.ok(['native', 'aux', 'compat'].includes(entry.mode), `mode 非法: ${entry.mode}`);
+    assert.ok(['enabled', 'disabled', 'unavailable', 'fixing', 'unknown'].includes(entry.state), `state 非法: ${entry.state}`);
+    assert.equal(typeof entry.reason, 'string');
+  }
+  assert.ok(Array.isArray(data.issues), '应返回 issues 数组');
+  assert.ok(data.core.count >= 4, '核心保护数量应 >= 4');
+  assert.equal(typeof data.eventsSupported, 'boolean');
+});
+
 test('/aux history: 简要溯源按新→旧显示最近 N 次', async () => {
   const { commands } = await makeHarness();
   const handler = commands[0].handler;

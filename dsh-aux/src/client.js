@@ -56,7 +56,25 @@ window.__ModuleLoader__.load({
 			".ax-save:disabled{opacity:.6;cursor:default}",
 			".ax-status{font-size:12px;line-height:18px}",
 			".ax-error{color:var(--dsw-alias-state-error-primary)}",
-			".ax-ok-text{color:var(--dsw-alias-state-success-primary)}"
+			".ax-ok-text{color:var(--dsw-alias-state-success-primary)}",
+			".ax-dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}",
+			".ax-dot-enabled{background:var(--dsw-alias-state-success-primary)}",
+			".ax-dot-disabled{background:var(--dsw-alias-label-tertiary)}",
+			".ax-dot-unavailable{background:var(--dsw-alias-state-error-primary)}",
+			".ax-dot-fixing{background:var(--dsw-alias-state-warn-primary)}",
+			".ax-dot-unknown{background:var(--dsw-alias-label-caption)}",
+			".ax-status-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}",
+			".ax-status-badge{font-size:11px;line-height:16px;border-radius:999px;padding:0 6px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-1)}",
+			".ax-status-badge-installed{color:var(--dsw-alias-state-success-primary);border-color:color-mix(in srgb,var(--dsw-alias-state-success-primary) 40%,transparent)}",
+			".ax-status-badge-missing{color:var(--dsw-alias-state-error-primary);border-color:color-mix(in srgb,var(--dsw-alias-state-error-primary) 40%,transparent)}",
+			".ax-status-badge-partial{color:var(--dsw-alias-state-warn-primary);border-color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 40%,transparent)}",
+			".ax-status-badge-unknown,.ax-status-badge-not-applicable{color:var(--dsw-alias-label-tertiary)}",
+			".ax-repair-button{border:1px solid var(--dsw-alias-border-l2);border-radius:999px;padding:0 8px;font-size:11px;line-height:20px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:var(--dsw-alias-bg-layer-1)}",
+			".ax-repair-button:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
+			".ax-repair-button:disabled{opacity:.6;cursor:default}",
+			".ax-status-issue{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;font-size:12px;line-height:18px}",
+			".ax-status-issue-text{flex:1;min-width:0}",
+			".ax-status-summary{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}"
 		].join("");
 		const tagId = "@dolorescaritasangelus/dsh-aux/Aux.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
@@ -135,6 +153,41 @@ window.__ModuleLoader__.load({
 			"settings.patching": "打补丁中…",
 			"settings.patchDone": "已触发 /aux patch,请查看会话输出。",
 			"settings.patchError": "打补丁失败: ",
+			"status.refresh": "刷新状态",
+			"status.loading": "正在获取平台状态…",
+			"status.error": "无法获取平台状态: ",
+			"status.core": "🔒 核心保护",
+			"status.coreDetail": "图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计(不可关闭)",
+			"status.coreCount": "🔒 核心保护 · {count} 项已生效",
+			"status.overview": "已启用 {enabled} 项 · 需处理 {issues} 项",
+			"status.diagnostics": "诊断与修复",
+			"status.diagnostics.desc": "补丁、依赖或配置缺失时,在这里一键修复。",
+			"status.noIssues": "所有可选能力状态正常。",
+			"status.state.enabled": "可用",
+			"status.state.disabled": "已关闭",
+			"status.state.unavailable": "不可用",
+			"status.state.fixing": "修复中",
+			"status.state.unknown": "未知",
+			"status.reason.mode-native": "当前为 native,未使用 AUX",
+			"status.reason.mode-aux": "当前为 aux,使用 AUX 实现",
+			"status.reason.mode-compat": "compat 为规划中模式,暂不可用",
+			"status.reason.patch-ok": "补丁已安装",
+			"status.reason.patch-v1": "旧版 v1 补丁,建议升级",
+			"status.reason.patch-partial": "补丁部分安装,需重打",
+			"status.reason.patch-missing": "补丁未安装,需打补丁",
+			"status.reason.patch-unknown": "无法检测补丁状态",
+			"status.reason.config-missing": "需要配置对应任务模型",
+			"status.reason.dependency-missing": "缺少 dsh-compaction-basic 依赖",
+			"status.reason.skill-mode-native": "SKILL 模式为 native,未审计",
+			"status.reason.vision-disabled-image-bridge-enabled": "vision_analyze 已关闭,但 imageBridge 仍开启",
+			"status.patch.installed": "已装",
+			"status.patch.missing": "未装",
+			"status.patch.partial": "部分",
+			"status.patch.unknown": "未知",
+			"status.patch.not-applicable": "—",
+			"status.action.patch": "打补丁",
+			"status.action.configure": "去配置",
+			"status.issue": "{label}: {reason}",
 			"chip.vision": "视觉",
 			"chip.web_extract": "网页",
 			"chip.web_crawl": "站点",
@@ -212,6 +265,41 @@ window.__ModuleLoader__.load({
 			"settings.patching": "Patching…",
 			"settings.patchDone": "Triggered /aux patch; see conversation output.",
 			"settings.patchError": "Patch failed: ",
+			"status.refresh": "Refresh",
+			"status.loading": "Loading platform status…",
+			"status.error": "Failed to load status: ",
+			"status.core": "🔒 Core protections",
+			"status.coreDetail": "Image lifecycle / session image safety / failure cooldown / event audit (cannot be disabled)",
+			"status.coreCount": "🔒 Core protections · {count} active",
+			"status.overview": "{enabled} enabled · {issues} need attention",
+			"status.diagnostics": "Diagnostics & Repair",
+			"status.diagnostics.desc": "Fix missing patches, dependencies, or configuration here.",
+			"status.noIssues": "All optional capabilities are healthy.",
+			"status.state.enabled": "Enabled",
+			"status.state.disabled": "Disabled",
+			"status.state.unavailable": "Unavailable",
+			"status.state.fixing": "Fixing",
+			"status.state.unknown": "Unknown",
+			"status.reason.mode-native": "Currently native; AUX not used",
+			"status.reason.mode-aux": "Currently aux; AUX implementation used",
+			"status.reason.mode-compat": "compat is planned and not available yet",
+			"status.reason.patch-ok": "Patch installed",
+			"status.reason.patch-v1": "Old v1 patch; upgrade recommended",
+			"status.reason.patch-partial": "Patch partially installed; re-run patch",
+			"status.reason.patch-missing": "Patch missing; run patch",
+			"status.reason.patch-unknown": "Patch status cannot be detected",
+			"status.reason.config-missing": "Configure the corresponding task model",
+			"status.reason.dependency-missing": "Missing dsh-compaction-basic dependency",
+			"status.reason.skill-mode-native": "SKILL mode is native; no audit",
+			"status.reason.vision-disabled-image-bridge-enabled": "vision_analyze is disabled but imageBridge is still enabled",
+			"status.patch.installed": "Installed",
+			"status.patch.missing": "Missing",
+			"status.patch.partial": "Partial",
+			"status.patch.unknown": "Unknown",
+			"status.patch.not-applicable": "—",
+			"status.action.patch": "Patch",
+			"status.action.configure": "Configure",
+			"status.issue": "{label}: {reason}",
 			"chip.vision": "Vision",
 			"chip.web_extract": "Web",
 			"chip.web_crawl": "Crawl",
@@ -262,12 +350,12 @@ window.__ModuleLoader__.load({
 		 * settings.mutate with the revision read at load.
 		 */
 		function AuxSettingsPage(props) {
-			const { api } = props;
+			const { api, runAuxCommand } = props;
 			const t = (props && props.t) || __t;
 			useLocaleRevision();
 			const [state, setState] = react.useState({ status: "loading", error: null, value: null, revision: 0, writable: true });
 			const [catalog, setCatalog] = react.useState({ providers: [], models: [], reasoning: {} });
-			const [openGroups, setOpenGroups] = react.useState({ tools: true, bridges: false, subagent: false, global: false });
+			const [openGroups, setOpenGroups] = react.useState({ diagnostics: true, tools: true, bridges: false, subagent: false, global: false });
 			const load = react.useCallback(() => {
 				let alive = true;
 				Promise.all([
@@ -316,6 +404,31 @@ window.__ModuleLoader__.load({
 			const [saved, setSaved] = react.useState(false);
 			const [patching, setPatching] = react.useState(false);
 			const [patchStatus, setPatchStatus] = react.useState(null);
+			const [status, setStatus] = react.useState(null);
+			const [statusLoading, setStatusLoading] = react.useState(true);
+			const [statusError, setStatusError] = react.useState(null);
+			const loadStatus = react.useCallback(() => {
+				let alive = true;
+				setStatusLoading(true);
+				setStatusError(null);
+				Promise.resolve()
+					.then(() => runAuxCommand("/aux status --json"))
+					.then((result) => {
+						if (!alive) return;
+						if (result.kind !== "success" || typeof result.text !== "string") {
+							throw new Error(result.text ?? "status command failed");
+						}
+						setStatus(JSON.parse(result.text));
+					})
+					.catch((error) => {
+						if (alive) setStatusError(error instanceof Error ? error.message : String(error));
+					})
+					.finally(() => {
+						if (alive) setStatusLoading(false);
+					});
+				return () => { alive = false; };
+			}, [runAuxCommand]);
+			react.useEffect(loadStatus, [loadStatus]);
 			if (state.status === "loading") return react.createElement("div", { className: "ax-section" }, t("settings.loading"));
 			if (state.status === "error") return react.createElement("div", { className: "ax-section" }, react.createElement("span", { className: "ax-error" }, t("settings.loadError") + state.error));
 			const tasks = ["vision", "web_extract", "web_crawl", "compress", "compaction", "skill"];
@@ -435,6 +548,7 @@ window.__ModuleLoader__.load({
 					}
 					setSaved(true);
 					setState((s) => ({ ...s, revision: response.result.value.revision, value: response.result.value.value }));
+					loadStatus();
 				}).catch((error) => {
 					setSaving(false);
 					setSaveError(error instanceof Error ? error.message : String(error));
@@ -444,14 +558,11 @@ window.__ModuleLoader__.load({
 				setPatching(true);
 				setPatchStatus(null);
 				Promise.resolve()
-					.then(async () => {
-						const listResponse = await api.sessions.list({});
-						const items = listResponse?.result?.value?.items ?? [];
-						if (items.length === 0) throw new Error("当前没有可用会话,无法执行 /aux patch");
-						const sessionId = items[0].sessionId;
-						const response = await api.sessions.command({ sessionId, line: "/aux patch" });
-						if (!response?.ok) throw new Error(response?.result?.error?.message ?? "command failed");
+					.then(() => runAuxCommand("/aux patch"))
+					.then((result) => {
+						if (result.kind !== "success") throw new Error(result.text ?? "patch failed");
 						setPatchStatus({ ok: true, text: t("settings.patchDone") });
+						loadStatus();
 					})
 					.catch((error) => {
 						setPatchStatus({ ok: false, text: t("settings.patchError") + (error?.message ?? String(error)) });
@@ -587,19 +698,84 @@ window.__ModuleLoader__.load({
 					return next;
 				});
 			};
-			const platformSelect = (key, label) => react.createElement("div", { className: "ax-row" },
-				react.createElement("label", null, label),
-				react.createElement("select", {
-					value: draft?.enabled?.[key] ?? "aux",
-					disabled: !state.writable,
-					onChange: (e) => setEnabled(key, e.target.value)
-				},
-					react.createElement("option", { value: "native" }, t("mode.native")),
-					react.createElement("option", { value: "aux" }, t("mode.aux")),
-					react.createElement("option", { value: "compat", disabled: true }, t("mode.compat"))
-				)
-			);
+			const statusByKey = {};
+			if (status !== null && Array.isArray(status.items)) {
+				for (const it of status.items) statusByKey[it.key] = it;
+			}
+			const platformSelect = (key, label) => {
+				const meta = statusByKey[key] ?? null;
+				const state = meta?.state ?? "unknown";
+				const stateText = t("status.state." + state);
+				const reason = meta ? t("status.reason." + meta.reason) : stateText;
+				const patchLabel = meta?.patch ? t("status.patch." + meta.patch) : null;
+				const title = label + " · " + stateText + (reason ? " — " + reason : "");
+				return react.createElement("div", { className: "ax-row", title },
+					react.createElement("div", { className: "ax-field-head" },
+						react.createElement("span", { className: "ax-dot ax-dot-" + state, "aria-hidden": "true" }),
+						react.createElement("label", null, label),
+						meta?.patch && patchLabel ? react.createElement("span", { className: "ax-status-badge ax-status-badge-" + meta.patch, title: reason }, patchLabel) : null
+					),
+					react.createElement("select", {
+						value: draft?.enabled?.[key] ?? "aux",
+						disabled: !state.writable,
+						onChange: (e) => setEnabled(key, e.target.value)
+					},
+						react.createElement("option", { value: "native" }, t("mode.native")),
+						react.createElement("option", { value: "aux", disabled: meta?.state === "unavailable" && meta?.action === "patch" }, t("mode.aux")),
+						react.createElement("option", { value: "compat", disabled: true }, t("mode.compat"))
+					)
+				);
+			};
+			const statusPanel = () => {
+				if (statusLoading) {
+					return react.createElement("div", { className: "ax-status-summary" }, t("status.loading"));
+				}
+				if (statusError !== null) {
+					return react.createElement("div", { className: "ax-status-head" },
+						react.createElement("span", { className: "ax-status-summary ax-error", role: "alert" }, t("status.error") + statusError),
+						react.createElement("button", { type: "button", className: "ax-repair-button", onClick: loadStatus }, t("status.refresh"))
+					);
+				}
+				const items = status?.items ?? [];
+				const enabledCount = items.filter((entry) => entry.state === "enabled").length;
+				const unavailableCount = items.filter((entry) => entry.state === "unavailable").length;
+				const issues = status?.issues ?? [];
+				const warnings = status?.warnings ?? [];
+				const summary = t("status.overview").replace("{enabled}", String(enabledCount)).replace("{issues}", String(unavailableCount));
+				return group("diagnostics", t("status.diagnostics"), t("status.diagnostics.desc"),
+					react.createElement("div", { className: "ax-status-head" },
+						react.createElement("span", { className: "ax-status-summary" },
+							t("status.coreCount").replace("{count}", String(status?.core?.count ?? 0))
+						),
+						react.createElement("span", { className: "ax-status-summary" }, summary),
+						react.createElement("button", { type: "button", className: "ax-repair-button", disabled: statusLoading, onClick: loadStatus }, t("status.refresh"))
+					),
+					issues.length === 0 && warnings.length === 0
+						? react.createElement("div", { className: "ax-status-summary" }, t("status.noIssues"))
+						: [
+							...issues.map((issue) => {
+								const label = issue.key;
+								return react.createElement("div", { key: issue.key, className: "ax-status-issue" },
+									react.createElement("span", { className: "ax-dot ax-dot-unavailable", "aria-hidden": "true" }),
+									react.createElement("span", { className: "ax-status-issue-text" }, label + ": " + t("status.reason." + issue.reason)),
+									issue.action === "patch"
+										? react.createElement("button", { type: "button", className: "ax-repair-button", disabled: patching, onClick: runPatch }, patching ? t("settings.patching") : t("status.action.patch"))
+										: issue.action === "configure"
+											? react.createElement("span", { className: "ax-status-badge ax-status-badge-partial" }, t("status.action.configure"))
+											: null
+								);
+							}),
+							...warnings.map((warning) => {
+								return react.createElement("div", { key: warning.code, className: "ax-status-issue" },
+									react.createElement("span", { className: "ax-dot ax-dot-fixing", "aria-hidden": "true" }),
+									react.createElement("span", { className: "ax-status-issue-text" }, t("status.reason." + warning.reason))
+								);
+							})
+						]
+				);
+			};
 			return react.createElement("div", { className: "ax-section" },
+				statusPanel(),
 				group("tools", t("group.tools"), t("group.tools.desc"),
 					tasks.filter((x) => ["vision", "web_extract", "web_crawl", "compress"].includes(x)).map(taskCard)
 				),
@@ -706,7 +882,7 @@ window.__ModuleLoader__.load({
 		}
 
 		/** Required client services. */
-		const inject = ["slots", "connection"];
+		const inject = ["slots", "connection", "remote", "remote.commands"];
 		/**
 		 * Client plugin body: register the settings page and the status chip.
 		 * @param ctx - client root context.
@@ -719,13 +895,23 @@ window.__ModuleLoader__.load({
 				});
 			}
 			const connection = ctx.get("connection");
+			const runAuxCommand = async (line) => {
+				const listResponse = await connection.api.sessions.list({});
+				const items = listResponse?.result?.value?.items ?? [];
+				if (items.length === 0) throw new Error("当前没有可用会话,无法执行命令");
+				const sessionId = items[0].sessionId;
+				const result = await ctx.remote.commands.execute(sessionId, line);
+				if (!result.ok) throw new Error((result.error?.code ?? "") + ": " + (result.error?.message ?? "command failed"));
+				if (result.value === void 0) throw new Error("unknown command: " + line);
+				return result.value.result;
+			};
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
 				id: "aux",
 				order: 30,
 				label: () => __t("settings.title"),
 				locale: NS,
-				inject: () => ({ api: connection.api })
+				inject: () => ({ api: connection.api, runAuxCommand })
 			}, AuxSettingsPage));
 			ctx.slots.inject("conversation.input.left", () => ctx.slots.register({
 				name: "conversation.input.left",
