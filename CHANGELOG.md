@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — 设置页 UI 重构 + reasoningEffort + 双语
+
+- **设置页 UI 重构**:分组可折叠卡片(工具任务 / 桥接任务 / 子代理 / 全局),每个任务两列网格布局。
+- **思考档位(reasoningEffort)**:每个任务可配置;设置页下拉选项来自当前 provider/model 的 `reasoning.efforts`;`AuxLlmRequest` 支持 per-call 覆盖;不传则沿用 provider 默认。
+- **字段级重置**:每个已覆盖字段显示「重置」按钮,一键回到继承默认。
+- **中英双语**:设置页跟随 DSH 语言(zh/en)。
+- 测试基线更新为 291。
+
 ## 0.3.2(2026-08-21)— DSH 0.1.1-rc.1 兼容
 
 - **DSH 0.1.1-rc.1 源码适配**:从 `deepseek-ai/deepseek-harness` tag

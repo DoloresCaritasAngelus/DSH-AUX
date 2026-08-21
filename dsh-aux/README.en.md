@@ -14,7 +14,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.3.2-blue)
-![Tests](https://img.shields.io/badge/tests-286-brightgreen)
+![Tests](https://img.shields.io/badge/tests-291-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 
@@ -57,7 +57,7 @@ Conversation models are getting stronger, but "look at this image", "read this p
 | **Subagent / workflow bridge** | The native `subagent` tool and `workflow`'s parallel `agent()` children transparently route to AUX (native / manual / vision-aware); no new tools, no system-prompt changes |
 | **Skill pre-audit bridge** | Once the `skill` aux model is configured, native `skill` calls are first audited by the auxiliary model (SKILL.md + current task), returning "how to apply / known pitfalls / 🔻rot-prone assertions / execution advice"; the main model can verify against the original text |
 | **`/aux` commands** | Status, model switching, image GC, vision self-test, image memory |
-| **Web settings + status chip** | Per-task model dropdowns; composer shows the latest auxiliary call |
+| **Web settings + status chip** | Grouped collapsible settings; per-task model/timeout/concurrency/reasoning effort; bilingual zh/en following DSH locale; composer shows the latest auxiliary call |
 | **Session image lifecycle** | Deleted sessions clean up unreferenced images; shared images are preserved; image memory survives restarts |
 | **Zero-config** | Works without any model configuration — auxiliary tasks automatically use the session's main model |
 
@@ -132,7 +132,7 @@ node scripts/doctor.mjs
 
 ### Settings
 
-Web → Settings → Auxiliary Models. Configure a model per `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. **`skill` is the skill pre-audit model** — once configured, native `skill` calls get an auxiliary pre-audit report. `web_extract` / `web_crawl` also expose `maxChars` (page character budget, default 32000). You can also turn off "Show auxiliary model status chip in conversation UI" (the `aux-status` projection is then no longer exposed to Web/third-party readers; `/aux status` still works).
+Web → Settings → Auxiliary Models. Configure a model per `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. **`skill` is the skill pre-audit model** — once configured, native `skill` calls get an auxiliary pre-audit report. `web_extract` / `web_crawl` also expose `maxChars` (page character budget, default 32000). Each task can also select a "reasoning effort"; options come from the current provider/model's `reasoning.efforts`, and omitting it preserves the provider default. The settings page is grouped into collapsible "Tool Tasks / Bridge Tasks / Subagents / Global" sections and is bilingual (zh/en) following the DSH language. You can also turn off "Show auxiliary model status chip in conversation UI" (the `aux-status` projection is then no longer exposed to Web/third-party readers; `/aux status` still works).
 
 ### web_extract
 

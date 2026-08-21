@@ -9,7 +9,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.3.2-blue)
-![Tests](https://img.shields.io/badge/tests-286-brightgreen)
+![Tests](https://img.shields.io/badge/tests-291-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 
@@ -52,7 +52,7 @@
 | **子代理/工作流桥接** | 原生 `subagent` 与 `workflow` 并行 `agent()` 子代理透明走 AUX(native/manual/vision-aware);零新工具、零系统提示词改动 |
 | **技能预审桥接** | 配置 `skill` 辅助模型后,原生 `skill` 工具调用会先由辅助模型精读 SKILL.md + 当前任务,返回「如何应用 / 已知坑 / 🔻易腐烂旧断言 / 执行建议」预审报告;主模型可对照原文辩证审视 |
 | **`/aux` 命令** | 状态查看、模型切换、图片回收、视觉自检、图片记忆 |
-| **Web 设置页 + 状态 chip** | 每任务模型下拉配置;composer 实时显示最近一次辅助调用 |
+| **Web 设置页 + 状态 chip** | 分组可折叠设置页,每任务模型/超时/并发/思考档位配置;中英双语跟随 DSH 语言;composer 实时显示最近一次辅助调用 |
 | **会话图片生命周期** | 删除会话自动清理无引用图片;共享保留、归档不误删;图片记忆跨重启可查 |
 | **零配置可用** | 不配任何模型也能跑——辅助任务自动使用会话主模型 |
 
@@ -126,7 +126,7 @@ node scripts/doctor.mjs
 
 ### 设置页
 
-Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型。其中 **`compaction` 就是会话压缩模型**——配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。**`skill` 就是技能预审模型**——配置后原生 `skill` 工具调用会先由辅助模型出预审报告。`web_extract` / `web_crawl` 还可单独配置 `maxChars`(页面字符预算,默认 32000)。也可关闭「在对话界面显示辅助模型状态芯片」(关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 不受影响)。
+Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型。其中 **`compaction` 就是会话压缩模型**——配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。**`skill` 就是技能预审模型**——配置后原生 `skill` 工具调用会先由辅助模型出预审报告。`web_extract` / `web_crawl` 还可单独配置 `maxChars`(页面字符预算,默认 32000)。每个任务还可选「思考档位」,选项来自当前 provider/model 支持的 `reasoning.efforts`,不传则沿用 provider 默认。设置页按「工具任务 / 桥接任务 / 子代理 / 全局」分组折叠,并支持中英双语跟随 DSH 语言。也可关闭「在对话界面显示辅助模型状态芯片」(关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 不受影响)。
 
 ### 网页提取 (web_extract)
 

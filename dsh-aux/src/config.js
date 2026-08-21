@@ -37,39 +37,45 @@ export const AUX_SETTINGS_SCHEMA = z.object({
       provider: z.string(),
       model: z.string(),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-      maxConcurrency: z.number().step(1).min(1)
+      maxConcurrency: z.number().step(1).min(1),
+      reasoningEffort: z.string().min(1)
     }),
     web_extract: z.object({
       provider: z.string(),
       model: z.string(),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
-      maxChars: z.number().step(1).min(1)
+      maxChars: z.number().step(1).min(1),
+      reasoningEffort: z.string().min(1)
     }),
     web_crawl: z.object({
       provider: z.string(),
       model: z.string(),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
-      maxChars: z.number().step(1).min(1)
+      maxChars: z.number().step(1).min(1),
+      reasoningEffort: z.string().min(1)
     }),
     compress: z.object({
       provider: z.string(),
       model: z.string(),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-      maxConcurrency: z.number().step(1).min(1)
+      maxConcurrency: z.number().step(1).min(1),
+      reasoningEffort: z.string().min(1)
     }),
     compaction: z.object({
       provider: z.string(),
       model: z.string(),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-      maxConcurrency: z.number().step(1).min(1)
+      maxConcurrency: z.number().step(1).min(1),
+      reasoningEffort: z.string().min(1)
     }),
     skill: z.object({
       provider: z.string(),
       model: z.string(),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-      maxConcurrency: z.number().step(1).min(1)
+      maxConcurrency: z.number().step(1).min(1),
+      reasoningEffort: z.string().min(1)
     })
   }),
   subagent: z.object({
@@ -106,6 +112,7 @@ export function projectSettings(settings) {
       ...(raw.model !== void 0 ? { model: raw.model } : {}),
       ...(raw.timeoutMs !== void 0 ? { timeoutMs: raw.timeoutMs } : {}),
       ...(raw.maxConcurrency !== void 0 ? { maxConcurrency: raw.maxConcurrency } : {}),
+      ...(raw.reasoningEffort !== void 0 ? { reasoningEffort: raw.reasoningEffort } : {}),
       ...((task === "web_extract" || task === "web_crawl") && raw.maxChars !== void 0 ? { maxChars: raw.maxChars } : {})
     };
   }

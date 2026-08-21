@@ -56,6 +56,11 @@ export interface AuxTaskConfigEntry {
     maxConcurrency?: number;
     /** web_extract page-text cap (code points); positive integer. */
     maxChars?: number;
+    /**
+     * Task-level reasoning effort (opaque id from the model's
+     * `reasoning.efforts`). Absent = inherit provider/model default.
+     */
+    reasoningEffort?: string;
 }
 
 /** Plugin config: optional per-task overrides. */
@@ -77,6 +82,12 @@ export interface AuxLlmRequest {
     tools?: readonly ToolSchema[];
     temperature?: number;
     maxTokens?: number;
+    /**
+     * Per-call reasoning effort override (opaque id from the model's
+     * `reasoning.efforts`). Priority: this field > task config > omit
+     * (provider/model default).
+     */
+    reasoningEffort?: string;
     /** Cancellation fused into the per-task deadline. */
     signal?: AbortSignal;
     /** The owning session; aux calls are logged here when present. */
