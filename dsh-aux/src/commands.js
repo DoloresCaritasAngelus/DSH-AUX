@@ -4,6 +4,11 @@
  * @module @dolorescaritasangelus/dsh-aux/commands
  */
 import { AUX_CALL_EVENT, AUX_DEBUG_EVENT, AUX_SETTINGS_NAMESPACE } from "./config.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
+
+const execFileAsync = promisify(execFile);
 import { AUX_TASKS, resolvePrimaryRoute } from "./route.js";
 import { gcImages } from "./images/gc.js";
 import { handleMemoryCommand } from "./images/memory.js";
@@ -46,6 +51,9 @@ export async function handleAuxCommand(service, agent, rawInput) {
   }
   if (sub === "debug") {
     return await handleDebugCommand(service, agent, args.slice(1));
+  }
+  if (sub === "patch") {
+    return await handlePatchCommand();
   }
   if (sub === "status" || sub === "") {
     // Reconcile first so the status view reflects any deleted-session
@@ -314,6 +322,28 @@ export async function handleDebugCommand(service, agent, args) {
   const rows = formatDebugEvents(debugEvents);
   const chosen = Number.isFinite(limit) ? rows.slice(-limit) : rows;
   return { kind: "success", text: [`AUX debug(${targetLabel},共 ${rows.length} 条,显示最近 ${chosen.length} 条):`, ...chosen.reverse()].join("\n") };
+}
+
+/**
+ * /aux patch — 一键重打 AUX 本地补丁并自愈(symlink / 补丁 / 白名单)。
+ * 运行 `bridge/apply-patch.mjs` 与 `bridge/self-heal.mjs`;失败不致命。
+ */
+export async function handlePatchCommand() {
+  const repo = fileURLToPath(new URL("../..", import.meta.url));
+  const steps = [
+    ["apply-patch", ["bridge/apply-patch.mjs"]],
+    ["self-heal", ["bridge/self-heal.mjs"]]
+  ];
+  const output = [];
+  for (const [name, args] of steps) {
+    try {
+      const { stdout, stderr } = await execFileAsync(process.execPath, args, { cwd: repo });
+      output.push(`[${name}]\n${stdout}${stderr}`);
+    } catch (error) {
+      output.push(`[${name}] 失败: ${error?.message ?? String(error)}\n${error?.stdout ?? ""}${error?.stderr ?? ""}`);
+    }
+  }
+  return { kind: "success", text: output.join("\n") };
 }
 
 /** Handle the /aux model subcommand: read or write one task's route. */

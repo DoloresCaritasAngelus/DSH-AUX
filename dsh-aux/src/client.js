@@ -131,6 +131,10 @@ window.__ModuleLoader__.load({
 			"debug.maxDebugEventBytes": "单条 debug 事件大小上限 (字节)",
 			"debug.debugEventsInHistory": "debug 事件混入 /aux history",
 			"debug.redactSecrets": "记录时排除疑似密钥/PII (redactSecrets)",
+			"settings.patch": "一键打补丁",
+			"settings.patching": "打补丁中…",
+			"settings.patchDone": "已触发 /aux patch,请查看会话输出。",
+			"settings.patchError": "打补丁失败: ",
 			"chip.vision": "视觉",
 			"chip.web_extract": "网页",
 			"chip.web_crawl": "站点",
@@ -204,6 +208,10 @@ window.__ModuleLoader__.load({
 			"debug.maxDebugEventBytes": "Max debug event bytes",
 			"debug.debugEventsInHistory": "Include debug events in /aux history",
 			"debug.redactSecrets": "Redact likely secrets/PII when recording (redactSecrets)",
+			"settings.patch": "Run patch",
+			"settings.patching": "Patching…",
+			"settings.patchDone": "Triggered /aux patch; see conversation output.",
+			"settings.patchError": "Patch failed: ",
 			"chip.vision": "Vision",
 			"chip.web_extract": "Web",
 			"chip.web_crawl": "Crawl",
@@ -306,6 +314,8 @@ window.__ModuleLoader__.load({
 			const [saving, setSaving] = react.useState(false);
 			const [saveError, setSaveError] = react.useState(null);
 			const [saved, setSaved] = react.useState(false);
+			const [patching, setPatching] = react.useState(false);
+			const [patchStatus, setPatchStatus] = react.useState(null);
 			if (state.status === "loading") return react.createElement("div", { className: "ax-section" }, t("settings.loading"));
 			if (state.status === "error") return react.createElement("div", { className: "ax-section" }, react.createElement("span", { className: "ax-error" }, t("settings.loadError") + state.error));
 			const tasks = ["vision", "web_extract", "web_crawl", "compress", "compaction", "skill"];
@@ -429,6 +439,24 @@ window.__ModuleLoader__.load({
 					setSaving(false);
 					setSaveError(error instanceof Error ? error.message : String(error));
 				});
+			};
+			const runPatch = () => {
+				setPatching(true);
+				setPatchStatus(null);
+				Promise.resolve()
+					.then(async () => {
+						const listResponse = await api.sessions.list({});
+						const items = listResponse?.result?.value?.items ?? [];
+						if (items.length === 0) throw new Error("当前没有可用会话,无法执行 /aux patch");
+						const sessionId = items[0].sessionId;
+						const response = await api.sessions.command({ sessionId, line: "/aux patch" });
+						if (!response?.ok) throw new Error(response?.result?.error?.message ?? "command failed");
+						setPatchStatus({ ok: true, text: t("settings.patchDone") });
+					})
+					.catch((error) => {
+						setPatchStatus({ ok: false, text: t("settings.patchError") + (error?.message ?? String(error)) });
+					})
+					.finally(() => setPatching(false));
 			};
 			const providerOptions = catalog.providers.map((p) => ({ value: p.provider, label: (p.displayName ?? p.provider) + " (" + p.provider + ")" }));
 			const modelOptionsFor = (task) => {
@@ -639,7 +667,11 @@ window.__ModuleLoader__.load({
 						})
 					),
 					switchRow(t("debug.debugEventsInHistory"), draft?.debug?.debugEventsInHistory === true, false, (e) => setDebug("debugEventsInHistory", e.target.checked)),
-					switchRow(t("debug.redactSecrets"), draft?.debug?.redactSecrets !== false, false, (e) => setDebug("redactSecrets", e.target.checked))
+					switchRow(t("debug.redactSecrets"), draft?.debug?.redactSecrets !== false, false, (e) => setDebug("redactSecrets", e.target.checked)),
+					react.createElement("div", { className: "ax-actions" },
+						react.createElement("button", { type: "button", className: "ax-save", disabled: patching, onClick: runPatch }, patching ? t("settings.patching") : t("settings.patch")),
+						patchStatus !== null && react.createElement("span", { className: "ax-status " + (patchStatus.ok ? "ax-ok-text" : "ax-error"), role: "status" }, patchStatus.text)
+					)
 				),
 				react.createElement("div", { className: "ax-actions" },
 					react.createElement("button", { type: "button", className: "ax-save", disabled: saving || !state.writable, onClick: save }, saving ? t("settings.saving") : t("settings.save")),
