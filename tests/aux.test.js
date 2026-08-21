@@ -703,6 +703,29 @@ test('隐私: showStatusChip=false 时注销 aux-status 投影,重新开启后�
   assert.equal(projections.length, 1, '重新开启后应恢复 aux-status 投影');
 });
 
+test('投影: DSH 0.1.1-rc.1 新 API 使用 stateSchema/wire', () => {
+  let captured;
+  const registry = {
+    stateOf() {},
+    register(def) {
+      captured = def;
+      return () => {};
+    }
+  };
+  const service = {
+    _projectionCtx: { sessionProjections: registry },
+    showStatusChip: true,
+    _auxStatusProjectionDispose: void 0
+  };
+  syncAuxStatusProjection(service);
+  assert.equal(captured.key, AUX_STATUS_KEY);
+  assert.ok(captured.stateSchema, '新 API 应提供 stateSchema');
+  assert.ok(captured.wire, '新 API 应提供 wire');
+  assert.ok(captured.wire.viewSchema, 'wire 应提供 viewSchema');
+  assert.equal(captured.schema, void 0, '新 API 不应再使用旧 schema 字段');
+  assert.deepEqual(captured.wire.view(captured.init()), { tasks: {} });
+});
+
 test('call: 未配置任务用默认辅助模型,成功返回文本与路由', async () => {
   const { ctx, streams } = await makeHarness();
   const session = makeSession();

@@ -1,6 +1,24 @@
 # Changelog
 
-## 0.3.1(未发布)— /aux 子命令识别修复 + 新增溯源命令 + 技能预审桥接
+## 0.3.2(2026-08-21)— DSH 0.1.1-rc.1 兼容
+
+- **DSH 0.1.1-rc.1 源码适配**:从 `deepseek-ai/deepseek-harness` tag
+  `dsh-v0.1.0-rc.8` → `dsh-v0.1.1-rc.1` 做源码级 diff,核心变化是
+  session-projection 注册 API(`schema/view` → `stateSchema/wire`)。
+  dsh-aux 的 `aux-status` 投影改为**双 API 兼容**(feature-detect
+  `sessionProjections.stateOf`),rc.6/7/8 继续用旧形态,0.1.1-rc.1 用新形态。
+- **版本判定修正**:`bridge/target.js` 的 `isRc7OrNewer` 现在能正确识别
+  `0.1.1-rc.1`(旧实现只看 rc 号,会把 0.1.1-rc.1 误判为 rc.1 老版本);
+  同时覆盖稳定 0.1.x/0.2.x 新线。
+- **peerDependencies 扩展**:15 个 DSH 官方 peer 依赖从 `^0.1.0-rc.6` 改为
+  `>=0.1.0-rc.6 <0.2.0 || ^0.1.1-rc.1`,同时覆盖 rc.6/7/8 与 0.1.1-rc.1。
+- **doctor 版本检查**:支持范围更新为 rc.6 / rc.7 / rc.8 / 0.1.1-rc.1。
+- **补丁验证**:在临时 0.1.1-rc.1 部署上 `apply-patch.mjs --dry-run`
+  P1-P6/P11 全部锚点匹配;P7 append 块匹配;P8 白名单插入点存在;
+  settings 补丁随版本判定跳过(rc.1 原生动态设置)。
+- **保持 rc.6/7/8 兼容**:行为变化全部走 feature-detection,不破坏旧版。
+
+## 0.3.1(2026-08-20)— /aux 子命令识别修复 + 新增溯源命令 + 技能预审桥接
 
 - **修复 `/aux status` / `/aux history` 等带参子命令被当成普通聊天发送**。
   根因:DSH 客户端对"未声明 `input` 提示的裸命令"只认无参裸行

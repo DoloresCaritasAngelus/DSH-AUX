@@ -82,7 +82,8 @@ dsh-aux 还接管原生 `skill` 工具的结果,让主模型在真正执行 SKIL
 
 ## 前置
 
-1. DSH 0.1.0-rc.6(`@deepseek-ai/dsh-host-apiproxy`、`@deepseek-ai/dsh-agent-loop` 同版本)
+1. DSH 0.1.0-rc.6 及以上(已验证 rc.6 / rc.7 / rc.8 / 0.1.1-rc.1;
+   `@deepseek-ai/dsh-host-apiproxy`、`@deepseek-ai/dsh-agent-loop` 同版本)
 2. dsh-aux 已挂载(提供 `vision_analyze` 工具;默认辅助模型 `opencode-go/kimi-k2.7-code` 已实测支持图像)
 
 ## 安装 / 升级

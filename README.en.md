@@ -8,10 +8,10 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.3.1-blue)
-![Tests](https://img.shields.io/badge/tests-285-brightgreen)
+![Version](https://img.shields.io/badge/version-0.3.2-blue)
+![Tests](https://img.shields.io/badge/tests-286-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Platform](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-0078D4)
+![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 
 </div>
 
@@ -67,7 +67,7 @@ Conversation models are getting stronger, but "look at this image", "read this p
 
 ## Requirements
 
-- **DSH** ≥ 0.1.0-rc.6
+- **DSH** 0.1.0-rc.6 ~ 0.1.1-rc.1 (verified rc.6 / rc.7 / rc.8 / 0.1.1-rc.1)
 - **Node.js** ≥ 20
 - **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages (shipped with the environment); there is no `dependencies` block, so no extra third-party runtime packages are needed.
 
@@ -284,7 +284,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 ## Compatibility & Dependencies
 
-- **Platform**: DSH ≥ 0.1.0-rc.6; Node ≥ 20.
+- **Platform**: DSH 0.1.0-rc.6 ~ 0.1.1-rc.1; Node ≥ 20.
 - **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages; no `dependencies`.
 - **Zero-dependency tests**: `node --test tests/*.test.js` (285 total; see `TESTING.md` for the file inventory and baseline).
 
