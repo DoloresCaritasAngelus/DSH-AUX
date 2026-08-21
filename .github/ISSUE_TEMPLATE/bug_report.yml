@@ -1,0 +1,40 @@
+name: Bug report
+description: 报告 dsh-aux 的缺陷
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 发生了什么?期望是什么?
+    validations:
+      required: true
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH 版本
+      description: 例如 0.1.0-rc.8 / 0.1.1-rc.1
+    validations:
+      required: true
+  - type: input
+    id: aux-version
+    attributes:
+      label: dsh-aux 版本
+      description: 例如 0.3.2
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 尽量详细
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 截图
+      description: 相关日志、报错或截图
+    validations:
+      required: false

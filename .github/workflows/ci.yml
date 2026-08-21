@@ -7,14 +7,15 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: aux 测试(零依赖)
-        run: node --test tests/aux.test.js
-        working-directory: tests
-      - name: bridge 逻辑测试(无 agent-loop 时自动跳过)
-        run: node --test bridge.test.js
-        working-directory: tests
+          node-version: ${{ matrix.node-version }}
+      - name: 全量测试(零依赖)
+        run: node --test tests/*.test.js
+      - name: README 单一真相检查
+        run: node scripts/gen-package-readme.mjs --check
