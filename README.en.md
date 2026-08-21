@@ -2,11 +2,11 @@
 
 <div align="center"><img src="assets/deepseek-girl.png" alt="AUX" width="120" /></div>
 
+<div align="center">
+
 > Hi~ I'm AUX, your auxiliary model little helper 💙
 > The main model stays focused on the chat; I take care of images, web pages, and compressing long text!
 > Whenever you need me, just call me directly～
-
-<div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.4.0-blue)
 ![Tests](https://img.shields.io/badge/tests-305-brightgreen)
@@ -17,59 +17,149 @@
 
 # dsh-aux — Auxiliary Model System for DSH
 
-> Give the main agent a "co-pilot": **vision analysis, web extraction, and long-text compression** are handled by a separate auxiliary LLM, so the main model stays focused on the conversation. No sub-agents, no session orchestration — install and it just works, zero configuration.
+> Give the main agent a "co-pilot": **vision analysis, web extraction, and long-text compression** are handled by a separate auxiliary LLM, so the main model stays focused on the conversation.
+> It can also transparently take over your existing `subagent` / `workflow` calls—**without creating extra sub-agents** and without stealing the main model's conversation.
+
+> 💬 "Leave these chores to me, and you just enjoy the chat~"
 
 ---
 
 ## Table of Contents
 
-- [Why](#why)
-- [Key Features](#key-features)
-- [Requirements](#requirements)
+- [What is this?](#what-is-this)
+- [Highlights](#highlights)
+- [What can I do for you](#what-can-i-do-for-you)
+- [Platform switches & SKILL modes](#platform-switches--skill-modes)
 - [Quick Start](#quick-start)
-- [Usage](#usage)
+- [Daily commands](#daily-commands)
+- [Settings & status panel](#settings--status-panel)
+- [Bridges & advanced capabilities](#bridges--advanced-capabilities)
+- [Security boundaries](#security-boundaries)
 - [How It Works](#how-it-works)
+- [Project Layout](#project-layout)
 - [Compatibility & Dependencies](#compatibility--dependencies)
+- [Documentation](#documentation)
 - [FAQ](#faq)
 - [Related Projects](#related-projects)
-- [Documentation](#documentation)
-- [Acknowledgments](#acknowledgments)
 - [License](#license)
 
 ---
 
-## Why
+## What is this?
 
-Conversation models are getting stronger, but "look at this image", "read this page", and "compress this long text" can interrupt the flow and burn context. dsh-aux delegates these side tasks to an **auxiliary model**: you just ask, and the plugin routes to the right model behind the scenes — the main model answers you, the auxiliary model "takes a look", "summarizes the page", or "compresses 50K characters".
+Models keep getting stronger, but handing "look at this image", "read this page", "compress this long text" to the main model interrupts the flow and burns context. **dsh-aux** routes those chores to a **separate auxiliary LLM**: you just send the request, and it automatically routes to the right model—the main model answers your conversation, while the auxiliary model takes care of "look at this image", "summarize this page", "compress these 50k words".
 
-## Key Features
+- **Unified auxiliary LLM routing**: per-task model / timeout / concurrency / reasoning effort.
+- **Zero-config by default**: works without any model configuration; falls back to the session's main model.
+- **Observable**: every call is written to the session log; visible through `/aux status`, the settings page, and the status chip.
+
+## Highlights
 
 | Feature | Description |
 |---|---|
-| **Unified auxiliary LLM routing** | Per-task model/timeout/concurrency; automatic fallback to the main model; failure cooldown; every call is recorded as a session event for auditability |
-| **Four ready-to-use tools** | `vision_analyze` (image analysis), `web_extract` (page extraction + summary), `web_crawl` (site deep-crawl + overall summary), `compress_text` (long-text compression) |
-| **Session compaction bridge** | Once the `compaction` task is configured, native DSH automatic/manual compaction routes through the AUX model; image degradation keeps compaction working even when attachments are missing or the route is text-only |
-| **Subagent / workflow bridge** | The native `subagent` tool and `workflow`'s parallel `agent()` children transparently route to AUX (native / manual / vision-aware); no new tools, no system-prompt changes |
-| **Skill pre-audit bridge** | Once the `skill` aux model is configured, native `skill` calls are first audited by the auxiliary model (SKILL.md + current task), returning "how to apply / known pitfalls / 🔻rot-prone assertions / execution advice"; the main model can verify against the original text |
-| **`/aux` commands** | Status, model switching, image GC, vision self-test, image memory |
-| **Web settings + status chip** | Grouped collapsible settings; per-task model/timeout/concurrency/reasoning effort; bilingual zh/en following DSH locale; composer shows the latest auxiliary call |
-| **Session image lifecycle** | Deleted sessions clean up unreferenced images; shared images are preserved; image memory survives restarts |
-| **Zero-config** | Works without any model configuration — auxiliary tasks automatically use the session's main model |
+| **Four ready-to-use tools** | `vision_analyze`, `web_extract`, `web_crawl`, `compress_text` |
+| **Unified routing & fallback** | Per-task model/timeout/concurrency; fallback to the main model on failure, cooldown after repeated failures |
+| **Platform switches** | Each tool/bridge can be `native` / `aux`; `compat` is reserved for the future |
+| **SKILL audit** | Four modes: `native` / `audit` / `report` / `report-ondemand` |
+| **Subagent / workflow bridge** | Native `subagent` and parallel `agent()` children of `workflow` transparently use AUX |
+| **Skill pre-audit bridge** | An auxiliary model reads SKILL.md + current task first and returns a pre-audit report |
+| **Compaction bridge** | With a `compaction` task configured, native auto/manual compaction routes through AUX |
+| **Settings + status panel** | Grouped and collapsible, bilingual; full platform status, patch diagnostics, one-click repair, and restart detection |
+| **Session image lifecycle** | Deleting a session cleans up unreferenced images; shared images are preserved; image memory survives restarts |
+| **Zero third-party runtime deps** | peerDependencies are all official DSH packages |
 
-### The Four Tools
+## What can I do for you
 
 | Tool | What it does | Typical use |
 |---|---|---|
-| `vision_analyze` | Image analysis (multi-image parallel) | "What's in this image?" "Read the chart values" "Compare two images" |
-| `web_extract` | Fetch + summarize web pages (supports `followLinks` same-origin recursion) | "Summarize this page" "Answer from this page" "Summarize this doc site" |
-| `web_crawl` | Deep-crawl a site + overall summary (scope/robots/rate limits/budgets) | "Crawl the whole docs site and summarize" "List all API endpoints on the docs site" |
-| `compress_text` | Long-text compression (auto-detects code/log/doc, supports output budget, multi-round/hierarchical) | Compress logs, docs, or oversized context |
+| `vision_analyze` | Image analysis (parallel multi-image) | "What's in this image?" "Read the chart values" |
+| `web_extract` | Web page fetch + summary (same-origin recursion) | "Summarize this page" "Answer a question from this page" |
+| `web_crawl` | Site-wide deep crawl + overall summary | "Crawl the whole docs site and summarize" |
+| `compress_text` | Long-text compression (code/log/doc aware) | Compress logs, docs, or very long context |
 
-## Requirements
+> 💬 "Seeing images, reading pages, compressing long text—all my specialties!"
 
-- **DSH** 0.1.0-rc.6 ~ 0.1.1-rc.1 (verified rc.6 / rc.7 / rc.8 / 0.1.1-rc.1)
-- **Node.js** ≥ 20
-- **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages (shipped with the environment); there is no `dependencies` block, so no extra third-party runtime packages are needed.
+<details>
+<summary><b>Full tool parameters (click to expand)</b></summary>
+
+### web_extract
+
+| Parameter | Default | Description |
+|---|---|---|
+| `url` | required | The page to fetch |
+| `question` | — | Optional follow-up to focus the answer |
+| `maxChars` | 32000 | Page character budget |
+| `followLinks` | `off` | `same-origin` recursively follows in-origin links |
+| `maxPages` / `maxDepth` | 3 / 1 | Recursive page / depth limits (`0` = seed only) |
+
+- **Output**: single page returns `summary` / `keyPoints` + `chars` / `truncated`; recursion adds `pages`, `totalChars`.
+- **Boundary**: static-HTML summary agent—does not execute JS; cannot click/paginate/fill forms.
+- **Recursion**: uses the same crawl engine as `web_crawl`, honoring robots.txt, rate limits, and per-hop SSRF checks.
+
+### web_crawl
+
+| Parameter | Default | Description |
+|---|---|---|
+| `url` | required | Starting seed page |
+| `scope` | `same-origin` | Crawl scope; `hosts` only crawls listed hosts |
+| `hosts` | — | Allowed hosts when `scope=hosts` |
+| `seedUrls` | — | Extra depth-0 seeds (still SSRF-checked) |
+| `maxPages` / `maxDepth` | 10 / 2 | Page limit / link depth limit |
+| `maxCharsPerPage` | 32000 | Per-page character budget |
+| `respectRobots` | true | Honors robots.txt |
+| `minIntervalMs` | 250 | Minimum interval between requests to the same host |
+| `useSitemap` | false | Seeds from `<origin>/sitemap.xml` |
+| `maxPagesPerHost` | 0 (unlimited) | Per-host page limit |
+| `perPageSummaries` | false | false=aggregate summary; true=per-page summaries |
+
+**Two summary modes**
+
+| Mode | How it summarizes | Cost |
+|---|---|---|
+| **A (default)** | One call over all pages → overall summary + page list | 1 call |
+| **B** | Per-page summaries, then aggregate | ≈ pages + 1 call |
+
+</details>
+
+### Cleaning & anti-crawl (zero dependencies)
+
+- **Encoding**: decodes via `Content-Type` / `<meta charset>`; GBK/GB18030 etc. remain intact.
+- **JS Challenge**: detects Cloudflare/challenge shells → returns `browserRequired`, does not burn tokens, suggests a browser.
+- **429 / 502-504**: retries once with a short backoff; if it still fails, reports a rate-limited error.
+- **403 and other 4xx**: returns a "may need a browser / login" message instead of feeding empty content to the auxiliary model.
+- **Redirects**: follows each hop with SSRF checks and exposes the `redirects` count.
+- **Proxy**: direct connection first; automatically falls back to `HTTP(S)_PROXY` (respecting `NO_PROXY`), zero dependencies.
+
+## Platform switches & SKILL modes
+
+This is the core v0.4.0 experience: AUX is no longer "automatic but opaque"—it is **configurable, disablable, and explainable**.
+
+### Tool / bridge three-state switches
+
+| Mode | Behavior |
+|---|---|
+| `native` | AUX off; DSH native behavior; AUX tools hidden from the model |
+| `aux` | AUX on; use our implementation / bridge |
+| `compat` | **Reserved for the future**, currently unavailable and disabled in the UI |
+
+Applies to: `vision_analyze`, `web_extract`, `web_crawl`, `compress_text`, `imageBridge`, `subagentBridge`, `workflowBridge`, `compactionBridge`, `skillAudit`.
+
+> 💬 "Don't want me in the way? One click back to native~"
+
+### SKILL audit modes
+
+| Mode | Behavior |
+|---|---|
+| `native` | No interception, native pass-through |
+| `audit` | Auxiliary model audits SKILL.md + current task first, then the main model acts |
+| `report` | Returns only the audit report, no execution |
+| `report-ondemand` | Fetches the original text on demand (`includeOriginal: true`) |
+
+### Diagnostics & repair panel
+
+The settings page top shows each tool/bridge's **status dot, patch badge, and unavailable reason**; when a patch is missing you can re-apply it in one click, and it reminds you to restart DSH afterward. Status data is read through the hidden `aux/platform-status` event + `aux-platform` projection (a non-command channel, so it does not generate `/aux status --json` command cards in the session).
+
+> 💬 "If something's off, I'll light up and tell you~"
 
 ## Quick Start
 
@@ -86,175 +176,130 @@ dsh plugin --profile web add "file:$(pwd)"
 
 After restarting DSH:
 
-1. Send an image to the agent — it will use `vision_analyze` to describe it (text-only main models work too; image-bridge is included);
-2. Run `/aux status` to see per-task routes;
-3. Want a dedicated vision model? `/aux model vision <provider>/mimo-v2.5`.
+1. Send an image to the agent and it will describe it with `vision_analyze` (even a text-only main model can receive images—image-bridge is integrated);
+2. Run `/aux status` to see each task's route;
+3. Want vision to use a dedicated model? `/aux model vision <provider>/mimo-v2.5`.
 
-## Updating (GitHub installs)
+> 💬 "Once installed, just call me~"
+
+### Updating (GitHub installs)
 
 ```sh
-# Recommended: pull latest code and re-wire (idempotent; applies new patches / self-heal hook)
-./update.sh
-
-# If you already pulled or extracted a zip, just re-wire:
-./update.sh --no-pull
-
-# Post-update health check (does not modify anything):
-node scripts/doctor.mjs
+./update.sh                # pull latest code + re-wire (idempotent)
+./update.sh --no-pull      # if you already updated the source, just re-wire
+node scripts/doctor.mjs    # post-update health check (does not modify anything)
 ```
 
-> Why is `git pull` not enough? dsh-aux's bridge patches and startup self-heal
-> hook live in the DSH deployment (`node_modules` / `start-dsh.sh`); `git pull`
-> only updates the source. `./update.sh` re-runs `install.sh` to write new
-> patches/self-heal into the deployment. The self-heal hook restores symlinks,
-> patches, and the whitelist before every DSH start; if your launch script is
-> not `start-dsh.sh`, run `./update.sh` manually.
+> Why isn't `git pull` enough? dsh-aux's bridge patches and start-up self-heal hook live in the DSH deployment (`node_modules` / `start-dsh.sh`); `git pull` only updates the source. `./update.sh` re-runs `install.sh` to write new patches / self-heal hooks into the deployment.
 
-## Usage
-
-### Commands
+## Daily commands
 
 | Command | Purpose |
 |---|---|
-| `/aux status` | Show routes and recent auxiliary calls |
-| `/aux status --json` | Return structured platform status (settings/diagnostics) |
+| `/aux status` | Show task routes and recent calls |
+| `/aux status --json` | Structured platform status (for settings/diagnostics) |
 | `/aux history [N]` | Brief trace: last N auxiliary calls (default 10) |
-| `/aux history full [N]` | Full trace: complete event fields (defaults to all) |
-| `/aux debug [N]` | Show AUX content-truth/debug events |
-| `/aux debug <target> [N]` | Read another session (@this / session id / prefix / cwd) |
-| `/aux patch` | Install all patches needed by the current DSH and self-heal |
-| `/aux patch --json` | Same, returning structured step results |
-| `/aux model <task> [provider/model]` | View/set a task's auxiliary model |
-| `/aux vision <path> <question...>` | Analyze an image from the command line |
+| `/aux history full [N]` | Full event fields |
+| `/aux debug [N]` | View AUX content-truth / debug events |
+| `/aux debug <target> [N]` | Cross-session view (@this / session id / prefix / cwd) |
+| `/aux patch` | Install all patches required by the current DSH and self-heal |
+| `/aux patch --json` | Same, with structured step results |
+| `/aux model <task> [provider/model]` | View / set a task's auxiliary model |
+| `/aux vision <path> <question...>` | Directly view an image from the command line |
 | `/aux test <task>` | Self-test a task route |
-| `/aux memory [n]` | Show recent image analysis memory |
+| `/aux memory [n]` | View recent image analysis memory |
 | `/aux gc-images [days]` | Manually reclaim old attachment images |
 
-### Settings
+## Settings & status panel
 
-Web → Settings → Auxiliary Models. Configure a model per `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. **`skill` is the skill pre-audit model** — once configured, native `skill` calls get an auxiliary pre-audit report. `web_extract` / `web_crawl` also expose `maxChars` (page character budget, default 32000). Each task can also select a "reasoning effort"; options come from the current provider/model's `reasoning.efforts`, and omitting it preserves the provider default. The settings page is grouped into collapsible "Tool Tasks / Bridge Tasks / Subagents / Global / Platform Switches" sections and is bilingual (zh/en) following the DSH language. In "Platform Switches" you can choose `native` / `aux` per tool/bridge (`compat` is reserved for the future), configure SKILL audit mode (`native` / `audit` / `report` / `report-ondemand`), and debug recording options. The settings page also has a "Diagnostics & Repair" panel at the top: each tool/bridge shows a status dot, patch badge, and unavailable reason, with one-click patch when a patch is missing; after writing patches it reminds you to restart DSH for them to take effect. Status data is read through the hidden `aux/platform-status` event and the `aux-platform` projection (a non-command channel, so it does not produce `/aux status --json` command cards in the session). You can also turn off "Show auxiliary model status chip in conversation UI" (the `aux-status` projection is then no longer exposed to Web/third-party readers; `/aux status` still works).
+### Why look here first?
 
-### web_extract
+Some AUX bridges need platform patches to work fully (`image-bridge`, `subagent` / `workflow`, `compaction`, `skill`, etc.). The old experience led users into two traps:
 
-Fetches a page (or crawls same-origin links with `followLinks`) and returns a **factual summary + key points** from the auxiliary model.
+- not knowing whether a patch is actually required;
+- not knowing whether their patch is actually installed.
 
-| Parameter | Default | What it does |
-|---|---|---|
-| `url` | required | The page to fetch |
-| `question` | — | Optional follow-up to focus the answer |
-| `maxChars` | 32000 | Page character budget (configurable; total budget when crawling) |
-| `followLinks` | `off` | `same-origin` crawls same-origin document links |
-| `maxPages` / `maxDepth` | 3 / 1 | Crawl page / link-depth cap (`0` = seed only) |
+This settings page turns both into **visible status**: it tells you each tool/bridge's current state, whether a patch is missing, and what to do about it. The platform switches turn "are patches required or optional?" from a philosophy question into a **configurable choice**:
 
-- **Output**: single pages return `summary`/`keyPoints` + `chars` and `truncated`; crawls additionally return `pages` and `totalChars`.
-- **Boundary**: a static-HTML summary proxy — no JS execution (SPA sites may be empty shells), no clicking/pagination/forms.
-- **Crawling**: shares web_crawl's engine — respects robots.txt, per-host rate limits and per-hop SSRF; follows only same-origin document links, skipping media/archives.
-
-### web_crawl
-
-Deep-crawls a whole documentation site (or a `hosts`-whitelisted set of sub-sites) from a seed URL and returns an **overall summary + page index** in one auxiliary call. Full design: `WEB-CRAWL-DESIGN.md`.
-
-| Parameter | Default | What it does |
-|---|---|---|
-| `url` | required | Starting seed page |
-| `scope` | `same-origin` | Crawl scope; `hosts` = only the listed hosts |
-| `hosts` | — | Allowed hosts when `scope=hosts` (seed must be included) |
-| `seedUrls` | — | Extra depth-0 seeds (SSRF-checked, scope-filtered) |
-| `maxPages` / `maxDepth` | 10 / 2 | Page cap / link-depth cap |
-| `maxCharsPerPage` | 32000 | Per-page character budget |
-| `respectRobots` | true | Honor robots.txt (Disallow paths are skipped) |
-| `minIntervalMs` | 250 | Minimum gap between requests to the same host |
-| `useSitemap` | false | Seed from `<origin>/sitemap.xml` (nested indices skipped) |
-| `maxPagesPerHost` | 0 (unlimited) | Per-host page cap |
-| `perPageSummaries` | false | false = aggregated summary; true = per-page summaries |
-
-**Two summary modes**
-
-| Mode | How it summarizes | Cost |
-|---|---|---|
-| **A (default)** | One call over all pages → overall `summary`/`keyPoints` + `pages` index | 1 call |
-| **B** (`perPageSummaries:true`) | A summary per page → `perPage`, then one aggregation call | ≈ pages + 1 calls |
-
-**Behavior**: honors robots and per-host rate limits; every page and hop runs the per-hop SSRF check; static HTML, no JS rendering; explicitly **not concurrency-safe** (`isConcurrencySafe=false`), backed by sequential BFS + rate limits so a single domain is never flooded.
-
-### Cleaning & anti-crawl (large-context era)
-
-For cheap large-context auxiliary models, the goal shifts from "shrink to minimum" to "**deliver clean, de-toxed content whole**": hand the clean page to the aux model to answer/summarize directly; the main model only receives the result.
-
-**Cleaning**: `htmlToText` drops whole non-content blocks (`script/style/iframe/canvas` …) and `data:` base64, keeping plain text, numbers and URLs. **De-tox (H5) stays unchanged**: page bodies go into a random-nonce untrusted-data block, physically separated from `Question`, ignoring any embedded instructions.
-
-**Anti-crawl (zero-dependency)**
-
-| Scenario | Behavior |
+| Mode | Patch relationship |
 |---|---|
-| Encoding | Decodes by `Content-Type` / `<meta charset>` via `TextDecoder` (GBK/GB18030 no longer mojibake) |
-| JS Challenge | Detects CF/bot shells → returns a `browserRequired` marker, no aux tokens burned, hint to switch to a browser |
-| 429 / 502-504 | One automatic retry (short backoff); then a rate-limited HTTP error |
-| 403 etc. 4xx | HTTP error with a "may need browser/login" hint instead of feeding empty content to the aux model |
-| Redirects | Followed per-hop with SSRF checks; exposes `redirects` hop count (landing ≠ request URL) |
-| Proxy | Direct-first; on transport failure falls back to `HTTP(S)_PROXY` CONNECT tunnel (honors `NO_PROXY`), zero-dependency |
+| `native` | No AUX patch needed; uses native DSH |
+| `aux` | Needs the corresponding patch; if missing, the status panel marks it and offers one-click repair |
+| `compat` | Reserved for the future, currently unavailable |
 
-### Subagent & workflow bridge
+> 💬 "Is the patch installed? Don't guess—I'll tell you directly~"
 
-DSH's native `subagent` tool, as well as the **concurrently fanned-out `agent()` children of `workflow`**, are transparently bridged to AUX — you keep calling `subagent`/`workflow` as usual, but the work is done by the auxiliary model, reusing per-task config, failure cooldown and main-model fallback. **Zero new tools, zero system-prompt changes.**
+### 3-step getting started
 
-| Mode | What model the subagents use |
+1. **Restart DSH** after installing;
+2. Open Web → Settings → Auxiliary Models;
+3. Look at the **Diagnostics & Repair** panel at the top:
+   - Status normal: you're ready to go;
+   - Patch missing / abnormal: click **one-click repair**;
+   - After repair, it tells you to **restart DSH for the patch to take effect**; restart and come back to confirm the status is healthy.
+
+### What else the settings page can do
+
+Web → Settings → Auxiliary Models. Configure per-task model, timeout, concurrency, `maxChars`, and **reasoning effort** for `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. The page is grouped into collapsible "Tool Tasks / Bridge Tasks / Subagents / Global / Platform Switches" sections and follows the DSH language (zh/en).
+
+- **Status chip**: the composer shows the latest auxiliary call (task, duration, whether it fell back).
+- **Diagnostics & repair**: each tool/bridge shows a status dot, patch badge, and unavailable reason; missing patches can be re-applied in one click, with restart detection after writing.
+- **Platform switches**: tools and bridges can switch `native` / `aux` / `compat`; turn off AUX anywhere you don't want it.
+- **SKILL audit modes**: `native` / `audit` / `report` / `report-ondemand`.
+- **Privacy**: you can turn off "Show auxiliary model status chip in conversation UI"; when off, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
+
+## Bridges & advanced capabilities
+
+### Subagent / workflow bridge
+
+The native `subagent` tool and the parallel `agent()` children fanned out by `workflow` are **transparently bridged** to AUX—you keep using `subagent` / `workflow` as usual, but the actual work is done by the AUX auxiliary model. **Zero new tools, zero system-prompt changes.**
+
+| Mode | Which model subagents use |
 |---|---|
-| `native` (default) | Not intercepted — fully native / main-model behavior |
+| `native` (default) | No interception; fully native / main-model behavior |
 | `manual` | All subagents use the `subagent.general` model |
-| `vision-aware` | Uses `subagent.vision` when "needs vision" (e.g. matches `visionKeywords`), otherwise `general` |
+| `vision-aware` | Uses `subagent.vision` when vision is needed, otherwise `general` |
 
-**Configuration** (settings page "Subagent" block, or yaml):
+> 💬 "Hand your subagents to me too—I won't talk over them, just help~"
+
+<details>
+<summary><b>Subagent config example (click to expand)</b></summary>
 
 ```yaml
 aux:
   subagent:
     mode: vision-aware        # native | manual | vision-aware
-    general: { provider: opencode-go, model: glm-5.2, reasoningEffort: high }   # reasoningEffort is optional
+    general: { provider: opencode-go, model: glm-5.2, reasoningEffort: high }
     vision:  { provider: opencode-go, model: kimi-k2.7-code, reasoningEffort: high }
-    includeWorkflow: true      # workflow's parallel agent() children also route via AUX (default true)
-    prepareTools: true         # inject AUX tools (vision_analyze etc.) as a fallback for subagents
-    visionKeywords: [ "图片", "图像", "截图" ]
-    retryVisionWithAux: false  # experimental: re-dispatch a failed subagent to the AUX vision route
+    includeWorkflow: true      # workflow parallel agent() children also use AUX
+    prepareTools: true         # inject vision_analyze etc. into subagents as a fallback
+    visionKeywords: [ "image", "picture", "screenshot" ]
+    retryVisionWithAux: false  # reserved experimental config, not implemented yet
 ```
 
-- `reasoningEffort` for `general` / `vision` is optional; when set it is forwarded to the subagent route, otherwise the provider default is used.
-- `includeWorkflow=false` means that even with `mode != native`, `workflow` children are not intercepted (only the `subagent` tool is).
-- Installation: the local patches come with `install.sh` (or `bridge/apply-patch.mjs`); `/aux status` shows `subagent-bridge` / `workflow-bridge` mode + patch state. Design: `SUBAGENT-BRIDGE.md` / `WORKFLOW-BRIDGE.md`.
+</details>
 
 ### Skill pre-audit bridge (skill-audit)
 
-The native DSH flow is "main model sees catalog → calls `skill` → executes SKILL.md directly". dsh-aux inserts an **auxiliary-model due-diligence step** in between:
+DSH's native flow is "main model sees catalog → calls `skill` → directly executes SKILL.md". dsh-aux inserts an **auxiliary-model due-diligence** step:
 
 ```
-Main model sees catalog → decides to call skill("auth-flow")
+Main model sees catalog → decides to call skill → native skill tool loads SKILL.md
     ↓
-Native skill tool loads SKILL.md as usual
+AUX intercepts → auxiliary model reads SKILL.md + current task
     ↓
-【AUX tools/post-execute interception】
+Returns "how to apply / known pitfalls / 🔻rot-prone stale assertions / execution advice"
     ↓
-Auxiliary model reads SKILL.md + current task (explicit task parameter + recent conversation)
-    ↓
-Returns pre-audit report:
-  - how to apply / applicability assessment
-  - known pitfalls / 🔻rot-prone stale assertions
-  - execution advice / confidence
-    ↓
-Main model sees both "original SKILL.md + pre-audit report" → critically reviews → accept / modify / reject
-    ↓
-Actually executes
+Main model sees both "original SKILL.md + pre-audit report" → verifies → truly executes
 ```
 
-- **Enable**: configure a dedicated model in the "Skill pre-audit" settings block or via `/aux model skill <provider>/<model>`. Without configuration, the native result passes through untouched.
-- **No skill management**: dsh-aux does not create or manage skills; skills stay with the official native system or memory-management plugins.
-- **Original text retained**: the main model always sees the original SKILL.md, so it is not forced to trust the auxiliary model blindly.
-- **Failure degrades**: if the auxiliary call fails, the native SKILL.md result is returned and the main model is not blocked.
+- **Enable**: only intercepts after you configure a dedicated auxiliary model in settings or `/aux model skill <provider>/<model>`; without it, native pass-through.
+- **Does not own skills**: dsh-aux does not create/manage skills; that remains the native or memory-management plugin's job.
+- **Fail-soft**: if the auxiliary call fails, the original SKILL.md is returned and the main model is not blocked.
 
-### Security boundaries
+### Compaction bridge
 
-- **SSRF protection (on by default)**: `web_extract`, `web_crawl`, and `vision_analyze`'s `imageUrl` reject internal/loopback/cloud-metadata addresses (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.169.254`, `*.local`, Teredo/6to4-embedded private addresses, etc.) by default and only allow `http/https`; the fallback fetch path validates **every redirect hop before the request is sent** (per-hop DNS + address check), and the provider-seam path requires a final URL, re-validates it, and hands any 3xx back to the per-hop follower. To fetch local/intranet services, explicitly set `allowInternalUrls: true` in the plugin config.
-- **Prompt-injection mitigation**: auxiliary prompts treat page content, text-to-compress, and text inside images as **untrusted data** and explicitly forbid executing embedded instructions; page bodies are wrapped in nonce-bearing `<<<UNTRUSTED PAGE DATA …>>>` … `<<<END UNTRUSTED PAGE DATA …>>>` data blocks, physically separated from the `Question` instruction; `guideText` is trusted plugin config — only copy it from trusted sources.
-- **Concurrency hard cap**: even if a task's `maxConcurrency` is configured higher, the effective value is capped at **10**, preventing misconfiguration from flooding the auxiliary model.
+Configure a `compaction` task and native DSH auto/manual compaction routes through the AUX model, reusing AUX timeout/concurrency/cooldown/fallback/event tracing. In image-containing sessions, if images are unavailable, they are downgraded to text placeholders and compaction does not fail.
 
 ### Programmatic API (for plugin developers)
 
@@ -270,79 +315,81 @@ const result = await ctx.auxLlm.call("compress", {
 
 Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
+## Security boundaries
+
+- **SSRF protection (on by default)**: `web_extract`, `web_crawl`, and `vision_analyze`'s `imageUrl` reject internal/loopback/cloud-metadata addresses by default; the fallback fetch path validates **every redirect hop before sending**. To fetch local/intranet services, explicitly set `allowInternalUrls: true`.
+- **Prompt injection mitigation**: page bodies, compressed text, and text inside images are treated as **untrusted data**, physically separated from the trusted `Question` instructions, with embedded instructions explicitly forbidden.
+- **Concurrency hard cap**: even if `maxConcurrency` is configured higher, each task is capped at **10**.
+
+> 💬 "Suspicious pages and instructions? I'll block them first and call you~"
+
 ## How It Works
 
-- **Route resolution**: explicit config > task default > session main model; auxiliary failure falls back to the main model.
-- **Robustness**: per-task timeout (default 60s), concurrency semaphore (default 2), failure cooldown (3 consecutive failures → 60s pause), error classification, and aggregate errors with per-attempt details.
+- **Route resolution**: explicit config > task default > session main model; on auxiliary failure, automatically falls back to the main model.
+- **Robustness**: per-task timeout (default 60s), concurrency semaphore (default 2), failure cooldown (3 consecutive failures → stop 60s), error classification, and aggregated error reporting per attempt.
 - **Observability**: every call writes an `aux/llm-call` session event + `aux-status` projection, replayable from history.
-- **Image capability gate**: checks model input capabilities before calling; explicitly unsupported models are skipped. Unknown capabilities pass through to the provider.
-- **Compaction synergy**: `dsh-compaction-basic` summarization can run through `ctx.auxLlm`'s `compaction` task, reusing AUX timeout/concurrency/cooldown/fallback/event tracing.
+- **Image capability gate**: checks model input capabilities before calling; explicitly unsupported models are skipped; unknown capabilities are passed to the provider.
+- **Compaction synergy**: `dsh-compaction-basic` summaries can run through `ctx.auxLlm`'s `compaction` task.
 
-## Source Layout
+## Project Layout
 
-`dsh-aux/src/index.js` intentionally keeps only **Service assembly and routing dispatch**; everything else lives in focused modules so contributors can find the right file quickly:
-
-- `config.js` / `route.js` / `prompt.js` / `url-policy.js` — config, routing, prompts, SSRF policy
-- `events.js` / `projection.js` / `bootstrap.js` / `commands.js` / `fetch.js` — events, projection, Bootstrap guidance, commands, fetching
-- `tools/` — `vision_analyze` / `web_extract` / `compress_text` implementations and registration
-- `images/` — attachment ownership, cleanup, image memory, image reference resolution
-- `image-bridge.js` / `compaction-bridge.js` / `compaction-messages.js` — bridges and compaction message degradation
+- `dsh-aux/src/` — plugin core (routing, tools, bridges, status/commands, client UI)
+- `bridge/` — platform patches, self-heal, install scripts
+- `tests/` — full test suite
+- `scripts/` — doctor and README generator
+- `assets/` — mascot images
 
 ## Compatibility & Dependencies
 
-- **Platform**: DSH 0.1.0-rc.6 ~ 0.1.1-rc.1; Node ≥ 20.
-- **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages; no `dependencies`.
-- **Zero-dependency tests**: `node --test tests/*.test.js` (305 total; see `TESTING.md` for the file inventory and baseline).
+- **Platform**: DSH 0.1.0-rc.6 ~ 0.1.1-rc.1 (verified on rc.6 / rc.7 / rc.8 / 0.1.1-rc.1); Node ≥ 20.
+- **Zero third-party runtime deps**: peerDependencies are all official DSH packages (bundled with the platform); no `dependencies`.
+- **Zero test deps**: `node --test tests/*.test.js` (305 tests; file list and baseline in `TESTING.md`).
 
-### Integrated Components
+### Integrated components
 
-- **image-bridge**: lets text-only main models paste images directly while the UI keeps thumbnails, and allows switching to a text-only model in image-bearing sessions (v3); re-run `bridge/apply-patch.mjs` after `npm update`.
-- **Settings dynamic exposure**: the Web settings page can read/write aux config; the patch ships in this repo's `bridge/` and does not require upstream deepseek-harness changes.
-- **Session event channel**: `aux/llm-call` events are written with `ignorable: true`; without the patch the plugin degrades to not writing events, protecting session logs.
-- **Session delete synergy**: works with the community plugin dsh-plugin-session-delete to clean up unreferenced images when a session is deleted.
-- **compaction-bridge**: once `compaction` is configured, native compaction routes through AUX; unusable images are degraded to text placeholders so compaction never fails outright.
-- **subagent-bridge**: transparently takes over the native `subagent` tool and routes it to AUX auxiliary models in native / manual / vision-aware modes; injects `vision_analyze` into the child as a fallback, with zero system-prompt changes. `workflow` `agent()` parallel children can share the same route (includeWorkflow).
+- **image-bridge**: lets text-only main models receive pasted images while keeping thumbnails; re-run `bridge/apply-patch.mjs` after `npm update`.
+- **settings dynamic exposure**: the settings page can read/write aux config; corresponding patches are shipped in this repo's `bridge/`.
+- **session event registration channel**: `aux/llm-call` is written with `ignorable: true`; if the patch is missing, events are downgraded (not written) to protect session logs.
+- **session deletion synergy**: works with `dsh-plugin-session-delete` to clean up unreferenced images when a session is deleted.
+- **subagent-bridge**: transparently takes over native `subagent` and `workflow` parallel `agent()` children.
 
-### Minimal / Anchored Standard Compatibility
+### Minimal / Anchored Standard compatibility
 
-Before the first durable `tool/call`, these presets expose only the Minimal tool pair and strip auto-injected context — that is the core of their first-round trajectory anchoring. dsh-aux **never injects any AUX context/prompt on the first round**; after the first `tool/call`, the catalog opens, AUX tools appear, and a one-time `agent/pre-step` reminder guides the model to use `vision_analyze` directly instead of spawning a sub-agent. See [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main) for the Anchored Standard design.
-
-## FAQ
-
-**Q1: Why are AUX tools like `vision_analyze` not visible in the first round of the Minimal / Anchored Standard presets?**
-
-A: Because of the "first-round trajectory anchoring" mechanism of these presets: before the first durable `tool/call`, only the Minimal tool pair is exposed and auto-injected context is stripped out. dsh-aux respects this — it **never injects any AUX context/prompt on the first round** and does not expose its tools early. After the first `tool/call`, the catalog opens, `vision_analyze` / `web_extract` / `compress_text` appear, and a one-time `agent/pre-step` reminder guides direct use.
-
-**Q2: Why did `/compact` fail with an image session?**
-
-A: If the image block in the replayed messages points to an attachment object that has already been GC'd/cleaned (reporting `Attachment object is missing.`), or none of the available compaction routes support image input, the images are unusable for compaction. In that case dsh-aux **degrades the images to text placeholders** (the actual placeholder is generated in Chinese, e.g. `[图片: name (type, WxH) — 未纳入压缩摘要]`) and continues compacting through AUX, so the compaction task does not fail outright.
-
-**Q3: Does dsh-aux require configuring models?**
-
-A: No. dsh-aux is **zero-config**: it works without configuring any model, and auxiliary tasks automatically fall back to the session's main model. You can assign a dedicated model to any task at any time via the settings page or `/aux model <task> <provider/model>`.
-
-## Related Projects
-
-- [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main) — design & implementation of the Anchored Standard preset
-- [dsh-vision-toolkit](https://github.com/Anionex/dsh-vision-toolkit) — community vision toolkit
-- [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete) — session-delete plugin (cleans up unreferenced images on session delete)
-- [SeekMaid-pet](https://github.com/DoloresCaritasAngelus/SeekMaid-pet) — SeekMaid electronic pet
+Before the first persistent `tool/call`, only the Minimal tool pair is exposed and auto-injected context is stripped. dsh-aux **never injects AUX context/prompts in the first turn**; after the first `tool/call`, the tool directory opens, AUX tools appear, and a one-time `agent/pre-step` hint guides direct use of `vision_analyze`.
 
 ## Documentation
 
 | Doc | Content |
 |---|---|
-| [AI.md](./dsh-aux/AI.md) | Installation guide for AI agents |
-| [PRD.md](./PRD.md) | Requirements & design decisions |
 | [CHANGELOG.md](./CHANGELOG.md) | Version history |
-| [COMPARISON.md](./COMPARISON.md) | Architecture comparison with community vision plugins |
-| [VISION-AGENT.md](./VISION-AGENT.md) | Vision sub-agent strategy & memory architecture |
-| [SESSION-ATTACHMENT-GC.md](./SESSION-ATTACHMENT-GC.md) | Image cleanup design on session delete |
-| [CONTRIBUTIONS.md](./CONTRIBUTIONS.md) | Acknowledgments & inspirations |
+| [TESTING.md](./TESTING.md) | Test file list and baseline |
+| [PRD.md](./PRD.md) | Requirements & design decisions |
+| [WEB-CRAWL-DESIGN.md](./WEB-CRAWL-DESIGN.md) | Site crawl design |
+| [SUBAGENT-BRIDGE.md](./SUBAGENT-BRIDGE.md) | Subagent bridge design |
+| [WORKFLOW-BRIDGE.md](./WORKFLOW-BRIDGE.md) | Workflow bridge design |
+| [AI.md](./dsh-aux/AI.md) | AI agent install guide |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guide |
 
-## Acknowledgments
+## FAQ
 
-Inspired by **Hermes Agent**, **agent-vision-toolkit**, **dsh-vision**, **deepseek-harness #733**, and the **DeepSeek Harness** platform. See [CONTRIBUTIONS.md](./CONTRIBUTIONS.md) for details.
+**Q1: Why can't I see `vision_analyze` and other AUX tools in the first turn of Minimal / Anchored Standard?**
+
+Those presets expose only the Minimal tool pair before the first persistent `tool/call` and strip auto-injected context. dsh-aux respects this and **never injects AUX context/prompts in the first turn**, nor exposes its tools early. After the first `tool/call`, the tool directory opens and AUX tools appear.
+
+**Q2: Why did `/compact` fail in an image-containing session?**
+
+If the image block's attachment object has already been GC/cleaned, or none of the available compaction routes support image input, images are unavailable for compaction. dsh-aux then **downgrades images to text placeholders** and continues compacting through AUX, so compaction normally does not fail.
+
+**Q3: Do I need to configure a model for dsh-aux?**
+
+No. dsh-aux is **zero-config**: it works without any model configuration and falls back to the session's main model. You can assign a dedicated model later via the settings page or `/aux model <task> <provider/model>`.
+
+## Related Projects
+
+- [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard/tree/main) — Anchored Standard preset
+- [dsh-vision-toolkit](https://github.com/Anionex/dsh-vision-toolkit) — community vision toolkit
+- [dsh-plugin-session-delete](https://github.com/lsz-asd/dsh-plugin-session-delete) — session deletion plugin
+- [SeekMaid-pet](https://github.com/DoloresCaritasAngelus/SeekMaid-pet) — DeepSeek desktop pet
 
 ## License
 
