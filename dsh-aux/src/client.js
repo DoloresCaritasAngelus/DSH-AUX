@@ -163,6 +163,7 @@ window.__ModuleLoader__.load({
 			"status.diagnostics": "诊断与修复",
 			"status.diagnostics.desc": "补丁、依赖或配置缺失时,在这里一键修复。",
 			"status.noIssues": "所有可选能力状态正常。",
+			"status.restartRequired": "补丁已写入,重启 DSH 后生效",
 			"status.state.enabled": "可用",
 			"status.state.disabled": "已关闭",
 			"status.state.unavailable": "不可用",
@@ -275,6 +276,7 @@ window.__ModuleLoader__.load({
 			"status.diagnostics": "Diagnostics & Repair",
 			"status.diagnostics.desc": "Fix missing patches, dependencies, or configuration here.",
 			"status.noIssues": "All optional capabilities are healthy.",
+			"status.restartRequired": "Patches written; restart DSH to apply",
 			"status.state.enabled": "Enabled",
 			"status.state.disabled": "Disabled",
 			"status.state.unavailable": "Unavailable",
@@ -750,9 +752,15 @@ window.__ModuleLoader__.load({
 						react.createElement("span", { className: "ax-status-summary" }, summary),
 						react.createElement("button", { type: "button", className: "ax-repair-button", disabled: statusLoading, onClick: loadStatus }, t("status.refresh"))
 					),
-					issues.length === 0 && warnings.length === 0
+					issues.length === 0 && warnings.length === 0 && status?.restartRequired !== true
 						? react.createElement("div", { className: "ax-status-summary" }, t("status.noIssues"))
 						: [
+							status?.restartRequired === true
+								? react.createElement("div", { key: "restart-required", className: "ax-status-issue" },
+									react.createElement("span", { className: "ax-dot ax-dot-fixing", "aria-hidden": "true" }),
+									react.createElement("span", { className: "ax-status-issue-text" }, t("status.restartRequired"))
+								)
+								: null,
 							...issues.map((issue) => {
 								const label = issue.key;
 								return react.createElement("div", { key: issue.key, className: "ax-status-issue" },

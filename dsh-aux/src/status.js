@@ -9,6 +9,9 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/status
  */
+import { stat } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { imageBridgeStatus } from "./image-bridge.js";
 import {
   subagentBridgeStatus,
@@ -25,6 +28,73 @@ import { sessionEventsSupported } from "./events.js";
 const TOOL_KEYS = ["vision_analyze", "web_extract", "web_crawl", "compress_text"];
 /** Bridge keys that depend on local patches / host packages. */
 const BRIDGE_KEYS = ["imageBridge", "subagentBridge", "workflowBridge", "compactionBridge", "skillAudit"];
+
+const require = createRequire(import.meta.url);
+
+/** Relative candidate paths for patched DSH files (symlink/source-tree layouts). */
+const PATCH_REL_CANDIDATES = [
+  "../../../@deepseek-ai/dsh-host-apiproxy/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js",
+  "../../../@deepseek-ai/dsh-agent-loop/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js",
+  "../../../@deepseek-ai/dsh-tool-subagent/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js",
+  "../../../@deepseek-ai/dsh-workflow-worker-thread/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-workflow-worker-thread/lib/index.js",
+  "../../../@deepseek-ai/dsh-tool-skill/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-tool-skill/lib/index.js",
+  "../../../@deepseek-ai/dsh-session/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-session/lib/index.js"
+];
+
+/** Packages whose patched `lib/index.js` we can resolve through Node. */
+const PATCH_RESOLVE_PACKAGES = [
+  "@deepseek-ai/dsh-host-apiproxy",
+  "@deepseek-ai/dsh-agent-loop",
+  "@deepseek-ai/dsh-tool-subagent",
+  "@deepseek-ai/dsh-workflow-worker-thread",
+  "@deepseek-ai/dsh-tool-skill",
+  "@deepseek-ai/dsh-session"
+];
+
+/** All candidate on-disk paths for patched DSH files. */
+function patchTargetPaths() {
+  const paths = [];
+  for (const rel of PATCH_REL_CANDIDATES) {
+    try {
+      paths.push(fileURLToPath(new URL(rel, import.meta.url)));
+    } catch {
+      /* skip malformed candidate */
+    }
+  }
+  for (const pkg of PATCH_RESOLVE_PACKAGES) {
+    try {
+      paths.push(require.resolve(pkg + "/lib/index.js"));
+    } catch {
+      /* package may be absent in this deployment */
+    }
+  }
+  return [...new Set(paths)];
+}
+
+/**
+ * Whether any patched DSH file was modified after this Node process started.
+ * Patches edit node_modules source files; already-loaded modules stay stale
+ * until DSH restarts, so a newer mtime means a restart is required for the
+ * new patch code to take effect.
+ */
+async function anyPatchFileNewerThanProcessStart() {
+  const startedAt = Date.now() - Math.round(process.uptime() * 1000);
+  for (const target of patchTargetPaths()) {
+    try {
+      const info = await stat(target);
+      if (info.mtimeMs > startedAt + 1000) return true;
+    } catch {
+      /* candidate not present; try next */
+    }
+  }
+  return false;
+}
 
 /**
  * Build one status item.
@@ -160,12 +230,15 @@ function skillBridgeStatusItem(service, status) {
  * @returns {Promise<object>} JSON-safe status object.
  */
 export async function collectPlatformStatus(service) {
-  const [image, sub, workflow, skill, events] = await Promise.all([
+  const [image, sub, workflow, skill, events, restartRequired] = await Promise.all([
     imageBridgeStatus(),
     subagentBridgeStatus(),
     workflowBridgeStatus(),
     skillBridgeStatus(),
-    sessionEventsSupported(service)
+    sessionEventsSupported(service),
+    service._patchAppliedThisSession === true
+      ? Promise.resolve(true)
+      : anyPatchFileNewerThanProcessStart()
   ]);
 
   const items = [];
@@ -192,6 +265,7 @@ export async function collectPlatformStatus(service) {
 
   return {
     generatedAt: Date.now(),
+    restartRequired,
     core: {
       count: 4,
       protected: [

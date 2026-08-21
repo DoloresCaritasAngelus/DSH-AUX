@@ -54,7 +54,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
     return await handleDebugCommand(service, agent, args.slice(1));
   }
   if (sub === "patch") {
-    return await handlePatchCommand();
+    return await handlePatchCommand(service);
   }
   if (sub === "status" || sub === "") {
     // Reconcile first so the status view reflects any deleted-session
@@ -333,20 +333,27 @@ export async function handleDebugCommand(service, agent, args) {
  * /aux patch — 一键重打 AUX 本地补丁并自愈(symlink / 补丁 / 白名单)。
  * 运行 `bridge/apply-patch.mjs` 与 `bridge/self-heal.mjs`;失败不致命。
  */
-export async function handlePatchCommand() {
+export async function handlePatchCommand(service) {
   const repo = fileURLToPath(new URL("../..", import.meta.url));
   const steps = [
     ["apply-patch", ["bridge/apply-patch.mjs"]],
     ["self-heal", ["bridge/self-heal.mjs"]]
   ];
   const output = [];
+  let changed = false;
   for (const [name, args] of steps) {
     try {
       const { stdout, stderr } = await execFileAsync(process.execPath, args, { cwd: repo });
       output.push(`[${name}]\n${stdout}${stderr}`);
+      changed = true;
     } catch (error) {
       output.push(`[${name}] 失败: ${error?.message ?? String(error)}\n${error?.stdout ?? ""}${error?.stderr ?? ""}`);
     }
+  }
+  // 补丁写的是 node_modules 源码文件;当前进程已加载旧模块,必须重启 DSH
+  // 新补丁才会真正生效。标记后,`/aux status --json` 会返回 restartRequired。
+  if (service !== void 0 && changed) {
+    service._patchAppliedThisSession = true;
   }
   return { kind: "success", text: output.join("\n") };
 }

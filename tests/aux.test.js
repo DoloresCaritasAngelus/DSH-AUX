@@ -1567,6 +1567,7 @@ test('/aux status --json 命令: 返回结构化平台状态', async () => {
   assert.ok(Array.isArray(data.issues), '应返回 issues 数组');
   assert.ok(data.core.count >= 4, '核心保护数量应 >= 4');
   assert.equal(typeof data.eventsSupported, 'boolean');
+  assert.equal(typeof data.restartRequired, 'boolean', '应返回是否需要重启 DSH');
 });
 
 test('/aux history: 简要溯源按新→旧显示最近 N 次', async () => {
