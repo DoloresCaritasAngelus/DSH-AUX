@@ -165,6 +165,7 @@ window.__ModuleLoader__.load({
 			"status.refresh": "刷新状态",
 			"status.loading": "正在获取平台状态…",
 			"status.error": "无法获取平台状态: ",
+			"status.commandFailed": "状态命令失败",
 			"status.invalid": "状态数据异常,请刷新重试",
 			"status.core": "🔒 核心保护",
 			"status.coreDetail": "图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计(不可关闭)",
@@ -287,6 +288,7 @@ window.__ModuleLoader__.load({
 			"status.refresh": "Refresh",
 			"status.loading": "Loading platform status…",
 			"status.error": "Failed to load status: ",
+			"status.commandFailed": "Status command failed",
 			"status.invalid": "Status data is invalid; refresh to retry",
 			"status.core": "🔒 Core protections",
 			"status.coreDetail": "Image lifecycle / session image safety / failure cooldown / event audit (cannot be disabled)",
@@ -452,7 +454,7 @@ window.__ModuleLoader__.load({
 					.then((result) => {
 						if (!alive || !mountedRef.current || requestId !== statusRequestId.current) return;
 						if (result.kind !== "success" || typeof result.text !== "string") {
-							throw new Error(result.text ?? "status command failed");
+							throw new Error(result.text ?? t("status.commandFailed"));
 						}
 						const data = JSON.parse(result.text);
 						setStatus(data);
@@ -660,18 +662,22 @@ window.__ModuleLoader__.load({
 				}
 			}, react.createElement("option", { value: "" }, placeholder),
 				options.map((o) => react.createElement("option", { key: o.value, value: o.value }, o.label)));
-			const fieldRow = (task, key, label, control) => react.createElement("div", { className: "ax-row" },
-				react.createElement("div", { className: "ax-field-head" },
-					react.createElement("label", null, label),
-					field(task, key) !== void 0 && field(task, key) !== "" ? react.createElement("button", {
-						type: "button",
-						className: "ax-reset",
-						disabled: !state.writable,
-						onClick: () => resetField(task, key)
-					}, t("settings.reset")) : null
-				),
-				control
-			);
+			const fieldRow = (task, key, label, control) => {
+				const controlId = "ax-" + task + "-" + key;
+				const labelledControl = react.cloneElement(control, { id: controlId });
+				return react.createElement("div", { className: "ax-row" },
+					react.createElement("div", { className: "ax-field-head" },
+						react.createElement("label", { htmlFor: controlId }, label),
+						field(task, key) !== void 0 && field(task, key) !== "" ? react.createElement("button", {
+							type: "button",
+							className: "ax-reset",
+							disabled: !state.writable,
+							onClick: () => resetField(task, key)
+						}, t("settings.reset")) : null
+					),
+					labelledControl
+				);
+			};
 			const taskCard = (task) => {
 				const effortOptions = reasoningOptionsFor(task);
 				return react.createElement("div", { key: task, className: "ax-task" },
@@ -699,7 +705,7 @@ window.__ModuleLoader__.load({
 			};
 			const group = (id, title, desc, children) => {
 				const open = openGroups[id] === true;
-				return react.createElement("div", { className: "ax-group" + (open ? " ax-group-open" : "") },
+				return react.createElement("div", { id: "ax-group-" + id, className: "ax-group" + (open ? " ax-group-open" : "") },
 					react.createElement("button", {
 						type: "button",
 						className: "ax-group-header",
@@ -720,6 +726,7 @@ window.__ModuleLoader__.load({
 			const setSub = (patch) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.subagent = { ...(next.subagent ?? {}), ...patch }; return next; }); };
 			const setSubGroup = (group, key, value) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.subagent = next.subagent ?? {}; next.subagent[group] = next.subagent[group] ?? {}; if (value === "") delete next.subagent[group][key]; else next.subagent[group][key] = value; return next; }); };
 			const subGroupSelect = (group, key, options, placeholder) => react.createElement("select", {
+				id: "ax-sub-" + group + "-" + key,
 				value: subField(group, key) ?? "",
 				disabled: !state.writable || options.length === 0,
 				onChange: (e) => { const value = e.target.value; setSubGroup(group, key, value); if (key === "provider") setSubGroup(group, "model", ""); }
@@ -784,6 +791,29 @@ window.__ModuleLoader__.load({
 						if (btn) btn.focus?.();
 						else el.focus?.();
 					}
+				}, 50);
+			};
+			const openConfig = (key) => {
+				const groupMap = {
+					vision_analyze: "tools",
+					web_extract: "tools",
+					web_crawl: "tools",
+					compress_text: "tools",
+					compactionBridge: "bridges",
+					skillAudit: "bridges",
+					imageBridge: "platform",
+					subagentBridge: "platform",
+					workflowBridge: "platform"
+				};
+				const target = groupMap[key] ?? "platform";
+				setOpenGroups((s) => ({ ...s, [target]: true }));
+				setActiveIssueKey(key);
+				if (openIssueTimer.current !== null) clearTimeout(openIssueTimer.current);
+				openIssueTimer.current = setTimeout(() => {
+					openIssueTimer.current = null;
+					if (!mountedRef.current) return;
+					const el = document.getElementById("ax-group-" + target);
+					if (el) el.scrollIntoView?.({ behavior: "smooth", block: "start" });
 				}, 50);
 			};
 			const platformSelect = (key, label) => {
@@ -879,7 +909,7 @@ window.__ModuleLoader__.load({
 									issue.action === "patch"
 										? react.createElement("button", { type: "button", className: "ax-repair-button", disabled: patching, onClick: () => { setActiveIssueKey(issue.key); runPatch(issue.key); } }, patching ? t("settings.patching") : t("status.action.patch"))
 										: issue.action === "configure"
-											? react.createElement("span", { className: "ax-status-badge ax-status-badge-partial" }, t("status.action.configure"))
+											? react.createElement("button", { type: "button", className: "ax-repair-button", onClick: () => openConfig(issue.key) }, t("status.action.configure"))
 											: null
 								);
 							}),
@@ -909,10 +939,10 @@ window.__ModuleLoader__.load({
 							react.createElement("option", { value: "manual" }, t("subagent.manual")),
 							react.createElement("option", { value: "vision-aware" }, t("subagent.visionAware"))
 						)),
-						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.generalProvider")), subGroupSelect("general", "provider", providerOptions, t("placeholder.inheritModel"))),
-						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.generalModel")), subGroupSelect("general", "model", subModelOptionsFor("general").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
-						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.visionProvider")), subGroupSelect("vision", "provider", providerOptions, t("placeholder.inheritModel"))),
-						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.visionModel")), subGroupSelect("vision", "model", subModelOptionsFor("vision").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
+						react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-general-provider" }, t("subagent.generalProvider")), subGroupSelect("general", "provider", providerOptions, t("placeholder.inheritModel"))),
+						react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-general-model" }, t("subagent.generalModel")), subGroupSelect("general", "model", subModelOptionsFor("general").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
+						react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-vision-provider" }, t("subagent.visionProvider")), subGroupSelect("vision", "provider", providerOptions, t("placeholder.inheritModel"))),
+						react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-vision-model" }, t("subagent.visionModel")), subGroupSelect("vision", "model", subModelOptionsFor("vision").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
 						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.visionKeywords")), react.createElement("input", {
 							type: "text", value: Array.isArray(sub.visionKeywords) ? sub.visionKeywords.join(",") : "", placeholder: "图片,image,截图", disabled: !state.writable, onChange: (e) => setSub({ visionKeywords: e.target.value === "" ? [] : e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
 						}))

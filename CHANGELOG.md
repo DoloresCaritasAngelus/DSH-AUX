@@ -16,6 +16,7 @@
 - **状态命令只读化**:`/aux status` 不再触发 `reconcileSessionImages`,避免持久化列表暂时不可用时状态查看变成删附件副作用。
 - **状态图标最终交互**:`unavailable` 行可点击跳转到「诊断与修复」并高亮对应 issue;修复中显示 `fixing`;失败后保留 `unavailable` 并在 issue 内展示错误。
 - **`/aux status` 统一重构**:人类可读输出改为消费 `collectPlatformStatus()`,消除两套状态推导,降低漂移风险。
+- **低优先级打磨**:`configure` issue 改为可点击跳转对应设置组;任务字段/子代理字段补齐 `label htmlFor` + 控件 `id`;状态命令失败文案中英文化。
 - 测试基线更新为 301。
 
 ## 0.3.3(2026-08-21)— 设置页 UI 重构 + reasoningEffort + 双语
