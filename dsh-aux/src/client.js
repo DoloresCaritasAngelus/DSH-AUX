@@ -166,6 +166,7 @@ window.__ModuleLoader__.load({
 			"status.refresh": "刷新状态",
 			"status.loading": "正在获取平台状态…",
 			"status.loadHint": "点击刷新加载平台状态",
+			"status.forcedNative": "补丁未装,当前按 native 处理",
 			"status.error": "无法获取平台状态: ",
 			"status.commandFailed": "状态命令失败",
 			"status.invalid": "状态数据异常,请刷新重试",
@@ -291,6 +292,7 @@ window.__ModuleLoader__.load({
 			"status.refresh": "Refresh",
 			"status.loading": "Loading platform status…",
 			"status.loadHint": "Click refresh to load status",
+			"status.forcedNative": "Patch missing; using native",
 			"status.error": "Failed to load status: ",
 			"status.commandFailed": "Status command failed",
 			"status.invalid": "Status data is invalid; refresh to retry",
@@ -448,6 +450,10 @@ window.__ModuleLoader__.load({
 			const [status, setStatus] = react.useState(null);
 			const [statusLoading, setStatusLoading] = react.useState(false);
 			const [statusError, setStatusError] = react.useState(null);
+			const auxForcedNative = (key) => {
+				const item = status?.items?.find((entry) => entry.key === key);
+				return item?.state === "unavailable" && item?.action === "patch";
+			};
 			const loadStatus = react.useCallback(() => {
 				let alive = true;
 				const requestId = ++statusRequestId.current;
@@ -579,7 +585,10 @@ window.__ModuleLoader__.load({
 				const enabledKeys = ["vision_analyze", "web_extract", "web_crawl", "compress_text", "imageBridge", "subagentBridge", "workflowBridge", "compactionBridge", "skillAudit"];
 				for (const key of enabledKeys) {
 					const val = draft?.enabled?.[key];
-					if (val !== void 0 && val !== "aux") ops.push({ op: "set", path: ["enabled", key], value: val });
+					// 设计意图 A22 10.5:补丁未装时,aux 不可选/强制 native。
+					// 即使草稿里还是 aux,保存时也落成 native,避免存一个当前不可用的模式。
+					const effectiveVal = auxForcedNative(key) && val === "aux" ? "native" : val;
+					if (effectiveVal !== void 0 && effectiveVal !== "aux") ops.push({ op: "set", path: ["enabled", key], value: effectiveVal });
 					else ops.push({ op: "unset", path: ["enabled", key] });
 				}
 				const skillMode = draft?.skill?.mode;
@@ -828,6 +837,9 @@ window.__ModuleLoader__.load({
 				const patchLabel = meta?.patch ? t("status.patch." + meta.patch) : null;
 				const title = label + " · " + stateText + (reason ? " — " + reason : "");
 				const actionable = baseState === "unavailable" && meta?.action !== "none";
+				const forcedNative = auxForcedNative(key);
+				const rawValue = draft?.enabled?.[key] ?? "aux";
+				const value = forcedNative && rawValue === "aux" ? "native" : rawValue;
 				const headerProps = actionable ? {
 					role: "button",
 					tabIndex: 0,
@@ -844,16 +856,17 @@ window.__ModuleLoader__.load({
 					react.createElement("div", { className: "ax-field-head", ...headerProps },
 						react.createElement("span", { className: "ax-dot ax-dot-" + state, "aria-hidden": "true" }),
 						react.createElement("span", null, label),
-						meta?.patch && patchLabel ? react.createElement("span", { className: "ax-status-badge ax-status-badge-" + meta.patch, title: reason }, patchLabel) : null
+						meta?.patch && patchLabel ? react.createElement("span", { className: "ax-status-badge ax-status-badge-" + meta.patch, title: reason }, patchLabel) : null,
+						forcedNative && rawValue === "aux" ? react.createElement("span", { className: "ax-status-badge ax-status-badge-partial", title: t("status.forcedNative") }, t("status.forcedNative")) : null
 					),
 					react.createElement("select", {
 						"aria-label": label,
-						value: draft?.enabled?.[key] ?? "aux",
+						value,
 						disabled: false,
 						onChange: (e) => setEnabled(key, e.target.value)
 					},
 						react.createElement("option", { value: "native" }, t("mode.native")),
-						react.createElement("option", { value: "aux", disabled: meta?.state === "unavailable" && meta?.action === "patch" }, t("mode.aux")),
+						react.createElement("option", { value: "aux", disabled: forcedNative }, t("mode.aux")),
 						react.createElement("option", { value: "compat", disabled: true }, t("mode.compat"))
 					)
 				);
