@@ -54,7 +54,7 @@ window.__ModuleLoader__.load({
 			".ax-actions{display:flex;gap:8px;align-items:center}",
 			".ax-save{border:none;border-radius:4px;padding:4px 12px;font-size:13px;font-weight:500;cursor:pointer;color:#fff;background:var(--dsw-alias-state-success-primary)}",
 			".ax-save:disabled{opacity:.6;cursor:default}",
-			".ax-status{font-size:12px;line-height:18px}",
+			".ax-status{font-size:12px;line-height:18px;white-space:pre-line;overflow-wrap:anywhere}",
 			".ax-error{color:var(--dsw-alias-state-error-primary)}",
 			".ax-ok-text{color:var(--dsw-alias-state-success-primary)}",
 			".ax-dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}",
@@ -149,13 +149,19 @@ window.__ModuleLoader__.load({
 			"debug.maxDebugEventBytes": "单条 debug 事件大小上限 (字节)",
 			"debug.debugEventsInHistory": "debug 事件混入 /aux history",
 			"debug.redactSecrets": "记录时排除疑似密钥/PII (redactSecrets)",
-			"settings.patch": "一键打补丁",
+			"settings.patch": "一键安装当前 DSH 所需全部补丁",
 			"settings.patching": "打补丁中…",
 			"settings.patchDone": "已触发 /aux patch,请查看会话输出。",
 			"settings.patchError": "打补丁失败: ",
+			"command.noSession": "当前没有可用会话,无法执行命令",
+			"command.unknown": "未知命令: ",
+			"command.failed": "命令失败: ",
+			"patch.invalidJson": "补丁返回了无效 JSON",
+			"patch.failed": "补丁失败",
 			"status.refresh": "刷新状态",
 			"status.loading": "正在获取平台状态…",
 			"status.error": "无法获取平台状态: ",
+			"status.invalid": "状态数据异常,请刷新重试",
 			"status.core": "🔒 核心保护",
 			"status.coreDetail": "图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计(不可关闭)",
 			"status.coreCount": "🔒 核心保护 · {count} 项已生效",
@@ -262,13 +268,19 @@ window.__ModuleLoader__.load({
 			"debug.maxDebugEventBytes": "Max debug event bytes",
 			"debug.debugEventsInHistory": "Include debug events in /aux history",
 			"debug.redactSecrets": "Redact likely secrets/PII when recording (redactSecrets)",
-			"settings.patch": "Run patch",
+			"settings.patch": "Install all patches for current DSH",
 			"settings.patching": "Patching…",
 			"settings.patchDone": "Triggered /aux patch; see conversation output.",
 			"settings.patchError": "Patch failed: ",
+			"command.noSession": "No available session to run the command",
+			"command.unknown": "Unknown command: ",
+			"command.failed": "Command failed: ",
+			"patch.invalidJson": "Patch returned invalid JSON",
+			"patch.failed": "Patch failed",
 			"status.refresh": "Refresh",
 			"status.loading": "Loading platform status…",
 			"status.error": "Failed to load status: ",
+			"status.invalid": "Status data is invalid; refresh to retry",
 			"status.core": "🔒 Core protections",
 			"status.coreDetail": "Image lifecycle / session image safety / failure cooldown / event audit (cannot be disabled)",
 			"status.coreCount": "🔒 Core protections · {count} active",
@@ -560,9 +572,25 @@ window.__ModuleLoader__.load({
 				setPatching(true);
 				setPatchStatus(null);
 				Promise.resolve()
-					.then(() => runAuxCommand("/aux patch"))
+					.then(() => runAuxCommand("/aux patch --json"))
 					.then((result) => {
-						if (result.kind !== "success") throw new Error(result.text ?? "patch failed");
+						if (result.kind !== "success") throw new Error(result.text ?? t("patch.failed"));
+						let data;
+						try {
+							data = JSON.parse(result.text);
+						} catch {
+							throw new Error(t("patch.invalidJson"));
+						}
+						if (data.ok !== true) {
+							const failed = (data.steps ?? []).filter((step) => step.ok !== true);
+							const detail = failed
+								.map((step) => `[${step.name}] ${step.error ?? "failed"}\n${(step.output ?? "").slice(0, 500)}`)
+								.join("\n\n");
+							setPatchStatus({ ok: false, text: t("settings.patchError") + (detail || t("patch.failed")) });
+							// 部分步骤可能已成功/已写盘,失败也要刷新状态和重启提示。
+							loadStatus();
+							return;
+						}
 						setPatchStatus({ ok: true, text: t("settings.patchDone") });
 						loadStatus();
 					})
@@ -711,7 +739,7 @@ window.__ModuleLoader__.load({
 				const reason = meta ? t("status.reason." + meta.reason) : stateText;
 				const patchLabel = meta?.patch ? t("status.patch." + meta.patch) : null;
 				const title = label + " · " + stateText + (reason ? " — " + reason : "");
-				return react.createElement("div", { className: "ax-row", title },
+				return react.createElement("div", { className: "ax-row", title, "aria-label": title },
 					react.createElement("div", { className: "ax-field-head" },
 						react.createElement("span", { className: "ax-dot ax-dot-" + state, "aria-hidden": "true" }),
 						react.createElement("label", null, label),
@@ -738,12 +766,18 @@ window.__ModuleLoader__.load({
 						react.createElement("button", { type: "button", className: "ax-repair-button", onClick: loadStatus }, t("status.refresh"))
 					);
 				}
-				const items = status?.items ?? [];
+				if (status === null || typeof status !== "object" || !Array.isArray(status.items)) {
+					return react.createElement("div", { className: "ax-status-head" },
+						react.createElement("span", { className: "ax-status-summary ax-error", role: "alert" }, t("status.invalid")),
+						react.createElement("button", { type: "button", className: "ax-repair-button", onClick: loadStatus }, t("status.refresh"))
+					);
+				}
+				const items = status.items;
 				const enabledCount = items.filter((entry) => entry.state === "enabled").length;
-				const unavailableCount = items.filter((entry) => entry.state === "unavailable").length;
 				const issues = status?.issues ?? [];
 				const warnings = status?.warnings ?? [];
-				const summary = t("status.overview").replace("{enabled}", String(enabledCount)).replace("{issues}", String(unavailableCount));
+				const attentionCount = issues.length + warnings.length;
+				const summary = t("status.overview").replace("{enabled}", String(enabledCount)).replace("{issues}", String(attentionCount));
 				return group("diagnostics", t("status.diagnostics"), t("status.diagnostics.desc"),
 					react.createElement("div", { className: "ax-status-head" },
 						react.createElement("span", { className: "ax-status-summary" },
@@ -906,11 +940,11 @@ window.__ModuleLoader__.load({
 			const runAuxCommand = async (line) => {
 				const listResponse = await connection.api.sessions.list({});
 				const items = listResponse?.result?.value?.items ?? [];
-				if (items.length === 0) throw new Error("当前没有可用会话,无法执行命令");
+				if (items.length === 0) throw new Error(__t("command.noSession"));
 				const sessionId = items[0].sessionId;
 				const result = await ctx.remote.commands.execute(sessionId, line);
-				if (!result.ok) throw new Error((result.error?.code ?? "") + ": " + (result.error?.message ?? "command failed"));
-				if (result.value === void 0) throw new Error("unknown command: " + line);
+				if (!result.ok) throw new Error(__t("command.failed") + (result.error?.code ?? "") + ": " + (result.error?.message ?? ""));
+				if (result.value === void 0) throw new Error(__t("command.unknown") + line);
 				return result.value.result;
 			};
 			ctx.slots.inject("settings.section", () => ctx.slots.register({

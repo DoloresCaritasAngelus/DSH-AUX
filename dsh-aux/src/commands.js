@@ -12,7 +12,6 @@ const execFileAsync = promisify(execFile);
 import { AUX_TASKS, resolvePrimaryRoute } from "./route.js";
 import { gcImages } from "./images/gc.js";
 import { handleMemoryCommand } from "./images/memory.js";
-import { reconcileSessionImages } from "./images/ownership.js";
 import { imageBridgeStatus } from "./image-bridge.js";
 import { subagentBridgeStatus, workflowBridgeStatus } from "./subagent-bridge.js";
 import { isCompactionBridgeInstalled, isCompactionTaskConfigured } from "./compaction-bridge.js";
@@ -54,12 +53,11 @@ export async function handleAuxCommand(service, agent, rawInput) {
     return await handleDebugCommand(service, agent, args.slice(1));
   }
   if (sub === "patch") {
-    return await handlePatchCommand(service);
+    return await handlePatchCommand(service, args.includes("--json"));
   }
   if (sub === "status" || sub === "") {
-    // Reconcile first so the status view reflects any deleted-session
-    // cleanup that happened while the service was not watching.
-    await reconcileSessionImages(service);
+    // 状态命令保持只读:不在这里触发 reconcileSessionImages,避免持久化列表
+    // 暂时不可用时状态查看变成删除附件的副作用。
     if (args.includes("--json")) {
       const status = await collectPlatformStatus(service);
       return { kind: "success", text: JSON.stringify(status) };
@@ -330,32 +328,67 @@ export async function handleDebugCommand(service, agent, args) {
 }
 
 /**
- * /aux patch — 一键重打 AUX 本地补丁并自愈(symlink / 补丁 / 白名单)。
- * 运行 `bridge/apply-patch.mjs` 与 `bridge/self-heal.mjs`;失败不致命。
+ * /aux patch [--json] — 一键安装当前 DSH 版本 AUX 所需的全部补丁并自愈
+ * (symlink / 补丁 / 白名单)。运行 `bridge/apply-patch.mjs` 与
+ * `bridge/self-heal.mjs`;失败不致命。
+ *
+ * `--json` 返回结构化结果供设置页展示每个步骤的成功/失败与错误信息:
+ *   { ok, restartRequired, steps: [{ name, ok, output, error? }] }
  */
-export async function handlePatchCommand(service) {
+export async function handlePatchCommand(service, json = false) {
   const repo = fileURLToPath(new URL("../..", import.meta.url));
-  const steps = [
+  const stepDefs = [
     ["apply-patch", ["bridge/apply-patch.mjs"]],
     ["self-heal", ["bridge/self-heal.mjs"]]
   ];
   const output = [];
-  let changed = false;
-  for (const [name, args] of steps) {
+  const steps = [];
+  for (const [name, args] of stepDefs) {
+    const record = { name, ok: false, output: "" };
     try {
       const { stdout, stderr } = await execFileAsync(process.execPath, args, { cwd: repo });
-      output.push(`[${name}]\n${stdout}${stderr}`);
-      changed = true;
+      record.output = `${stdout}${stderr}`;
+      record.ok = true;
+      output.push(`[${name}]\n${record.output}`);
     } catch (error) {
-      output.push(`[${name}] 失败: ${error?.message ?? String(error)}\n${error?.stdout ?? ""}${error?.stderr ?? ""}`);
+      record.output = `${error?.stdout ?? ""}${error?.stderr ?? ""}`;
+      record.error = error?.message ?? String(error);
+      output.push(`[${name}] 失败: ${record.error}\n${record.output}`);
+    }
+    steps.push(record);
+  }
+  // 补丁脚本可能“退出 0 但仍有补丁缺失/版本不匹配”,所以不能只看子进程退出码。
+  // 跑完后用 collectPlatformStatus 做一次真实校验:仍存在 action=patch 的不可用项
+  // 就视为未成功;restartRequired 也以实际文件状态为准,避免 no-op 误报。
+  let status;
+  if (service !== void 0) {
+    try {
+      status = await collectPlatformStatus(service);
+    } catch {
+      status = void 0;
     }
   }
+  const patchIssues = (status?.items ?? []).filter(
+    (entry) => entry.action === "patch" &&
+      (entry.state === "unavailable" || entry.state === "unknown" ||
+       entry.patch === "missing" || entry.patch === "partial")
+  );
+  const ok = steps.every((step) => step.ok) && patchIssues.length === 0;
+  const changed = status?.restartRequired === true;
   // 补丁写的是 node_modules 源码文件;当前进程已加载旧模块,必须重启 DSH
   // 新补丁才会真正生效。标记后,`/aux status --json` 会返回 restartRequired。
-  if (service !== void 0 && changed) {
-    service._patchAppliedThisSession = true;
+  if (service !== void 0) {
+    service._patchAppliedThisSession = changed;
+    // 让 sessionEventsSupported 重新读盘,避免旧缓存掩盖刚打上的补丁。
+    service._sessionEventsSupportedCache = void 0;
   }
-  return { kind: "success", text: output.join("\n") };
+  if (json) {
+    return {
+      kind: "success",
+      text: JSON.stringify({ ok, restartRequired: changed, steps })
+    };
+  }
+  return { kind: ok ? "success" : "error", text: output.join("\n") };
 }
 
 /** Handle the /aux model subcommand: read or write one task's route. */

@@ -69,6 +69,7 @@ import {
   recordAttachmentOwnership
 } from '../dsh-aux/src/images/ownership.js';
 import { runWebExtract } from '../dsh-aux/src/tools/web-extract.js';
+import { resolvePackageFile } from '../dsh-aux/src/bridge-locate.js';
 import { fetchWithSsrf } from '../dsh-aux/src/fetch.js';
 import { resolveImageRef } from '../dsh-aux/src/images/resolve.js';
 import { imageBridgeStatus } from '../dsh-aux/src/image-bridge.js';
@@ -2180,6 +2181,12 @@ test('image-bridge 状态: 通过 Node 解析能给出明确状态(不再因源�
 test('workflow-bridge 状态: 通过 Node 解析能给出明确状态(不再因源码树误报 unknown)', async () => {
   const status = await workflowBridgeStatus();
   assert.ok(['installed', 'missing'].includes(status), `应返回明确状态而非 unknown,实际: ${status}`);
+});
+
+test('bridge-locate: require.resolve 能解析 @deepseek-ai 包主入口', () => {
+  const target = resolvePackageFile('dsh-host-apiproxy');
+  assert.ok(target !== void 0, '应能解析 dsh-host-apiproxy');
+  assert.ok(target.endsWith('/lib/index.js'), `应指向 lib/index.js,实际: ${target}`);
 });
 
 

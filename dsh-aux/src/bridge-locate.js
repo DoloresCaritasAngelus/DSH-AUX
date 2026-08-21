@@ -46,9 +46,14 @@ function relativeCandidates(pkg) {
 
 /** All candidate paths for one patched package's `lib/index.js`. */
 export function packageFileCandidates(pkg) {
+  if (!/^[a-z0-9-]+$/.test(pkg)) {
+    throw new Error(`bridge-locate: invalid package name "${pkg}"`);
+  }
   const paths = relativeCandidates(pkg);
   try {
-    paths.push(require.resolve(pkg + "/lib/index.js"));
+    // The real packages are scoped (@deepseek-ai/dsh-*). Resolving the bare
+    // package main returns its lib/index.js through package.json `main`.
+    paths.push(require.resolve("@deepseek-ai/" + pkg));
   } catch {
     /* package may be absent in this deployment */
   }

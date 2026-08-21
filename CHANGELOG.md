@@ -12,7 +12,9 @@
 - **设置页补丁状态展示**:每个工具/桥接显示可用状态与补丁状态;`unavailable` 项列出原因,可一键打补丁或提示配置。
 - **重启生效提示**:运行中打补丁后,`/aux status --json` 返回 `restartRequired:true`;设置页「诊断与修复」面板显示“补丁已写入,重启 DSH 后生效”。
 - **非标准安装路径补丁检测**:新增 `dsh-aux/src/bridge-locate.js`,统一用 `require.resolve` + 多级相对路径解析 DSH 包;修复源码树/自定义布局下 bridge 状态误报 `unknown` 的问题;`unknown` 文案改为“请运行 install.sh 或确认安装方式”。
-- 测试基线更新为 300。
+- **一键安装全部补丁 + 结构化失败信息**:`/aux patch --json` 返回 `{ ok, restartRequired, steps[] }`;设置页按钮改为“一键安装当前 DSH 所需全部补丁”,失败时展示每个步骤的错误输出;补丁后自动刷新状态。
+- **状态命令只读化**:`/aux status` 不再触发 `reconcileSessionImages`,避免持久化列表暂时不可用时状态查看变成删附件副作用。
+- 测试基线更新为 301。
 
 ## 0.3.3(2026-08-21)— 设置页 UI 重构 + reasoningEffort + 双语
 
