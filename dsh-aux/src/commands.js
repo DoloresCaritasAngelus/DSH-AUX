@@ -4,11 +4,10 @@
  * @module @dolorescaritasangelus/dsh-aux/commands
  */
 import { AUX_CALL_EVENT, AUX_DEBUG_EVENT, AUX_SETTINGS_NAMESPACE } from "./config.js";
-import { execFile } from "node:child_process";
+import childProcess from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-const execFileAsync = promisify(execFile);
 import { AUX_TASKS, resolvePrimaryRoute } from "./route.js";
 import { gcImages } from "./images/gc.js";
 import { handleMemoryCommand } from "./images/memory.js";
@@ -336,6 +335,8 @@ export async function handleDebugCommand(service, agent, args) {
  */
 export async function handlePatchCommand(service, json = false) {
   const repo = fileURLToPath(new URL("../..", import.meta.url));
+  // 每次调用时再 promisify,便于测试在动态 import 前/后替换 child_process.execFile。
+  const execFileAsync = promisify(childProcess.execFile);
   const stepDefs = [
     ["apply-patch", ["bridge/apply-patch.mjs"]],
     ["self-heal", ["bridge/self-heal.mjs"]]
