@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — 设置页 UI 重构 + reasoningEffort + 双语
+## 0.3.3(2026-08-21)— 设置页 UI 重构 + reasoningEffort + 双语
 
 - **设置页 UI 重构**:分组可折叠卡片(工具任务 / 桥接任务 / 子代理 / 全局),每个任务两列网格布局。
 - **思考档位(reasoningEffort)**:每个任务可配置;设置页下拉选项来自当前 provider/model 的 `reasoning.efforts`;`AuxLlmRequest` 支持 per-call 覆盖;不传则沿用 provider 默认。
