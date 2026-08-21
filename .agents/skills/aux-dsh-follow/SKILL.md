@@ -29,7 +29,7 @@ user-invocable: false
    补丁块,再继续;**宁可跳过也不硬替换**。
 5. 重跑 `install.sh`(幂等;`--dry-run` 可先看)。升级后**必须重打自定义事件白名单**
    (官方 `KNOWN_SESSION_EVENT_TYPES` 是生成式打包产物,每次升级都丢 aux/llm-call)。
-6. 跑全量测试(`aux-test-baseline`,🔻易腐烂·快照*285*,以跑出 #pass 为准)与
+6. 跑全量测试(`aux-test-baseline`,🔻易腐烂·快照*286*,以跑出 #pass 为准)与
    `npm run gen-package-readme -- --check`。
 7. `/aux status` 逐项确认:(🔻易腐烂·枚举清单 *image-bridge / subagent-bridge /
    workflow-bridge / compaction-bridge / skill-audit / 会话事件记录* —— bridge 种类会增长,
@@ -60,3 +60,11 @@ user-invocable: false
   rc.6 保留 P9/P10 补丁;插件代码不变。
 - 子代理 Job Panel 字段(job/jobId/jobs):**不采用**(UI 展示,与 AUX 路由无关)。
 - 其它 rc.7 接口:不需要不采用。
+
+## 0.1.1-rc.1 接口应用决策(🔻易腐烂·随版本演进,2026-08-21)
+- **session-projection 注册 API 采用双兼容**:`stateOf` 存在 → 新 `stateSchema/wire`;
+  不存在 → 旧 `schema/view`。rc.6/7/8 与 0.1.1-rc.1 都保持可用。
+- **版本判定更新**:`isRc7OrNewer('0.1.1-rc.1')` 必须为 true(旧实现会误判为 rc.1)。
+- **peerDependencies**:DSH 官方 peer 范围改为同时覆盖 0.1.0-rc.6 与 0.1.1-rc.1。
+- 其它 0.1.1-rc.1 接口(`session.create reuseWorkspaceBlank`、api-remotes 事件改名、
+  client transport hooks):**不采用/不处理**,与 AUX 无关。

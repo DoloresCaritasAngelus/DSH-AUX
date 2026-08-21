@@ -137,6 +137,12 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
          */
         'aux-status': AuxStatusProjection;
     }
+
+    // DSH 0.1.1-rc.1 introduced a separate host fold-state table. The
+    // `aux-status` state equals its wire value (privacy-minimized view).
+    interface SessionProjectionStateMap {
+        'aux-status': AuxStatusProjection;
+    }
 }
 
 declare module '@deepseek-ai/cordis' {
