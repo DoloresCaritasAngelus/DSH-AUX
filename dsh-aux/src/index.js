@@ -171,6 +171,7 @@ export class AuxLlmService extends Service {
     this._customTasks = new Map();
     this._projectionCtx = void 0;
     this._auxStatusProjectionDispose = void 0;
+    this._toolsInitialized = false;
     this._recomputeMerged();
     // Main-agent guidance: tell the chat model the auxiliary tools exist and
     // are executed by a separate auxiliary LLM, so it uses vision_analyze
@@ -209,6 +210,7 @@ export class AuxLlmService extends Service {
       exposedToWeb: true
     });
     registerAuxTools(this);
+    this._toolsInitialized = true;
     attachSkillBridge(this);
     this._sessionImages = new Map();
     this._sessionImagesLoaded = false;
@@ -341,6 +343,7 @@ export class AuxLlmService extends Service {
       debugEventsInHistory: settings.debug?.debugEventsInHistory ?? false,
       redactSecrets: settings.debug?.redactSecrets ?? true
     };
+    if (this._toolsInitialized) this.syncTools();
   }
 
   /** Mode of one tool/bridge switch: 'native' | 'aux' | 'compat'. */
@@ -351,6 +354,11 @@ export class AuxLlmService extends Service {
   /** Whether a tool should be exposed to the model catalog (only aux exposes). */
   isToolExposed(name) {
     return this.toolBridgeMode(name) === "aux";
+  }
+
+  /** Re-mount AUX tools according to the current enabled switches (hot update). */
+  syncTools() {
+    registerAuxTools(this);
   }
 
   /** Settings schema snapshot for UIs. */

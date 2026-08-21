@@ -12,6 +12,17 @@ import { runCompress } from "./compress.js";
 /** Register the auxiliary tools. */
 export function registerAuxTools(service) {
   const ctx = service.ctx;
+  // Hot-update support: dispose previously mounted tools before re-registering.
+  if (!Array.isArray(service._toolDisposers)) service._toolDisposers = [];
+  for (const dispose of service._toolDisposers) {
+    try { dispose(); } catch { /* ignore stale disposer */ }
+  }
+  service._toolDisposers.length = 0;
+  const mountTool = (tools, def) => {
+    const dispose = tools.register(def);
+    service._toolDisposers.push(dispose);
+    return dispose;
+  };
   // The vision tool needs the durable attachment service; register it in
   // the attachments-injected scope (mirrors dsh-tool-fs read_image), so
   // `ctx.get("attachments")` resolves inside execution even under a
@@ -19,7 +30,7 @@ export function registerAuxTools(service) {
   if (service.isToolExposed("vision_analyze")) {
   ctx.inject(["attachments"], (imageCtx) => {
     service._imageCtx = imageCtx;
-    imageCtx.tools.register(defineTool({
+    mountTool(imageCtx.tools, defineTool({
       name: "vision_analyze",
       description: "Look at one image (or several via the images array) with the auxiliary vision model and answer a SPECIFIC question about it/them. Always state exactly what you need to know in the question parameter (extract text, count objects, read a chart, check a color, compare elements) — never ask for a generic description, because the vision model answers your intent, not a caption. If the returned description misses a detail you need, call again with a more specific question about that detail. If the same image (same attachmentId) was already analyzed with the same question in this session, reuse that earlier result instead of re-analyzing. Provide one of attachmentId (a session image attachment), imagePath (a local image file), imageUrl (a remote image URL), or an images array (each entry exactly one of those three keys; analyzed in parallel — useful for comparing multiple images with one question).",
       parameters: {
@@ -49,7 +60,7 @@ export function registerAuxTools(service) {
   });
   }
   if (service.isToolExposed("web_extract")) {
-  ctx.tools.register(defineTool({
+  mountTool(ctx.tools, defineTool({
     name: "web_extract",
     description: "Fetch a web page (or a same-origin set of pages via followLinks) and summarize it with the auxiliary model: returns a factual summary plus key points. Fetches static HTML only — no JavaScript rendering. Use when you need the essence of a page (or doc set) without carrying its full text.",
     parameters: {
@@ -91,7 +102,7 @@ export function registerAuxTools(service) {
   }));
   }
   if (service.isToolExposed("web_crawl")) {
-  ctx.tools.register(defineTool({
+  mountTool(ctx.tools, defineTool({
     name: "web_crawl",
     description: "Crawl a documentation site (or a whitelisted host set) starting from a seed URL and summarize the whole site with the auxiliary model: returns an overall summary plus per-page metadata. Respects robots.txt and per-host rate limits by default; every page and hop is SSRF-checked. Fetches static HTML only — no JavaScript rendering.",
     parameters: {
@@ -148,7 +159,7 @@ export function registerAuxTools(service) {
   }));
   }
   if (service.isToolExposed("compress_text")) {
-  ctx.tools.register(defineTool({
+  mountTool(ctx.tools, defineTool({
     name: "compress_text",
     description: "Compress long text with the auxiliary model, preserving factual details (numbers, paths, identifiers). Use to shrink oversized tool output, research notes, or logs before they enter context.",
     parameters: {
