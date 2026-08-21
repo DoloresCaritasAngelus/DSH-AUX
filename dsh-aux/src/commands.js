@@ -52,6 +52,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
     // cleanup that happened while the service was not watching.
     await reconcileSessionImages(service);
     const lines = ["辅助模型系统状态:"];
+    lines.push("  🔒 核心保护:图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计(不可关闭)");
     // Integrated image-bridge status: report it so a fresh install knows
     // whether pasting images into a text-only main model will work.
     const bridge = await imageBridgeStatus();
