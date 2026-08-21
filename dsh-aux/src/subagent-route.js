@@ -87,6 +87,9 @@ export function resolveSubagentRoute(settings, request = {}) {
   }
 
   const agentOptions = { provider: group.provider, model: group.model };
+  if (typeof group.reasoningEffort === "string" && group.reasoningEffort.length > 0) {
+    agentOptions.reasoningEffort = group.reasoningEffort;
+  }
 
   // Tool filter: dsh's toolFilter.allow is a WHITELIST — introducing one would
   // filter OUT every other tool (bash/read/…), breaking presets like

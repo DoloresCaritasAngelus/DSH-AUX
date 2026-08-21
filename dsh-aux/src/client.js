@@ -123,6 +123,9 @@ window.__ModuleLoader__.load({
 			"placeholder.inheritModel": "(继承主模型)",
 			"placeholder.inheritDefault": "(继承默认)",
 			"subagent.mode": "模式",
+			"subagent.general": "通用子代理",
+			"subagent.vision": "视觉子代理",
+			"subagent.reasoningEffort": "思考强度",
 			"subagent.native": "native (原生,不拦截)",
 			"subagent.manual": "manual (统一用 general)",
 			"subagent.visionAware": "vision-aware (按需 vision / general)",
@@ -251,6 +254,9 @@ window.__ModuleLoader__.load({
 			"placeholder.inheritModel": "(Inherit main model)",
 			"placeholder.inheritDefault": "(Inherit default)",
 			"subagent.mode": "Mode",
+			"subagent.general": "General subagent",
+			"subagent.vision": "Vision subagent",
+			"subagent.reasoningEffort": "Reasoning effort",
 			"subagent.native": "native (no interception)",
 			"subagent.manual": "manual (always use general)",
 			"subagent.visionAware": "vision-aware (vision/general on demand)",
@@ -573,6 +579,10 @@ window.__ModuleLoader__.load({
 						ops.push({ op: "unset", path: [...gbase, "provider"] });
 						ops.push({ op: "unset", path: [...gbase, "model"] });
 					}
+					const effort = g.reasoningEffort;
+					const effortPath = [...gbase, "reasoningEffort"];
+					if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
+					else ops.push({ op: "unset", path: effortPath });
 				}
 				if (sub.prepareTools === false) ops.push({ op: "set", path: ["subagent", "prepareTools"], value: false });
 				else ops.push({ op: "unset", path: ["subagent", "prepareTools"] });
@@ -762,6 +772,19 @@ window.__ModuleLoader__.load({
 				const ids = catalog.models.filter((m) => m.provider === pid).map((m) => m.id);
 				return [...new Set(ids)];
 			};
+			const subReasoningOptionsFor = (group) => {
+				const pid = subField(group, "provider") ?? "";
+				const mid = subField(group, "model") ?? "";
+				if (!pid || !mid) return [];
+				return catalog.reasoning[pid + "\u0000" + mid] ?? [];
+			};
+			const subReasoningSelect = (group) => react.createElement("select", {
+				id: "ax-sub-" + group + "-reasoningEffort",
+				value: subField(group, "reasoningEffort") ?? "",
+				disabled: subReasoningOptionsFor(group).length === 0,
+				onChange: (e) => setSubGroup(group, "reasoningEffort", e.target.value)
+			}, react.createElement("option", { value: "" }, t("placeholder.inheritDefault")),
+				subReasoningOptionsFor(group).map((o) => react.createElement("option", { key: o.id, value: o.id }, o.name ?? o.id)));
 			const switchRow = (label, checked, disabled, onChange) => react.createElement("label", { className: "ax-switch" },
 				react.createElement("input", { type: "checkbox", checked, disabled: disabled, onChange }), label);
 			const setEnabled = (key, value) => {
@@ -966,21 +989,36 @@ window.__ModuleLoader__.load({
 					tasks.filter((x) => ["compaction", "skill"].includes(x)).map(taskCard)
 				),
 				group("subagent", t("group.subagent"), t("group.subagent.desc"),
-					react.createElement("div", { className: "ax-grid" },
-						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.mode")), react.createElement("select", {
+					react.createElement("div", { className: "ax-row" },
+						react.createElement("label", { htmlFor: "ax-sub-mode" }, t("subagent.mode")),
+						react.createElement("select", {
+							id: "ax-sub-mode",
 							value: sub.mode ?? "native", disabled: false, onChange: (e) => setSub({ mode: e.target.value })
 						},
 							react.createElement("option", { value: "native" }, t("subagent.native")),
 							react.createElement("option", { value: "manual" }, t("subagent.manual")),
 							react.createElement("option", { value: "vision-aware" }, t("subagent.visionAware"))
-						)),
-						react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-general-provider" }, t("subagent.generalProvider")), subGroupSelect("general", "provider", providerOptions, t("placeholder.inheritModel"))),
-						react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-general-model" }, t("subagent.generalModel")), subGroupSelect("general", "model", subModelOptionsFor("general").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
-						react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-vision-provider" }, t("subagent.visionProvider")), subGroupSelect("vision", "provider", providerOptions, t("placeholder.inheritModel"))),
-						react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-vision-model" }, t("subagent.visionModel")), subGroupSelect("vision", "model", subModelOptionsFor("vision").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
-						react.createElement("div", { className: "ax-row" }, react.createElement("label", null, t("subagent.visionKeywords")), react.createElement("input", {
-							type: "text", value: Array.isArray(sub.visionKeywords) ? sub.visionKeywords.join(",") : "", placeholder: "图片,image,截图", disabled: false, onChange: (e) => setSub({ visionKeywords: e.target.value === "" ? [] : e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
-						}))
+						)
+					),
+					react.createElement("div", { className: "ax-task" },
+						react.createElement("h3", null, t("subagent.general")),
+						react.createElement("div", { className: "ax-grid" },
+							react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-general-provider" }, t("subagent.generalProvider")), subGroupSelect("general", "provider", providerOptions, t("placeholder.inheritModel"))),
+							react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-general-model" }, t("subagent.generalModel")), subGroupSelect("general", "model", subModelOptionsFor("general").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
+							react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-general-reasoningEffort" }, t("subagent.reasoningEffort")), subReasoningSelect("general"))
+						)
+					),
+					react.createElement("div", { className: "ax-task" },
+						react.createElement("h3", null, t("subagent.vision")),
+						react.createElement("div", { className: "ax-grid" },
+							react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-vision-provider" }, t("subagent.visionProvider")), subGroupSelect("vision", "provider", providerOptions, t("placeholder.inheritModel"))),
+							react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-vision-model" }, t("subagent.visionModel")), subGroupSelect("vision", "model", subModelOptionsFor("vision").map((id) => ({ value: id, label: id })), t("placeholder.inheritModel"))),
+							react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-vision-reasoningEffort" }, t("subagent.reasoningEffort")), subReasoningSelect("vision")),
+							react.createElement("div", { className: "ax-row" }, react.createElement("label", { htmlFor: "ax-sub-vision-keywords" }, t("subagent.visionKeywords")), react.createElement("input", {
+								id: "ax-sub-vision-keywords",
+								type: "text", value: Array.isArray(sub.visionKeywords) ? sub.visionKeywords.join(",") : "", placeholder: "图片,image,截图", disabled: false, onChange: (e) => setSub({ visionKeywords: e.target.value === "" ? [] : e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
+							}))
+						)
 					),
 					switchRow(t("subagent.includeWorkflow"), sub.includeWorkflow !== false, false, (e) => setSub({ includeWorkflow: e.target.checked })),
 					switchRow(t("subagent.prepareTools"), sub.prepareTools !== false, false, (e) => setSub({ prepareTools: e.target.checked }))

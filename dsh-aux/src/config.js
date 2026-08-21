@@ -89,11 +89,13 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     includeWorkflow: z.boolean().default(true),
     general: z.object({
       provider: z.string(),
-      model: z.string()
+      model: z.string(),
+      reasoningEffort: z.string().min(1)
     }),
     vision: z.object({
       provider: z.string(),
-      model: z.string()
+      model: z.string(),
+      reasoningEffort: z.string().min(1)
     }),
     prepareTools: z.boolean().default(true),
     retryVisionWithAux: z.boolean().default(false),

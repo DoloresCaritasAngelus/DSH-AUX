@@ -30,6 +30,15 @@ test('manual 模式:统一使用 general', () => {
   assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'glm-5.2' })
 })
 
+test('manual 模式: general.reasoningEffort 透传到 agentOptions', () => {
+  const r = resolveSubagentRoute(
+    { mode: 'manual', general: { provider: 'opencode-go', model: 'glm-5.2', reasoningEffort: 'high' }, vision: { provider: 'opencode-go', model: 'kimi-k2.7-code' } },
+    { prompt: '写个脚本' }
+  )
+  assert.equal(r.settled, true)
+  assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'glm-5.2', reasoningEffort: 'high' })
+})
+
 test('vision-aware + 显式 true → vision', () => {
   const r = resolveSubagentRoute(visionAwareSettings, { prompt: '随便', requiresVision: true })
   assert.equal(r.settled, true)
