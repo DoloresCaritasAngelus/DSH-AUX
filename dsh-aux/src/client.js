@@ -559,8 +559,12 @@ window.__ModuleLoader__.load({
 					}
 					const effort = entry.reasoningEffort;
 					const effortPath = [...base, "reasoningEffort"];
-					if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
-					else ops.push({ op: "unset", path: effortPath });
+					if (hasProvider && hasModel) {
+						if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
+						else ops.push({ op: "unset", path: effortPath });
+					} else {
+						ops.push({ op: "unset", path: effortPath });
+					}
 				}
 				const sub = draft?.subagent ?? {};
 				if (sub.mode !== void 0 && sub.mode !== "native") ops.push({ op: "set", path: ["subagent", "mode"], value: sub.mode });
@@ -572,17 +576,18 @@ window.__ModuleLoader__.load({
 					const gbase = ["subagent", group];
 					const gp = typeof g.provider === "string" && g.provider !== "";
 					const gm = typeof g.model === "string" && g.model !== "";
+					const effort = g.reasoningEffort;
+					const effortPath = [...gbase, "reasoningEffort"];
 					if (gp && gm) {
 						ops.push({ op: "set", path: [...gbase, "provider"], value: g.provider });
 						ops.push({ op: "set", path: [...gbase, "model"], value: g.model });
+						if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
+						else ops.push({ op: "unset", path: effortPath });
 					} else {
 						ops.push({ op: "unset", path: [...gbase, "provider"] });
 						ops.push({ op: "unset", path: [...gbase, "model"] });
+						ops.push({ op: "unset", path: effortPath });
 					}
-					const effort = g.reasoningEffort;
-					const effortPath = [...gbase, "reasoningEffort"];
-					if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
-					else ops.push({ op: "unset", path: effortPath });
 				}
 				if (sub.prepareTools === false) ops.push({ op: "set", path: ["subagent", "prepareTools"], value: false });
 				else ops.push({ op: "unset", path: ["subagent", "prepareTools"] });
@@ -737,7 +742,7 @@ window.__ModuleLoader__.load({
 					)
 				);
 			};
-			const group = (id, title, desc, children) => {
+			const group = (id, title, desc, ...children) => {
 				const open = openGroups[id] === true;
 				return react.createElement("div", { id: "ax-group-" + id, className: "ax-group" + (open ? " ax-group-open" : "") },
 					react.createElement("button", {
@@ -752,7 +757,7 @@ window.__ModuleLoader__.load({
 						),
 						react.createElement("span", { className: "ax-group-chevron" + (open ? " ax-group-chevronOpen" : "") }, "▾")
 					),
-					open ? react.createElement("div", { className: "ax-group-body" }, children) : null
+					open ? react.createElement("div", { className: "ax-group-body" }, ...children) : null
 				);
 			};
 			const sub = draft?.subagent ?? {};
