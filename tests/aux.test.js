@@ -801,17 +801,48 @@ test('call: fullToolTrace=true 时写入 aux/debug 事件', async () => {
   assert.ok(debugEvents[0].data.output.includes('OUTPUT_TEXT'));
 });
 
-test('/aux debug: 展示当前会话 debug 事件', () => {
+test('/aux debug: 展示当前会话 debug 事件', async () => {
   const session = {
+    id: 'sess-current',
     events: [
       { seq: 1, type: AUX_DEBUG_EVENT, data: { kind: 'call', task: 'compress', ok: true, output: 'OUTPUT' } }
     ]
   };
-  const result = handleDebugCommand({ session }, []);
+  const service = { ctx: { get() { return void 0; } } };
+  const result = await handleDebugCommand(service, { session }, []);
   assert.equal(result.kind, 'success');
   assert.match(result.text, /AUX debug/);
   assert.match(result.text, /compress/);
   assert.match(result.text, /OUTPUT/);
+});
+
+test('/aux debug: 指定会话 id 读取另一会话 debug 事件', async () => {
+  const service = {
+    ctx: {
+      get(name) {
+        if (name === 'sessionPersistence') {
+          return {
+            async list() {
+              return [{ id: 'sess-abc', cwd: '/workspace/abc' }];
+            },
+            async inspect(id) {
+              if (id === 'sess-abc') {
+                return { events: [{ seq: 1, type: AUX_DEBUG_EVENT, data: { kind: 'call', task: 'vision', ok: true, output: 'VISION' } }] };
+              }
+              return { events: [] };
+            }
+          };
+        }
+        return void 0;
+      }
+    }
+  };
+  const agent = { session: { id: 'sess-current', events: [] } };
+  const result = await handleDebugCommand(service, agent, ['sess-abc']);
+  assert.equal(result.kind, 'success');
+  assert.match(result.text, /sess-abc/);
+  assert.match(result.text, /vision/);
+  assert.match(result.text, /VISION/);
 });
 
 test('call: compaction 任务可显式配置并记录事件', async () => {

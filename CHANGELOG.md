@@ -6,8 +6,8 @@
 - **SKILL 模式**:`native` / `audit` / `report` / `report-ondemand`;`report-ondemand` 支持 `includeOriginal` 取原文;`auto` 预留。
 - **配置 schema**:新增 `aux.enabled`、`aux.skill.mode`、`aux.debug`(fullToolTrace / maxDebugEventBytes / debugEventsInHistory / redactSecrets),默认保守。
 - **imageBridge 运行时门控**:补丁仍在,但 `imageBridge=native` 时不改写图片/不建硬链接。
-- **内容真相/debug**:`fullToolTrace=true` 时,辅助调用写入 `aux/debug` 会话事件(ignorable,不进模型上下文);新增 `/aux debug [N]` 查看。
-- 测试基线更新为 298。
+- **内容真相/debug**:`fullToolTrace=true` 时,辅助调用写入 `aux/debug` 会话事件(ignorable,不进模型上下文);新增 `/aux debug [N]` 查看,并支持 `/aux debug <目标>` 跨会话读取(@this / session id / id 前缀 / cwd 片段)。
+- 测试基线更新为 299。
 
 ## 0.3.3(2026-08-21)— 设置页 UI 重构 + reasoningEffort + 双语
 

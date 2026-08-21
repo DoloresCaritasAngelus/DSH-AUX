@@ -45,7 +45,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
     return await handleHistoryCommand(agent, args.slice(1));
   }
   if (sub === "debug") {
-    return handleDebugCommand(agent, args.slice(1));
+    return await handleDebugCommand(service, agent, args.slice(1));
   }
   if (sub === "status" || sub === "") {
     // Reconcile first so the status view reflects any deleted-session
@@ -196,23 +196,54 @@ export function handleHistoryCommand(agent, args) {
  * 这些事件带 ignorable 标记,不进模型上下文;需要完整工具追踪时先开启
  * aux.debug.fullToolTrace。
  */
-export function handleDebugCommand(agent, args) {
-  const limitArg = args[0];
-  let limit = 10;
-  if (limitArg !== void 0) {
-    limit = Number(limitArg);
-    if (!Number.isInteger(limit) || limit < 0) {
-      return { kind: "error", text: "用法: /aux debug [N] — N 为非负整数条数" };
-    }
+/**
+ * Resolve a `/aux debug` target to a session id.
+ * Supports `@this`/`@current`, exact session id, id prefix, and cwd substring.
+ * Returns `{ id, label }` or `{ error }`.
+ */
+async function resolveDebugTarget(service, raw, currentId) {
+  let token = raw;
+  if (token.startsWith("@")) token = token.slice(1);
+  if (token === "" || token === "this" || token === "current") {
+    if (!currentId) return { error: { kind: "error", text: "当前会话无 id,无法解析 @this" } };
+    return { id: currentId, label: "当前会话" };
   }
-  const events = (agent?.session?.events ?? []).filter((event) => event?.type === AUX_DEBUG_EVENT);
-  if (events.length === 0) {
-    return {
-      kind: "success",
-      text: "当前会话暂无 AUX debug 事件。开启 aux.debug.fullToolTrace 后,后续辅助调用会记录内容真相。"
-    };
+  if (currentId !== void 0 && (token === currentId || currentId.startsWith(token))) {
+    return { id: currentId, label: "当前会话" };
   }
-  const rows = events.map((event, index) => {
+  let sp;
+  try {
+    sp = service.ctx.get("sessionPersistence");
+  } catch {
+    sp = void 0;
+  }
+  if (!sp || typeof sp.list !== "function") {
+    return { error: { kind: "error", text: "sessionPersistence 不可用,无法解析目标会话" } };
+  }
+  let headers;
+  try {
+    headers = await sp.list();
+  } catch (error) {
+    return { error: { kind: "error", text: "读取会话列表失败: " + (error?.message ?? String(error)) } };
+  }
+  const exact = headers.find((h) => h.id === token);
+  if (exact !== void 0) return { id: exact.id, label: exact.id };
+  const idMatches = headers.filter((h) => h.id.startsWith(token));
+  if (idMatches.length === 1) return { id: idMatches[0].id, label: idMatches[0].id };
+  if (idMatches.length > 1) {
+    return { error: { kind: "error", text: `目标不唯一,匹配 ${idMatches.length} 个会话: ${idMatches.map((m) => m.id).join(", ")}` } };
+  }
+  const cwdMatches = headers.filter((h) => typeof h.cwd === "string" && h.cwd.toLowerCase().includes(token.toLowerCase()));
+  if (cwdMatches.length === 1) return { id: cwdMatches[0].id, label: `${cwdMatches[0].id} (${cwdMatches[0].cwd})` };
+  if (cwdMatches.length > 1) {
+    return { error: { kind: "error", text: `目标不唯一,匹配 ${cwdMatches.length} 个会话: ${cwdMatches.map((m) => m.id).join(", ")}` } };
+  }
+  return { error: { kind: "error", text: `未找到会话: ${raw}` } };
+}
+
+/** Format debug events into human-readable lines. */
+function formatDebugEvents(events) {
+  return events.map((event, index) => {
     const d = event.data ?? {};
     const seq = event.seq ?? index + 1;
     const parts = [`#${seq} ${d.kind ?? "debug"}`, d.task ?? "", d.ok === true ? "成功" : d.ok === false ? "失败" : ""];
@@ -224,8 +255,64 @@ export function handleDebugCommand(agent, args) {
     if (d.output !== void 0) parts.push(`output=${typeof d.output === "string" ? d.output.slice(0, 200) : JSON.stringify(d.output).slice(0, 200)}`);
     return `  ${parts.filter(Boolean).join(" | ")}`;
   });
+}
+
+/**
+ * /aux debug [N] — 查看当前会话 debug 事件。
+ * /aux debug <目标> [N] — 查看指定会话(支持 @this / session id / id 前缀 / cwd 片段)。
+ */
+export async function handleDebugCommand(service, agent, args) {
+  let limit = 10;
+  let targetArg;
+  if (/^\d+$/.test(args[0] ?? "")) {
+    limit = Number(args[0]);
+    targetArg = args[1];
+  } else {
+    targetArg = args[0];
+    if (args[1] !== void 0) limit = Number(args[1]);
+  }
+  if (!Number.isInteger(limit) || limit < 0) {
+    return { kind: "error", text: "用法: /aux debug [N] | /aux debug <目标> [N] — N 为非负整数条数" };
+  }
+  const currentId = agent?.session?.id;
+  let targetId = currentId;
+  let targetLabel = "当前会话";
+  if (targetArg !== void 0 && targetArg !== "") {
+    const resolved = await resolveDebugTarget(service, targetArg, currentId);
+    if (resolved.error !== void 0) return resolved.error;
+    targetId = resolved.id;
+    targetLabel = resolved.label;
+  }
+  let events;
+  if (targetId === currentId) {
+    events = agent?.session?.events ?? [];
+  } else {
+    let sp;
+    try {
+      sp = service.ctx.get("sessionPersistence");
+    } catch {
+      sp = void 0;
+    }
+    if (!sp || typeof sp.inspect !== "function") {
+      return { kind: "error", text: "sessionPersistence 不可用,无法读取目标会话" };
+    }
+    try {
+      const inspection = await sp.inspect(targetId);
+      events = inspection?.events ?? [];
+    } catch (error) {
+      return { kind: "error", text: `读取会话 ${targetLabel} 失败: ${error?.message ?? String(error)}` };
+    }
+  }
+  const debugEvents = events.filter((event) => event?.type === AUX_DEBUG_EVENT);
+  if (debugEvents.length === 0) {
+    return {
+      kind: "success",
+      text: `${targetLabel} 暂无 AUX debug 事件。开启 aux.debug.fullToolTrace 后,后续辅助调用会记录内容真相。`
+    };
+  }
+  const rows = formatDebugEvents(debugEvents);
   const chosen = Number.isFinite(limit) ? rows.slice(-limit) : rows;
-  return { kind: "success", text: [`AUX debug(共 ${rows.length} 条,显示最近 ${chosen.length} 条):`, ...chosen.reverse()].join("\n") };
+  return { kind: "success", text: [`AUX debug(${targetLabel},共 ${rows.length} 条,显示最近 ${chosen.length} 条):`, ...chosen.reverse()].join("\n") };
 }
 
 /** Handle the /aux model subcommand: read or write one task's route. */
