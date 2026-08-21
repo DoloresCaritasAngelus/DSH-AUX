@@ -192,8 +192,12 @@ test('B4: onSessionDisposed 在 _shuttingDown=false 时正常批量清理', asyn
     // 普通批量删除:每个 disposed 会话都应触发清理(删除其无引用文件)
     onSessionDisposed(service, { id: 'sess-1' });
     onSessionDisposed(service, { id: 'sess-2' });
-    await new Promise((r) => setTimeout(r, 60));
-    const remaining = await fsPromises.readdir(objects);
+    // 等待异步清理完成(轮询,避免 Node 20/慢机器上的固定延时抖动)。
+    let remaining = await fsPromises.readdir(objects);
+    for (let i = 0; i < 40 && (remaining.includes(hashA) || remaining.includes(hashB)); i++) {
+      await new Promise((r) => setTimeout(r, 50));
+      remaining = await fsPromises.readdir(objects);
+    }
     assert.ok(!remaining.includes(hashA), 'sess-1 的文件应删除');
     assert.ok(!remaining.includes(hashB), 'sess-2 的文件应删除');
     // 写回的文件仍是合法 JSON
