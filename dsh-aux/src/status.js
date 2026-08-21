@@ -25,8 +25,6 @@ import { sessionEventsSupported } from "./events.js";
 
 /** Tool keys that do not depend on bridge patches. */
 const TOOL_KEYS = ["vision_analyze", "web_extract", "web_crawl", "compress_text"];
-/** Bridge keys that depend on local patches / host packages. */
-const BRIDGE_KEYS = ["imageBridge", "subagentBridge", "workflowBridge", "compactionBridge", "skillAudit"];
 
 /** Packages whose patched `lib/index.js` participates in restart detection. */
 const PATCH_PACKAGES = [
@@ -219,6 +217,25 @@ export async function collectPlatformStatus(service) {
   items.push(filePatchBridgeStatusItem(service, "workflowBridge", workflow));
   items.push(compactionBridgeStatusItem(service));
   items.push(skillBridgeStatusItem(service, skill));
+
+  // 保留人类可读的桥接配置细节,避免统一到 status 后丢掉 subagent 模式、
+  // workflow includeWorkflow、compaction/skill 是否已配置等信息。
+  const subItem = items.find((entry) => entry.key === "subagentBridge");
+  if (subItem !== void 0) {
+    subItem.detail = `mode=${service.subagentMode ?? "native"}${service.subagentPrepareTools ? ", prepareTools" : ""}`;
+  }
+  const wfItem = items.find((entry) => entry.key === "workflowBridge");
+  if (wfItem !== void 0) {
+    wfItem.detail = `includeWorkflow=${service.subagentIncludeWorkflow ? "on" : "off"}`;
+  }
+  const compactionItem = items.find((entry) => entry.key === "compactionBridge");
+  if (compactionItem !== void 0) {
+    compactionItem.detail = `installed=${isCompactionBridgeInstalled() ? "yes" : "no"}, configured=${isCompactionTaskConfigured(service) ? "yes" : "no"}`;
+  }
+  const skillItem = items.find((entry) => entry.key === "skillAudit");
+  if (skillItem !== void 0) {
+    skillItem.detail = `configured=${isSkillTaskConfigured(service) ? "yes" : "no"}, mode=${service.skillMode ?? "audit"}`;
+  }
 
   const warnings = [];
   const enabled = service._enabled ?? {};

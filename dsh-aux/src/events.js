@@ -4,8 +4,8 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/events
  */
-import { readFile as readFileText } from "node:fs/promises";
 import { AUX_CALL_EVENT, AUX_DEBUG_EVENT } from "./config.js";
+import { readPackageFile } from "./bridge-locate.js";
 
 /** One auxiliary call outcome. */
 export class AuxCallError extends Error {
@@ -68,19 +68,8 @@ export function sessionPatchCandidates(baseUrl) {
  */
 export async function sessionEventsSupported(service) {
   if (service._sessionEventsSupportedCache !== void 0) return service._sessionEventsSupportedCache;
-  const candidates = sessionPatchCandidates(import.meta.url);
-  for (const candidate of candidates) {
-    try {
-      const src = await readFileText(candidate);
-      if (src.includes("dsh-aux ignorable (local patch)")) {
-        service._sessionEventsSupportedCache = true;
-        return true;
-      }
-    } catch {
-      /* try the next candidate */
-    }
-  }
-  service._sessionEventsSupportedCache = false;
+  const src = await readPackageFile("dsh-session");
+  service._sessionEventsSupportedCache = src?.includes("dsh-aux ignorable (local patch)") === true;
   return service._sessionEventsSupportedCache;
 }
 

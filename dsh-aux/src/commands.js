@@ -12,16 +12,45 @@ const execFileAsync = promisify(execFile);
 import { AUX_TASKS, resolvePrimaryRoute } from "./route.js";
 import { gcImages } from "./images/gc.js";
 import { handleMemoryCommand } from "./images/memory.js";
-import { imageBridgeStatus } from "./image-bridge.js";
-import { subagentBridgeStatus, workflowBridgeStatus } from "./subagent-bridge.js";
-import { isCompactionBridgeInstalled, isCompactionTaskConfigured } from "./compaction-bridge.js";
-import { isSkillTaskConfigured, skillBridgeStatus } from "./skill-bridge.js";
-import { sessionEventsSupported } from "./events.js";
 import { collectPlatformStatus } from "./status.js";
 import { runVision } from "./tools/vision.js";
 import { runWebExtract } from "./tools/web-extract.js";
 import { runWebCrawl } from "./tools/web-crawl.js";
 import { runCompress } from "./tools/compress.js";
+
+/** Human-readable reason text for a status item/issue. */
+function statusReasonText(reason) {
+  return {
+    "mode-native": "当前为 native",
+    "mode-aux": "使用 AUX",
+    "mode-compat": "compat 预留",
+    "patch-ok": "补丁已装",
+    "patch-missing": "补丁未装",
+    "patch-partial": "补丁部分安装",
+    "patch-v1": "旧版 v1 补丁,建议升级",
+    "patch-unknown": "无法检测补丁状态,请运行 install.sh 或确认安装方式",
+    "config-missing": "需配置任务模型",
+    "dependency-missing": "缺少依赖",
+    "skill-mode-native": "SKILL 模式为 native",
+    "vision-disabled-image-bridge-enabled": "vision 关闭但 imageBridge 开启"
+  }[reason] ?? reason;
+}
+
+/** Format one structured platform status item as a human-readable line. */
+function formatStatusItem(entry) {
+  const stateText = {
+    enabled: "已启用",
+    disabled: "未使用(原生)",
+    unavailable: "不可用",
+    fixing: "修复中",
+    unknown: "无法检测"
+  }[entry.state] ?? entry.state;
+  const reason = statusReasonText(entry.reason);
+  const mode = entry.mode ?? "aux";
+  const patch = entry.patch ? ` [${entry.patch}]` : "";
+  const detail = entry.detail ? ` (${entry.detail})` : "";
+  return `${entry.key}: ${stateText}(${reason})${detail} [${mode}]${patch}`;
+}
 
 /** Handle the /aux command. */
 export async function handleAuxCommand(service, agent, rawInput) {
@@ -62,53 +91,20 @@ export async function handleAuxCommand(service, agent, rawInput) {
       const status = await collectPlatformStatus(service);
       return { kind: "success", text: JSON.stringify(status) };
     }
+    const status = await collectPlatformStatus(service);
     const lines = ["辅助模型系统状态:"];
-    lines.push("  🔒 核心保护:图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计(不可关闭)");
-    // Integrated image-bridge status: report it so a fresh install knows
-    // whether pasting images into a text-only main model will work.
-    const bridge = await imageBridgeStatus();
-    if (bridge !== "unknown") {
-      const label = {
-        v3: "已集成(v3:含图会话可切纯文本模型 + 可强制原生视觉走 AUX)",
-        v2: "已集成(v2:UI 保留缩略图;含图会话切换纯文本模型仍受限)",
-        v1: "旧版 v1(建议运行 bridge/apply-patch.mjs 升级)",
-        partial: "部分安装(建议运行 bridge/apply-patch.mjs 补全)",
-        missing: "未安装(纯文本主模型发图会受限;运行仓库 install.sh 一键集成)"
-      }[bridge] ?? bridge;
-      lines.push("  - image-bridge: " + label);
+    lines.push(`  🔒 核心保护:${status.core?.count ?? 0} 项已生效(图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计,不可关闭)`);
+    if (status.restartRequired === true) {
+      lines.push("  ⚠️ 补丁已写入,重启 DSH 后生效");
     }
     lines.push(`  - forceAuxVision: ${service.forceAuxVision ? "开启(原生图片也走 AUX 视觉)" : "关闭"}`);
     lines.push(`  - visionFallbackToMain: ${service.visionFallbackToMain ? "开启(失败回退主模型)" : "关闭(视觉失败直接失败)"}`);
-    const subMode = service.subagentMode ?? "native";
-    const subBridge = await subagentBridgeStatus();
-    const subPatch = subBridge === "installed" ? "补丁已装" : subBridge === "unknown" ? "无法检测(请运行 install.sh 或确认安装方式)" : "补丁未装(请跑 bridge/apply-patch.mjs)";
-    lines.push(`  - subagent-bridge: ${subMode === "native" ? "native(未拦截)" : subMode === "manual" ? "manual(统一 general 模型)" : "vision-aware(按需 vision / general)"}${service.subagentPrepareTools ? " + 注入 AUX 工具兜底" : ""} [${subPatch}]`);
-    const wfBridge = await workflowBridgeStatus();
-    const wfPatch = wfBridge === "installed" ? "补丁已装" : wfBridge === "unknown" ? "无法检测(请运行 install.sh 或确认安装方式)" : "补丁未装(请跑 bridge/apply-patch.mjs)";
-    lines.push(`  - workflow-bridge: ${service.subagentIncludeWorkflow ? "includeWorkflow(workflow agent() 走 AUX 路由)" : "excluded(workflow 未纳入)"} [${wfPatch}]`);
-    const skillPatch = await skillBridgeStatus();
-    const skillBridgeLabel = skillPatch === "installed" ? "补丁已装(task 参数可用)" : skillPatch === "unknown" ? "无法检测(请运行 install.sh 或确认安装方式)" : "补丁未装(请跑 bridge/apply-patch.mjs)";
-    lines.push(`  - skill-audit: ${isSkillTaskConfigured(service) ? "已启用(原生 skill 调用先走辅助模型预审)" : "未配置(原生直通)"} [${skillBridgeLabel}]`);
-    // Compaction bridge status: when dsh-compaction-basic is present and a
-    // dedicated `compaction` AUX route is configured, native session
-    // compaction is routed through AUX.
-    const compactionBridgeInstalled = isCompactionBridgeInstalled();
-    if (compactionBridgeInstalled) {
-      lines.push(
-        "  - compaction-bridge: " +
-          (isCompactionTaskConfigured(service)
-            ? "已启用(会话压缩走 AUX 辅助模型)"
-            : "已安装(未配置 compaction 任务 → 原生摘要)")
-      );
-    } else {
-      lines.push("  - compaction-bridge: 未安装(dsh-compaction-basic 缺失)");
+    for (const entry of status.items ?? []) {
+      lines.push("  - " + formatStatusItem(entry));
     }
-    // Session-event tracing status: without the dsh-session ignorable
-    // patch, aux/llm-call events are not written (safety degradation).
-    const eventsSupported = await sessionEventsSupported(service);
     lines.push(
       "  - 会话事件记录: " +
-        (eventsSupported ? "已启用(ignorable 补丁已装)" : "已停用(缺 dsh-session ignorable 补丁,运行 bridge/patch-session-ignorable.mjs 或 install.sh 启用)")
+        (status.eventsSupported ? "已启用(ignorable 补丁已装)" : "已停用(缺 dsh-session ignorable 补丁,运行 bridge/patch-session-ignorable.mjs 或 install.sh 启用)")
     );
     for (const entry of service.describe()) {
       const primary = entry.primary
@@ -123,27 +119,22 @@ export async function handleAuxCommand(service, agent, rawInput) {
       lines.push("");
       lines.push("最近辅助调用:");
       for (const call of recent) {
-        const status = call.ok ? "成功" : "失败";
+        const callState = call.ok ? "成功" : "失败";
         const fallback = call.fallbackUsed ? " (已降级)" : "";
         const error = call.ok ? "" : ` [${call.errorCode ?? "error"}]`;
         lines.push(
-          `  - ${call.task}: ${call.provider}/${call.model} ${status}${fallback}${error} ${call.durationMs}ms`
+          `  - ${call.task}: ${call.provider}/${call.model} ${callState}${fallback}${error} ${call.durationMs}ms`
         );
       }
     }
-    // 版本/补丁不匹配的醒目提示:任何集成补丁缺失或部分安装时,在状态顶部
-    // 直接建议用户运行 ./update.sh,而不是只靠分散的 [补丁未装] 小字。
-    const issues = [];
-    if (bridge === "missing" || bridge === "partial") issues.push("image-bridge 未完整安装");
-    if (subBridge === "missing") issues.push("subagent-bridge 补丁未装");
-    if (wfBridge === "missing") issues.push("workflow-bridge 补丁未装");
-    if (skillPatch === "missing") issues.push("skill-audit 补丁未装(task 参数不可用)");
-    if (!eventsSupported) issues.push("会话事件记录已停用(缺 dsh-session ignorable 补丁)");
-    if (issues.length > 0) {
+    // 版本/补丁不匹配的醒目提示:任何仍需要打补丁的项,在状态顶部直接建议
+    // 用户运行 ./update.sh,而不是只靠分散的小字。
+    const patchIssues = (status.issues ?? []).filter((issue) => issue.action === "patch");
+    if (patchIssues.length > 0) {
       lines.splice(1, 0,
         "",
         "⚠️ 检测到 dsh-aux 补丁缺失/版本不匹配,请运行 ./update.sh 或更新 dsh-aux:",
-        ...issues.map((issue) => "  - " + issue)
+        ...patchIssues.map((issue) => `  - ${issue.key}: ${statusReasonText(issue.reason)}`)
       );
     }
     return { kind: "success", text: lines.join("\n") };
@@ -359,34 +350,45 @@ export async function handlePatchCommand(service, json = false) {
   }
   // 补丁脚本可能“退出 0 但仍有补丁缺失/版本不匹配”,所以不能只看子进程退出码。
   // 跑完后用 collectPlatformStatus 做一次真实校验:仍存在 action=patch 的不可用项
-  // 就视为未成功;restartRequired 也以实际文件状态为准,避免 no-op 误报。
+  // 或 dsh-session 事件补丁缺失,就视为未成功;restartRequired 也以实际文件状态为准。
+  // 先清缓存,确保校验读到的是刚写完的磁盘状态。
+  if (service !== void 0) {
+    service._sessionEventsSupportedCache = void 0;
+  }
   let status;
+  let verificationError;
   if (service !== void 0) {
     try {
       status = await collectPlatformStatus(service);
-    } catch {
+    } catch (error) {
+      verificationError = error?.message ?? String(error);
       status = void 0;
     }
   }
-  const patchIssues = (status?.items ?? []).filter(
-    (entry) => entry.action === "patch" &&
-      (entry.state === "unavailable" || entry.state === "unknown" ||
-       entry.patch === "missing" || entry.patch === "partial")
-  );
-  const ok = steps.every((step) => step.ok) && patchIssues.length === 0;
+  const patchIssues = (status?.issues ?? []).filter((issue) => issue.action === "patch");
+  const eventsOk = status?.eventsSupported !== false;
+  const stepsOk = steps.every((step) => step.ok);
+  const verificationOk = status !== void 0 && patchIssues.length === 0 && eventsOk;
+  const ok = stepsOk && verificationOk;
   const changed = status?.restartRequired === true;
   // 补丁写的是 node_modules 源码文件;当前进程已加载旧模块,必须重启 DSH
   // 新补丁才会真正生效。标记后,`/aux status --json` 会返回 restartRequired。
   if (service !== void 0) {
     service._patchAppliedThisSession = changed;
-    // 让 sessionEventsSupported 重新读盘,避免旧缓存掩盖刚打上的补丁。
-    service._sessionEventsSupportedCache = void 0;
   }
   if (json) {
+    if (verificationError !== void 0) {
+      steps.push({ name: "verify", ok: false, output: "", error: verificationError });
+    }
     return {
       kind: "success",
-      text: JSON.stringify({ ok, restartRequired: changed, steps })
+      text: JSON.stringify({ ok, restartRequired: changed, steps, remaining: patchIssues })
     };
+  }
+  if (!ok) {
+    if (verificationError !== void 0) output.push(`[verify] 失败: ${verificationError}`);
+    for (const issue of patchIssues) output.push(`[verify] 仍待处理: ${issue.key} (${statusReasonText(issue.reason)})`);
+    if (eventsOk === false) output.push("[verify] 仍待处理: dsh-session ignorable 补丁未生效");
   }
   return { kind: ok ? "success" : "error", text: output.join("\n") };
 }

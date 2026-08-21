@@ -47,6 +47,9 @@ window.__ModuleLoader__.load({
 			".ax-row input,.ax-row select{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-strong);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}",
 			".ax-row input:focus-visible,.ax-row select:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:1px}",
 			".ax-field-head{display:flex;align-items:center;gap:6px;min-width:0}",
+			".ax-field-head[role=button]{cursor:pointer;border-radius:4px;padding:2px 4px;margin:-2px -4px}",
+			".ax-field-head[role=button]:hover{background:var(--dsw-alias-interactive-bg-hover)}",
+			".ax-field-head[role=button]:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}",
 			".ax-reset{font:inherit;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;padding:0;font-size:11px;line-height:1.5}",
 			".ax-reset:hover:not(:disabled){color:var(--dsw-alias-label-primary)}",
 			".ax-reset:disabled{cursor:default}",
@@ -73,7 +76,8 @@ window.__ModuleLoader__.load({
 			".ax-repair-button:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
 			".ax-repair-button:disabled{opacity:.6;cursor:default}",
 			".ax-status-issue{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;font-size:12px;line-height:18px}",
-			".ax-status-issue-text{flex:1;min-width:0}",
+			".ax-status-issue-active{border-color:var(--dsw-alias-state-warn-primary);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 8%,transparent)}",
+			".ax-status-issue-text{flex:1;min-width:0;white-space:pre-line;overflow-wrap:anywhere}",
 			".ax-status-summary{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}"
 		].join("");
 		const tagId = "@dolorescaritasangelus/dsh-aux/Aux.css";
@@ -190,6 +194,9 @@ window.__ModuleLoader__.load({
 			"status.patch.installed": "已装",
 			"status.patch.missing": "未装",
 			"status.patch.partial": "部分",
+			"status.patch.v1": "v1",
+			"status.patch.v2": "v2",
+			"status.patch.v3": "v3",
 			"status.patch.unknown": "未知",
 			"status.patch.not-applicable": "—",
 			"status.action.patch": "打补丁",
@@ -309,6 +316,9 @@ window.__ModuleLoader__.load({
 			"status.patch.installed": "Installed",
 			"status.patch.missing": "Missing",
 			"status.patch.partial": "Partial",
+			"status.patch.v1": "v1",
+			"status.patch.v2": "v2",
+			"status.patch.v3": "v3",
 			"status.patch.unknown": "Unknown",
 			"status.patch.not-applicable": "—",
 			"status.action.patch": "Patch",
@@ -418,27 +428,49 @@ window.__ModuleLoader__.load({
 			const [saved, setSaved] = react.useState(false);
 			const [patching, setPatching] = react.useState(false);
 			const [patchStatus, setPatchStatus] = react.useState(null);
+			const [activeIssueKey, setActiveIssueKey] = react.useState(null);
+			const mountedRef = react.useRef(true);
+			const statusRequestId = react.useRef(0);
+			const openIssueTimer = react.useRef(null);
+			react.useEffect(() => {
+				mountedRef.current = true;
+				return () => {
+					mountedRef.current = false;
+					if (openIssueTimer.current !== null) clearTimeout(openIssueTimer.current);
+				};
+			}, []);
 			const [status, setStatus] = react.useState(null);
 			const [statusLoading, setStatusLoading] = react.useState(true);
 			const [statusError, setStatusError] = react.useState(null);
 			const loadStatus = react.useCallback(() => {
 				let alive = true;
+				const requestId = ++statusRequestId.current;
 				setStatusLoading(true);
 				setStatusError(null);
 				Promise.resolve()
 					.then(() => runAuxCommand("/aux status --json"))
 					.then((result) => {
-						if (!alive) return;
+						if (!alive || !mountedRef.current || requestId !== statusRequestId.current) return;
 						if (result.kind !== "success" || typeof result.text !== "string") {
 							throw new Error(result.text ?? "status command failed");
 						}
-						setStatus(JSON.parse(result.text));
+						const data = JSON.parse(result.text);
+						setStatus(data);
+						setActiveIssueKey((current) =>
+							current !== null && Array.isArray(data.issues) && data.issues.some((issue) => issue.key === current)
+								? current
+								: null
+						);
 					})
 					.catch((error) => {
-						if (alive) setStatusError(error instanceof Error ? error.message : String(error));
+						if (alive && mountedRef.current && requestId === statusRequestId.current) {
+							setStatusError(error instanceof Error ? error.message : String(error));
+						}
 					})
 					.finally(() => {
-						if (alive) setStatusLoading(false);
+						if (alive && mountedRef.current && requestId === statusRequestId.current) {
+							setStatusLoading(false);
+						}
 					});
 				return () => { alive = false; };
 			}, [runAuxCommand]);
@@ -568,12 +600,13 @@ window.__ModuleLoader__.load({
 					setSaveError(error instanceof Error ? error.message : String(error));
 				});
 			};
-			const runPatch = () => {
+			const runPatch = (sourceKey) => {
 				setPatching(true);
 				setPatchStatus(null);
 				Promise.resolve()
 					.then(() => runAuxCommand("/aux patch --json"))
 					.then((result) => {
+						if (!mountedRef.current) return;
 						if (result.kind !== "success") throw new Error(result.text ?? t("patch.failed"));
 						let data;
 						try {
@@ -581,23 +614,28 @@ window.__ModuleLoader__.load({
 						} catch {
 							throw new Error(t("patch.invalidJson"));
 						}
+						if (!data || typeof data !== "object") throw new Error(t("patch.invalidJson"));
 						if (data.ok !== true) {
 							const failed = (data.steps ?? []).filter((step) => step.ok !== true);
 							const detail = failed
 								.map((step) => `[${step.name}] ${step.error ?? "failed"}\n${(step.output ?? "").slice(0, 500)}`)
 								.join("\n\n");
-							setPatchStatus({ ok: false, text: t("settings.patchError") + (detail || t("patch.failed")) });
+							setPatchStatus({ ok: false, key: sourceKey, text: t("settings.patchError") + (detail || t("patch.failed")) });
 							// 部分步骤可能已成功/已写盘,失败也要刷新状态和重启提示。
 							loadStatus();
 							return;
 						}
-						setPatchStatus({ ok: true, text: t("settings.patchDone") });
+						setPatchStatus({ ok: true, key: sourceKey, text: t("settings.patchDone") });
 						loadStatus();
 					})
 					.catch((error) => {
-						setPatchStatus({ ok: false, text: t("settings.patchError") + (error?.message ?? String(error)) });
+						if (mountedRef.current) {
+							setPatchStatus({ ok: false, key: sourceKey, text: t("settings.patchError") + (error?.message ?? String(error)) });
+						}
 					})
-					.finally(() => setPatching(false));
+					.finally(() => {
+						if (mountedRef.current) setPatching(false);
+					});
 			};
 			const providerOptions = catalog.providers.map((p) => ({ value: p.provider, label: (p.displayName ?? p.provider) + " (" + p.provider + ")" }));
 			const modelOptionsFor = (task) => {
@@ -732,20 +770,51 @@ window.__ModuleLoader__.load({
 			if (status !== null && Array.isArray(status.items)) {
 				for (const it of status.items) statusByKey[it.key] = it;
 			}
+			const openIssue = (key) => {
+				setOpenGroups((s) => ({ ...s, diagnostics: true, platform: true }));
+				setActiveIssueKey(key);
+				if (openIssueTimer.current !== null) clearTimeout(openIssueTimer.current);
+				openIssueTimer.current = setTimeout(() => {
+					openIssueTimer.current = null;
+					if (!mountedRef.current) return;
+					const el = document.getElementById("ax-issue-" + key);
+					if (el) {
+						el.scrollIntoView?.({ behavior: "smooth", block: "center" });
+						const btn = el.querySelector?.(".ax-repair-button");
+						if (btn) btn.focus?.();
+						else el.focus?.();
+					}
+				}, 50);
+			};
 			const platformSelect = (key, label) => {
 				const meta = statusByKey[key] ?? null;
-				const state = meta?.state ?? "unknown";
+				const baseState = meta?.state ?? "unknown";
+				const state = patching && meta?.action === "patch" && baseState === "unavailable" ? "fixing" : baseState;
 				const stateText = t("status.state." + state);
 				const reason = meta ? t("status.reason." + meta.reason) : stateText;
 				const patchLabel = meta?.patch ? t("status.patch." + meta.patch) : null;
 				const title = label + " · " + stateText + (reason ? " — " + reason : "");
+				const actionable = baseState === "unavailable" && meta?.action !== "none";
+				const headerProps = actionable ? {
+					role: "button",
+					tabIndex: 0,
+					"aria-label": title + " — " + t("status.diagnostics"),
+					onClick: () => openIssue(key),
+					onKeyDown: (e) => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault();
+							openIssue(key);
+						}
+					}
+				} : {};
 				return react.createElement("div", { className: "ax-row", title, "aria-label": title },
-					react.createElement("div", { className: "ax-field-head" },
+					react.createElement("div", { className: "ax-field-head", ...headerProps },
 						react.createElement("span", { className: "ax-dot ax-dot-" + state, "aria-hidden": "true" }),
-						react.createElement("label", null, label),
+						react.createElement("span", null, label),
 						meta?.patch && patchLabel ? react.createElement("span", { className: "ax-status-badge ax-status-badge-" + meta.patch, title: reason }, patchLabel) : null
 					),
 					react.createElement("select", {
+						"aria-label": label,
 						value: draft?.enabled?.[key] ?? "aux",
 						disabled: !state.writable,
 						onChange: (e) => setEnabled(key, e.target.value)
@@ -772,10 +841,10 @@ window.__ModuleLoader__.load({
 						react.createElement("button", { type: "button", className: "ax-repair-button", onClick: loadStatus }, t("status.refresh"))
 					);
 				}
-				const items = status.items;
+				const items = status.items.filter((entry) => entry !== null && typeof entry === "object");
 				const enabledCount = items.filter((entry) => entry.state === "enabled").length;
-				const issues = status?.issues ?? [];
-				const warnings = status?.warnings ?? [];
+				const issues = Array.isArray(status.issues) ? status.issues : [];
+				const warnings = Array.isArray(status.warnings) ? status.warnings : [];
 				const attentionCount = issues.length + warnings.length;
 				const summary = t("status.overview").replace("{enabled}", String(enabledCount)).replace("{issues}", String(attentionCount));
 				return group("diagnostics", t("status.diagnostics"), t("status.diagnostics.desc"),
@@ -797,11 +866,18 @@ window.__ModuleLoader__.load({
 								: null,
 							...issues.map((issue) => {
 								const label = issue.key;
-								return react.createElement("div", { key: issue.key, className: "ax-status-issue" },
-									react.createElement("span", { className: "ax-dot ax-dot-unavailable", "aria-hidden": "true" }),
-									react.createElement("span", { className: "ax-status-issue-text" }, label + ": " + t("status.reason." + issue.reason)),
+								const active = activeIssueKey === issue.key;
+								const dotClass = patching && issue.action === "patch" ? "ax-dot-fixing" : "ax-dot-unavailable";
+								return react.createElement("div", { key: issue.key, id: "ax-issue-" + issue.key, tabIndex: -1, className: "ax-status-issue" + (active ? " ax-status-issue-active" : "") },
+									react.createElement("span", { className: "ax-dot " + dotClass, "aria-hidden": "true" }),
+									react.createElement("div", { className: "ax-status-issue-text" },
+										label + ": " + t("status.reason." + issue.reason),
+										active && patchStatus !== null && patchStatus.ok === false && patchStatus.key === issue.key
+											? react.createElement("div", { className: "ax-status-summary ax-error", role: "alert" }, patchStatus.text)
+											: null
+									),
 									issue.action === "patch"
-										? react.createElement("button", { type: "button", className: "ax-repair-button", disabled: patching, onClick: runPatch }, patching ? t("settings.patching") : t("status.action.patch"))
+										? react.createElement("button", { type: "button", className: "ax-repair-button", disabled: patching, onClick: () => { setActiveIssueKey(issue.key); runPatch(issue.key); } }, patching ? t("settings.patching") : t("status.action.patch"))
 										: issue.action === "configure"
 											? react.createElement("span", { className: "ax-status-badge ax-status-badge-partial" }, t("status.action.configure"))
 											: null

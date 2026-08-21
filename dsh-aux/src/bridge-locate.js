@@ -6,10 +6,11 @@
  * pnpm, custom node_modules locations) and produced confusing `unknown`
  * states. This module centralizes target resolution:
  *
- *   - relative candidates for symlink deploy and source-tree layouts;
- *   - `require.resolve(pkg + "/lib/index.js")` as the robust fallback,
- *     which follows Node's normal module resolution (including pnpm
- *     symlinks and hoisted node_modules).
+ *   - `require.resolve("@deepseek-ai/" + pkg)` first, which follows Node's
+ *     normal module resolution (including pnpm symlinks and hoisted
+ *     node_modules);
+ *   - relative candidates for symlink deploy and source-tree layouts as
+ *     fallback when Node resolution cannot find the package.
  *
  * @module @dolorescaritasangelus/dsh-aux/bridge-locate
  */
@@ -49,13 +50,16 @@ export function packageFileCandidates(pkg) {
   if (!/^[a-z0-9-]+$/.test(pkg)) {
     throw new Error(`bridge-locate: invalid package name "${pkg}"`);
   }
-  const paths = relativeCandidates(pkg);
+  const paths = [];
   try {
     // The real packages are scoped (@deepseek-ai/dsh-*). Resolving the bare
     // package main returns its lib/index.js through package.json `main`.
     paths.push(require.resolve("@deepseek-ai/" + pkg));
   } catch {
     /* package may be absent in this deployment */
+  }
+  for (const candidate of relativeCandidates(pkg)) {
+    if (!paths.includes(candidate)) paths.push(candidate);
   }
   return paths;
 }
