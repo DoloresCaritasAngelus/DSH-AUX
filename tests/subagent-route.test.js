@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import {
   detectNeedsVision,
   resolveSubagentRoute,
@@ -153,4 +154,40 @@ test('includeWorkflow 不进入纯函数(仅 workflow 调用点门控,保护 sub
   const r = resolveSubagentRoute({ ...manualSettings, includeWorkflow: false }, { prompt: 'x' })
   assert.equal(r.settled, true)
   assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'glm-5.2' })
+})
+
+test('/aux patch --json: handlePatchCommand 返回结构化步骤(stub execFileAsync)', async () => {
+  // commands.js 在本测试文件中尚未被静态加载;先替换 child_process.execFile,
+  // 再动态 import,使 commands.js 内的 promisify(execFile) 捕获到 stub。
+  const require = createRequire(import.meta.url)
+  const cp = require('node:child_process')
+  const originalExecFile = cp.execFile
+  const calls = []
+  cp.execFile = (file, args, options, callback) => {
+    calls.push({ file, args, options })
+    if (args[0] === 'bridge/apply-patch.mjs') {
+      callback(null, { stdout: 'apply output\n', stderr: '' })
+    } else if (args[0] === 'bridge/self-heal.mjs') {
+      callback(null, { stdout: 'self-heal output\n', stderr: '' })
+    } else {
+      callback(new Error('unexpected script: ' + args[0]))
+    }
+  }
+  try {
+    const { handlePatchCommand } = await import('../dsh-aux/src/commands.js')
+    const result = await handlePatchCommand(void 0, true)
+    assert.equal(result.kind, 'success')
+    const data = JSON.parse(result.text)
+    assert.equal(typeof data.ok, 'boolean')
+    assert.equal(data.restartRequired, false)
+    assert.ok(Array.isArray(data.steps), '应返回 steps 数组')
+    assert.equal(data.steps.length, 2)
+    assert.deepEqual(data.steps.map((s) => s.name), ['apply-patch', 'self-heal'])
+    assert.ok(data.steps.every((s) => s.ok === true && typeof s.output === 'string'))
+    assert.deepEqual(data.remaining, [])
+    assert.equal(calls.length, 2)
+    assert.ok(calls.every((c) => c.args[0].endsWith('.mjs')))
+  } finally {
+    cp.execFile = originalExecFile
+  }
 })

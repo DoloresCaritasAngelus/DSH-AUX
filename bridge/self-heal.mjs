@@ -24,10 +24,10 @@
  * 被 ~/dsh/start-dsh.sh 在启动 DSH 前调用;失败不致命(继续启动)。
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deployedFile, guardTarget, readPackageVersion, isRc7OrNewer } from "./target.js";
+import { deployedFile, guardPackageFile, guardTarget, readPackageVersion, isRc7OrNewer } from "./target.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url)); // <repo>/bridge
 const REPO = resolve(HERE, "..");
@@ -49,7 +49,21 @@ function dshAuxTarget(root) {
 
 function ensureSymlink(root) {
   const target = dshAuxTarget(root);
-  if (existsSync(target)) { log(`symlink 存在,跳过: ${target}`); return; }
+  let st;
+  try {
+    st = lstatSync(target);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const brokenSymlink = st?.isSymbolicLink() === true && !existsSync(target);
+  if (brokenSymlink) {
+    if (DRY) { log(`[dry-run] 将移除损坏 symlink 并重建: ${target} -> ${join(REPO, "dsh-aux")}`); return; }
+    unlinkSync(target);
+    log(`已移除损坏 symlink: ${target}`);
+  } else if (st) {
+    log(`symlink 存在,跳过: ${target}`);
+    return;
+  }
   if (DRY) { log(`[dry-run] 将重建 symlink: ${target} -> ${join(REPO, "dsh-aux")}`); return; }
   // npm prune 可能连 @dolorescaritasangelus/ 目录一起删掉,先确保父目录存在。
   mkdirSync(dirname(target), { recursive: true });
@@ -65,6 +79,30 @@ function runNode(script, args = []) {
   if (/(版本不匹配|未找到已知代码块|无法自动补|缺失块|替换失败)/.test(out)) {
     log("⚠️ 检测到补丁/自愈不匹配——当前 DSH 版本可能与 dsh-aux 不兼容,请运行 ./update.sh 或更新 dsh-aux");
   }
+}
+
+function syntaxCheck(file, label) {
+  try {
+    execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
+    log(`${label} 语法检查通过`);
+    return true;
+  } catch (error) {
+    log(`${label} 语法检查失败: ${error.stderr?.toString() ?? error.message}`);
+    return false;
+  }
+}
+
+function backupFile(file, tag) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 23);
+  let bak = `${file}.bak-selfheal-${stamp}`;
+  let suffix = 0;
+  while (existsSync(bak)) {
+    suffix += 1;
+    bak = `${file}.bak-selfheal-${stamp}-${suffix}`;
+  }
+  copyFileSync(file, bak);
+  log(`${tag} 备份: ${bak}`);
+  return bak;
 }
 
 /** P7: 只打 session append 的 ignorable 写入口(整跑 patch-session-ignorable 会因 rc.7 白名单块不匹配失败)。 */
@@ -90,8 +128,8 @@ function ensureSessionAppendIgnorable() {
 /** P8: 保证两处白名单都含 aux/llm-call(不负责 thinking/language)。 */
 function ensureWhitelist(root) {
   const files = [
-    join(root, "node_modules/@deepseek-ai/dsh-session/lib/index.js"),
-    join(root, "node_modules/@deepseek-ai/dsh-session/lib/types/known-event-types.js")
+    guardPackageFile(join(root, "node_modules/@deepseek-ai/dsh-session/lib/index.js"), "dsh-aux-self-heal"),
+    guardPackageFile(join(root, "node_modules/@deepseek-ai/dsh-session/lib/types/known-event-types.js"), "dsh-aux-self-heal")
   ];
   for (const f of files) {
     if (!existsSync(f)) { log(`白名单文件缺失,跳过: ${f}`); continue; }
@@ -100,8 +138,25 @@ function ensureWhitelist(root) {
     const marker = "const KNOWN_SESSION_EVENT_TYPES = new Set([";
     if (!data.includes(marker)) { log(`⚠️ P8 无法自动补:未找到目录声明(${f})`); continue; }
     if (DRY) { log(`[dry-run] 将向白名单插入 aux/llm-call: ${f}`); continue; }
+    const bak = backupFile(f, `P8`);
     const out = data.replace(marker, `${marker}\n\t"aux/llm-call",`);
-    writeFileSync(f, out);
+    if (!out.includes('"aux/llm-call"') && !out.includes("'aux/llm-call'")) {
+      log(`⚠️ P8 替换失败,已回滚: ${f}`);
+      copyFileSync(bak, f);
+      continue;
+    }
+    try {
+      writeFileSync(f, out);
+    } catch (error) {
+      log(`P8 写盘失败,已回滚: ${error?.message ?? error}`);
+      copyFileSync(bak, f);
+      continue;
+    }
+    if (!syntaxCheck(f, `P8`)) {
+      copyFileSync(bak, f);
+      log(`P8 语法检查失败,已回滚: ${f}`);
+      continue;
+    }
     log(`P8 已插入 aux/llm-call: ${f}`);
   }
 }

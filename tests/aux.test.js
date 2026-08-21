@@ -1277,6 +1277,9 @@ test('projectSettings: 暴露 forceAuxVision / visionFallbackToMain 默认值', 
   assert.equal(projected.visionFallbackToMain, true);
   assert.equal(projected.subagent.mode, 'native');
   assert.equal(projected.subagent.includeWorkflow, true);
+  assert.equal(projected.subagent.prepareTools, true);
+  assert.equal(projected.subagent.retryVisionWithAux, false);
+  assert.deepEqual(projected.subagent.visionKeywords, []);
   const custom = projectSettings({ forceAuxVision: true, visionFallbackToMain: false });
   assert.equal(custom.forceAuxVision, true);
   assert.equal(custom.visionFallbackToMain, false);

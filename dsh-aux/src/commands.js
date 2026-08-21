@@ -76,7 +76,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
     return await handleMemoryCommand(args.slice(1));
   }
   if (sub === "history") {
-    return await handleHistoryCommand(agent, args.slice(1));
+    return await handleHistoryCommand(service, agent, args.slice(1));
   }
   if (sub === "debug") {
     return await handleDebugCommand(service, agent, args.slice(1));
@@ -149,8 +149,9 @@ export async function handleAuxCommand(service, agent, rawInput) {
  * /aux history [N] — 简要溯源:最近 N 次辅助调用(默认 10,按时间新→旧)。
  * /aux history full [N] — 全部溯源:完整事件字段(默认全部事件,可用 N 取
  * 最近 N 条)。数据来自会话里每次 AUX_CALL_EVENT 事件日志(事件溯源)。
+ * 当 `aux.debug.debugEventsInHistory` 开启时,AUX_DEBUG_EVENT 也会混入统计。
  */
-export function handleHistoryCommand(agent, args) {
+export function handleHistoryCommand(service, agent, args) {
   const full = args[0] === "full";
   const limitArg = full ? args[1] : args[0];
   let limit = full ? Infinity : 10;
@@ -160,7 +161,11 @@ export function handleHistoryCommand(agent, args) {
       return { kind: "error", text: "用法: /aux history [N] | /aux history full [N] — N 为非负整数条数" };
     }
   }
-  const events = (agent?.session?.events ?? []).filter((event) => event?.type === AUX_CALL_EVENT);
+  const includeDebug = service?.debugConfig?.debugEventsInHistory === true;
+  const events = (agent?.session?.events ?? []).filter((event) =>
+    event?.type === AUX_CALL_EVENT ||
+    (includeDebug && event?.type === AUX_DEBUG_EVENT)
+  );
   if (events.length === 0) {
     return {
       kind: "success",
@@ -175,19 +180,22 @@ export function handleHistoryCommand(agent, args) {
     const duration = typeof d.durationMs === "number" ? `${d.durationMs}ms` : "-";
     if (!full) {
       const status = d.ok ? "成功" : "失败";
-      const error = d.ok ? "" : ` [${d.errorCode ?? "error"}]`;
+      const error = d.ok ? "" : ` [${d.errorCode ?? (d.error !== void 0 ? "error" : "")}]`;
       const fallback = d.fallbackUsed ? " (已降级)" : "";
       return `  #${seq} ${d.task}: ${provider}/${model} ${status}${error}${fallback} ${duration}`;
     }
     const parts = [`#${seq} ${d.task}`, `路由 ${provider}/${model}`, d.ok ? "成功" : "失败", duration];
     if (!d.ok && d.errorCode !== void 0) parts.push(`error=${d.errorCode}`);
+    if (!d.ok && d.error !== void 0) parts.push(`error=${typeof d.error === "string" ? d.error : JSON.stringify(d.error)}`);
     if (d.fallbackUsed) parts.push("已降级");
     if (typeof d.inputChars === "number") parts.push(`输入 ${d.inputChars} chars`);
     if (typeof d.outputChars === "number") parts.push(`输出 ${d.outputChars} chars`);
+    if (d.input !== void 0) parts.push(`input=${typeof d.input === "string" ? d.input.slice(0, 200) : JSON.stringify(d.input).slice(0, 200)}`);
+    if (d.output !== void 0) parts.push(`output=${typeof d.output === "string" ? d.output.slice(0, 200) : JSON.stringify(d.output).slice(0, 200)}`);
     if (d.purpose !== void 0) parts.push(`purpose=${d.purpose}`);
     return `  ${parts.join(" | ")}`;
   });
-  const chosen = Number.isFinite(limit) ? rows.slice(-limit) : rows;
+  const chosen = Number.isFinite(limit) ? (limit === 0 ? [] : rows.slice(-limit)) : rows;
   const header = full
     ? `全部溯源(共 ${rows.length} 次${Number.isFinite(limit) ? `,显示最近 ${chosen.length} 次` : ""}):`
     : `简要溯源(最近 ${chosen.length} 次,共 ${rows.length} 次);完整信息用 /aux history full:`;
@@ -314,7 +322,7 @@ export async function handleDebugCommand(service, agent, args) {
     };
   }
   const rows = formatDebugEvents(debugEvents);
-  const chosen = Number.isFinite(limit) ? rows.slice(-limit) : rows;
+  const chosen = Number.isFinite(limit) ? (limit === 0 ? [] : rows.slice(-limit)) : rows;
   return { kind: "success", text: [`AUX debug(${targetLabel},共 ${rows.length} 条,显示最近 ${chosen.length} 条):`, ...chosen.reverse()].join("\n") };
 }
 
@@ -376,6 +384,10 @@ export async function handlePatchCommand(service, json = false) {
   // 新补丁才会真正生效。标记后,`/aux status --json` 会返回 restartRequired。
   if (service !== void 0) {
     service._patchAppliedThisSession = changed;
+    // Record when the patch happened so collectPlatformStatus can treat the
+    // flag as a bounded hint instead of a permanent restartRequired override
+    // (a later rollback/reset should not be masked forever).
+    service._patchAppliedThisSessionAt = changed ? Date.now() : void 0;
     // 同进程内打补丁后不写 aux/platform-status 事件:当前加载的 dsh-session
     // 仍是旧代码,无法正确处理 ignorable 标记;等重启后由启动发布再写入。
     if (changed === false) {

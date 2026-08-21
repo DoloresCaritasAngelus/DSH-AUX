@@ -9,7 +9,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.3.3-blue)
-![Tests](https://img.shields.io/badge/tests-304-brightgreen)
+![Tests](https://img.shields.io/badge/tests-305-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 
@@ -131,7 +131,7 @@ node scripts/doctor.mjs
 
 ### 设置页
 
-Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型。其中 **`compaction` 就是会话压缩模型**——配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。**`skill` 就是技能预审模型**——配置后原生 `skill` 工具调用会先由辅助模型出预审报告。`web_extract` / `web_crawl` 还可单独配置 `maxChars`(页面字符预算,默认 32000)。每个任务还可选「思考档位」,选项来自当前 provider/model 支持的 `reasoning.efforts`,不传则沿用 provider 默认。设置页按「工具任务 / 桥接任务 / 子代理 / 全局 / 平台开关」分组折叠,并支持中英双语跟随 DSH 语言。在「平台开关」中可为每个工具/桥接选择 `native` / `aux`(`compat` 为未来预留),并可配置 SKILL 审计模式(`native` / `audit` / `report` / `report-ondemand`)与 debug 记录选项。设置页顶部还有「诊断与修复」面板:每个工具/桥接显示状态点、补丁徽标与不可用原因,补丁缺失时可一键重打;补丁写入后会提示“重启 DSH 后生效”。也可关闭「在对话界面显示辅助模型状态芯片」(关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 不受影响)。
+Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型。其中 **`compaction` 就是会话压缩模型**——配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。**`skill` 就是技能预审模型**——配置后原生 `skill` 工具调用会先由辅助模型出预审报告。`web_extract` / `web_crawl` 还可单独配置 `maxChars`(页面字符预算,默认 32000)。每个任务还可选「思考档位」,选项来自当前 provider/model 支持的 `reasoning.efforts`,不传则沿用 provider 默认。设置页按「工具任务 / 桥接任务 / 子代理 / 全局 / 平台开关」分组折叠,并支持中英双语跟随 DSH 语言。在「平台开关」中可为每个工具/桥接选择 `native` / `aux`(`compat` 为未来预留),并可配置 SKILL 审计模式(`native` / `audit` / `report` / `report-ondemand`)与 debug 记录选项。设置页顶部还有「诊断与修复」面板:每个工具/桥接显示状态点、补丁徽标与不可用原因,补丁缺失时可一键重打;补丁写入后会提示“重启 DSH 后生效”。状态数据通过隐藏的 `aux/platform-status` 事件与 `aux-platform` 投影读取(非命令通道,不会在会话里生成 `/aux status --json` 命令卡片)。也可关闭「在对话界面显示辅助模型状态芯片」(关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 不受影响)。
 
 ### 网页提取 (web_extract)
 
@@ -209,14 +209,15 @@ DSH 原生的 `subagent` 工具,以及 `workflow` 批量**并发扇出的 `agent
 aux:
   subagent:
     mode: vision-aware        # native | manual | vision-aware
-    general: { provider: opencode-go, model: glm-5.2 }
-    vision:  { provider: opencode-go, model: kimi-k2.7-code }
+    general: { provider: opencode-go, model: glm-5.2, reasoningEffort: high }   # reasoningEffort 可选
+    vision:  { provider: opencode-go, model: kimi-k2.7-code, reasoningEffort: high }
     includeWorkflow: true      # workflow 的并行 agent() 子代理也走 AUX(默认 true)
     prepareTools: true         # 给子代理注入 vision_analyze 等 AUX 工具作兜底
     visionKeywords: [ "图片", "图像", "截图" ]
     retryVisionWithAux: false  # 实验性:子代理失败后二次派发到 AUX 视觉
 ```
 
+- `general` / `vision` 的 `reasoningEffort` 可选;设置后透传到子代理路由,不传则沿用 provider 默认。
 - `includeWorkflow=false` 时,即使 `mode != native`,`workflow` 的子代理也不拦截(仅 `subagent` 工具生效)。
 - 安装:本地补丁由 `install.sh`(或 `bridge/apply-patch.mjs`)安装;`/aux status` 会显示 `subagent-bridge` / `workflow-bridge` 的当前模式与补丁状态。设计细节见 `SUBAGENT-BRIDGE.md` / `WORKFLOW-BRIDGE.md`。
 
@@ -290,7 +291,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 - **平台**:DSH 0.1.0-rc.6 ~ 0.1.1-rc.1;Node ≥ 20。
 - **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
-- **测试零依赖**:`node --test tests/*.test.js`(304 项;文件清单与基线见 `TESTING.md`)。
+- **测试零依赖**:`node --test tests/*.test.js`(305 项;文件清单与基线见 `TESTING.md`)。
 
 ### 集成组件
 

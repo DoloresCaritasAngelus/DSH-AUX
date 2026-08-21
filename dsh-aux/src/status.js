@@ -10,6 +10,7 @@
  * @module @dolorescaritasangelus/dsh-aux/status
  */
 import { stat } from "node:fs/promises";
+import { performance } from "node:perf_hooks";
 import { resolvePackageFile } from "./bridge-locate.js";
 import { imageBridgeStatus } from "./image-bridge.js";
 import {
@@ -36,6 +37,48 @@ const PATCH_PACKAGES = [
   "dsh-session"
 ];
 
+/**
+ * Precise wall-clock process start from Node's performance origin. This is
+ * more reliable than `Date.now() - Math.round(process.uptime() * 1000)` for
+ * deciding whether a patched file changed after this process started.
+ */
+const PROCESS_STARTED_AT_MS = performance.timeOrigin;
+
+/**
+ * Small mtime tolerance for filesystems with coarse timestamp granularity.
+ * The previous 1s tolerance could hide patches written shortly after boot;
+ * 250ms is enough slack for common filesystems while keeping the check sharp.
+ */
+const RESTART_MTIME_TOLERANCE_MS = 250;
+
+/**
+ * How long the same-process patch hint remains authoritative when mtime is
+ * ambiguous. `/aux patch` stores `_patchAppliedThisSessionAt`; after this
+ * window the file mtime check is the source of truth so a stale flag cannot
+ * mask a later rollback/reset forever.
+ */
+const PATCH_APPLIED_HINT_TOLERANCE_MS = 5000;
+
+/** Serializes platform-status publishes per service instance. */
+const platformPublishQueues = new WeakMap();
+
+/** Monotonic per-service publish sequence for status snapshots. */
+const platformPublishSeqs = new WeakMap();
+
+function nextPlatformPublishSeq(service) {
+  const next = (platformPublishSeqs.get(service) ?? 0) + 1;
+  platformPublishSeqs.set(service, next);
+  return next;
+}
+
+/** Queue one status publish behind all previous publishes for the same service. */
+function enqueuePlatformPublish(service, task) {
+  const previous = platformPublishQueues.get(service) ?? Promise.resolve();
+  const run = previous.then(task, task);
+  platformPublishQueues.set(service, run.catch(() => {}));
+  return run;
+}
+
 /** All candidate on-disk paths for patched DSH files. */
 function patchTargetPaths() {
   const paths = [];
@@ -53,11 +96,11 @@ function patchTargetPaths() {
  * new patch code to take effect.
  */
 async function anyPatchFileNewerThanProcessStart() {
-  const startedAt = Date.now() - Math.round(process.uptime() * 1000);
+  const startedAt = PROCESS_STARTED_AT_MS;
   for (const target of patchTargetPaths()) {
     try {
       const info = await stat(target);
-      if (info.mtimeMs > startedAt + 1000) return true;
+      if (info.mtimeMs > startedAt + RESTART_MTIME_TOLERANCE_MS) return true;
     } catch {
       /* candidate not present; try next */
     }
@@ -202,16 +245,23 @@ function skillBridgeStatusItem(service, status) {
  * @returns {Promise<object>} JSON-safe status object.
  */
 export async function collectPlatformStatus(service) {
-  const [image, sub, workflow, skill, events, restartRequired] = await Promise.all([
+  const [image, sub, workflow, skill, events, fileRestartRequired] = await Promise.all([
     imageBridgeStatus(),
     subagentBridgeStatus(),
     workflowBridgeStatus(),
     skillBridgeStatus(),
     sessionEventsSupported(service),
-    service._patchAppliedThisSession === true
-      ? Promise.resolve(true)
-      : anyPatchFileNewerThanProcessStart()
+    anyPatchFileNewerThanProcessStart()
   ]);
+  // A same-process patch is a hint, not a permanent override. If the mtime
+  // check later says no patched file changed after boot (e.g. a rollback that
+  // restored original timestamps), the stale flag should not keep reporting
+  // restartRequired forever.
+  const patchAppliedAt = service._patchAppliedThisSessionAt ?? Date.now();
+  const patchAppliedHint =
+    service._patchAppliedThisSession === true &&
+    Date.now() - patchAppliedAt < PATCH_APPLIED_HINT_TOLERANCE_MS;
+  const restartRequired = fileRestartRequired || patchAppliedHint;
 
   const items = [];
   for (const key of TOOL_KEYS) items.push(toolStatus(service, key));
@@ -274,29 +324,53 @@ export async function collectPlatformStatus(service) {
 }
 
 /**
- * Publish the current platform status to one session as a hidden,
- * ignorable `aux/platform-status` event. The `aux-platform` projection folds
- * this event, so the settings page can read the snapshot through
- * `sessions.history` without executing a slash command.
+ * Collect one status snapshot, stamp it with a monotonic sequence, and record
+ * it to the given sessions. All errors are swallowed: status publishing must
+ * never break session lifecycle.
  */
-export async function publishPlatformStatusToSession(service, session) {
+async function publishStatusSnapshot(service, sessions) {
   // 同进程内刚打过补丁时,当前 dsh-session 仍是旧代码,不能写需要 ignorable
   // 标记的新事件;等重启后由启动发布再写入。
   if (service._patchAppliedThisSession === true) return;
   try {
     const status = await collectPlatformStatus(service);
-    await recordPlatformEvent(service, session, status);
+    status.publishSeq = nextPlatformPublishSeq(service);
+    await Promise.all(
+      sessions.map((session) => recordPlatformEvent(service, session, status).catch(() => {}))
+    );
   } catch {
     /* status publishing must never break session lifecycle */
   }
 }
 
 /**
+ * Publish the current platform status to one session as a hidden,
+ * ignorable `aux/platform-status` event. The `aux-platform` projection folds
+ * this event, so the settings page can read the snapshot through
+ * `sessions.history` without executing a slash command.
+ *
+ * Publishes are serialized per service: a slower/older `collectPlatformStatus`
+ * cannot append after a newer snapshot, which would otherwise let the
+ * projection regress to stale data. Each snapshot also carries a monotonic
+ * `publishSeq` for consumers that want to order/ignore snapshots.
+ */
+export async function publishPlatformStatusToSession(service, session) {
+  if (session === void 0) return Promise.resolve();
+  return enqueuePlatformPublish(service, () => publishStatusSnapshot(service, [session]));
+}
+
+/**
  * Publish the current platform status to every attached session. Called on
  * service start, settings changes, and after patch runs so the settings page
  * always has a fresh projection to read.
+ *
+ * The per-service queue also coalesces the fire-and-forget call sites in
+ * index.js/commands.js into ordered snapshots, so an older publish cannot land
+ * after a newer one in the session log.
  */
 export async function publishPlatformStatus(service) {
-  const sessions = service.ctx?.sessions?.list?.() ?? [];
-  await Promise.all(sessions.map((session) => publishPlatformStatusToSession(service, session)));
+  return enqueuePlatformPublish(service, () => {
+    const sessions = service.ctx?.sessions?.list?.() ?? [];
+    return publishStatusSnapshot(service, sessions);
+  });
 }

@@ -48,7 +48,7 @@ import {
   projectSettings,
   validateAuxSettings
 } from "./config.js";
-import { AuxCallError, finishError, recordAuxEvent, recordDebugEvent, sessionPatchCandidates } from "./events.js";
+import { AuxCallError, finishError, recordAuxEvent, recordDebugEvent, redactDebugData, sessionPatchCandidates } from "./events.js";
 import { syncAuxPlatformProjection, syncAuxStatusProjection } from "./projection.js";
 import { publishPlatformStatus, publishPlatformStatusToSession } from "./status.js";
 import {
@@ -77,6 +77,15 @@ function truncateForDebug(value, max) {
   }
   if (text.length > max) return text.slice(0, max) + "…[truncated]";
   return text;
+}
+
+/**
+ * Prepare one fullToolTrace field: redact first (so truncation cannot split a
+ * secret pattern), then bound the stored size.
+ */
+function debugField(service, value, max) {
+  const redacted = service.debugConfig?.redactSecrets === false ? value : redactDebugData(value);
+  return truncateForDebug(redacted, max);
 }
 
 /**
@@ -469,8 +478,8 @@ export class AuxLlmService extends Service {
               ok: true,
               provider: candidate.provider,
               model: candidate.model,
-              input: truncateForDebug(request.messages, max),
-              output: truncateForDebug(output, max),
+              input: debugField(this, request.messages, max),
+              output: debugField(this, output, max),
               purpose: request.purpose,
               reasoningEffort: request.reasoningEffort ?? definition.reasoningEffort,
               durationMs: Date.now() - startedAt
@@ -509,9 +518,9 @@ export class AuxLlmService extends Service {
           ok: false,
           provider: attempts[0]?.provider ?? "",
           model: attempts[0]?.model ?? "",
-          input: truncateForDebug(request.messages, max),
-          error: truncateForDebug(lastError?.message ?? String(lastError ?? ""), max),
-          attempts: truncateForDebug(attempts.map((a) => ({ provider: a.provider, model: a.model, kind: a.kind, error: a.error?.message })), max),
+          input: debugField(this, request.messages, max),
+          error: debugField(this, lastError?.message ?? String(lastError ?? ""), max),
+          attempts: debugField(this, attempts.map((a) => ({ provider: a.provider, model: a.model, kind: a.kind, error: a.error?.message })), max),
           purpose: request.purpose,
           reasoningEffort: request.reasoningEffort ?? definition.reasoningEffort,
           durationMs: Date.now() - startedAt

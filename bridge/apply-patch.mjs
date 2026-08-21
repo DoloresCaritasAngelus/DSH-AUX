@@ -33,7 +33,7 @@
 import { readFile, writeFile, copyFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { deployedFile, guardTarget } from "./target.js";
 
@@ -148,18 +148,51 @@ const TARGETS = [
 
 function log(msg) { console.log(`[dsh-image-bridge] ${msg}`); }
 
+// Keep one backup per physical file for the lifetime of one apply-patch run.
+// dsh-host-apiproxy appears in multiple TARGETS; without this, the second
+// target in the same second could overwrite the first backup with an already
+// patched file and make --rollback unable to restore the original.
+const backupsByFile = new Map();
+
 function syntaxCheck(file, label) {
   try {
     execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
     log(`${label} 语法检查通过`);
+    return true;
   } catch (error) {
     log(`${label} 语法检查失败: ${error.stderr?.toString() ?? error.message}`);
     process.exitCode = 1;
+    return false;
   }
 }
 
+async function backupTarget(file, backupPrefix, label) {
+  const existing = backupsByFile.get(file);
+  if (existing !== void 0) return existing;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 23);
+  let bak = join(dirname(file), `${backupPrefix}${stamp}`);
+  let suffix = 0;
+  while (existsSync(bak)) {
+    suffix += 1;
+    bak = join(dirname(file), `${backupPrefix}${stamp}-${suffix}`);
+  }
+  await copyFile(file, bak);
+  backupsByFile.set(file, bak);
+  log(`${label} 备份: ${bak}`);
+  return bak;
+}
+
+async function restoreBackup(file, bak, label) {
+  if (bak === void 0) return;
+  await copyFile(bak, file);
+  log(`${label} 已回滚: ${file} <- ${basename(bak)}`);
+}
+
+const rolledBackFiles = new Set();
+
 async function rollbackOne(target) {
   const file = target.file;
+  if (rolledBackFiles.has(file)) { log(`${target.label} 同文件已回滚,跳过: ${file}`); return; }
   if (!existsSync(file)) { log(`${target.label} 不存在,跳过回滚`); return; }
   const dir = dirname(file);
   const baks = (await readdir(dir)).filter((f) => f.startsWith(target.backupPrefix) && !f.includes(".node"));
@@ -167,6 +200,7 @@ async function rollbackOne(target) {
   if (baks.length === 0) { log(`${target.label} 无备份可回滚`); return; }
   const bak = join(dir, baks[0]);
   await copyFile(bak, file);
+  rolledBackFiles.add(file);
   log(`${target.label} 已回滚: ${file} <- ${baks[0]}`);
   syntaxCheck(file, target.label);
 }
@@ -185,29 +219,38 @@ async function applyOne(target, dryRun) {
     }
     if (state.action === "skip") {
       if (applied > 0) {
-        await writeFile(file, data);
+        try {
+          await writeFile(file, data);
+        } catch (error) {
+          log(`${target.label} 写盘失败: ${error?.message ?? error}`);
+          await restoreBackup(file, bak, target.label);
+          process.exitCode = 1;
+          return;
+        }
         log(`${target.label} 已打补丁(${applied} 步): ${file}`);
-        syntaxCheck(file, target.label);
+        if (!syntaxCheck(file, target.label)) {
+          await restoreBackup(file, bak, target.label);
+          log(`${target.label} 语法检查失败,已恢复备份`);
+        }
       } else {
         log(`${target.label} 已是 v2,跳过: ${file}`);
       }
       return;
     }
     if (dryRun) { log(`[dry-run] ${target.label} 可从 ${state.name} 升级: ${file}`); return; }
-    if (bak === void 0) {
-      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      bak = join(dirname(file), `${target.backupPrefix}${stamp}`);
-      await copyFile(file, bak);
-      log(`${target.label} 备份: ${bak}`);
-    }
+    if (bak === void 0) bak = await backupTarget(file, target.backupPrefix, target.label);
     const patched = data.replace(state.block.trim(), (state.replacement ?? target.patched).trim());
     if (patched === data) {
       log(`${target.label} ${state.name} 步骤块未命中,停止推进(避免假成功空转)`);
+      if (applied > 0 || bak !== void 0) {
+        await restoreBackup(file, bak, target.label);
+        log(`${target.label} 已回滚部分补丁`);
+      }
       break;
     }
     if (!patched.includes(target.mark)) {
       log(`${target.label} 补丁块未生效(替换失败),回滚`);
-      await copyFile(bak, file);
+      await restoreBackup(file, bak, target.label);
       process.exit(1);
     }
     data = patched;
@@ -215,9 +258,19 @@ async function applyOne(target, dryRun) {
     log(`${target.label} 已应用 ${state.name} 步骤`);
   }
   if (applied > 0) {
-    await writeFile(file, data);
+    try {
+      await writeFile(file, data);
+    } catch (error) {
+      log(`${target.label} 写盘失败: ${error?.message ?? error}`);
+      await restoreBackup(file, bak, target.label);
+      process.exitCode = 1;
+      return;
+    }
     log(`${target.label} 已打补丁(${applied} 步): ${file}`);
-    syntaxCheck(file, target.label);
+    if (!syntaxCheck(file, target.label)) {
+      await restoreBackup(file, bak, target.label);
+      log(`${target.label} 语法检查失败,已恢复备份`);
+    }
   } else {
     log(`${target.label} 跳过(无可应用步骤)`);
   }

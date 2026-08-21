@@ -57,10 +57,45 @@ export function assertSafeTarget(file) {
   return file;
 }
 
+/**
+ * Reject any target inside a @deepseek-ai package's `lib/` directory that is
+ * not a `.js` file. This is used by self-heal for known-event-types.js as
+ * well as lib/index.js.
+ * @param file absolute path to validate
+ * @returns the same path (for chaining)
+ */
+export function assertSafePackageFile(file) {
+  const normalized = normalize(file);
+  const parts = normalized.split(sep);
+  const nmIndex = parts.lastIndexOf("node_modules");
+  if (nmIndex < 0 || parts[nmIndex + 1] !== "@deepseek-ai") {
+    throw new Error(
+      `unsafe patch target: resolved path is not inside node_modules/@deepseek-ai (${file})`
+    );
+  }
+  const libIndex = parts.indexOf("lib", nmIndex + 3);
+  if (libIndex < 0 || !normalized.endsWith(".js")) {
+    throw new Error(
+      `unsafe patch target: expected .../lib/*.js (${file})`
+    );
+  }
+  return file;
+}
+
 /** Validate a target before use; on failure print and exit 1. */
 export function guardTarget(file, label) {
   try {
     return assertSafeTarget(file);
+  } catch (error) {
+    console.error(`[${label}] ${error.message}`);
+    process.exit(1);
+  }
+}
+
+/** Validate a package lib file (including lib/types/*.js) before use. */
+export function guardPackageFile(file, label) {
+  try {
+    return assertSafePackageFile(file);
   } catch (error) {
     console.error(`[${label}] ${error.message}`);
     process.exit(1);

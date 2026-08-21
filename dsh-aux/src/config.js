@@ -148,15 +148,15 @@ export function projectSettings(settings) {
   const subagent = {
     mode: rawSub.mode ?? "native",
     includeWorkflow: rawSub.includeWorkflow !== false,
+    prepareTools: rawSub.prepareTools !== false,
+    retryVisionWithAux: rawSub.retryVisionWithAux === true,
+    visionKeywords: Array.isArray(rawSub.visionKeywords) ? [...rawSub.visionKeywords] : [],
     ...(rawSub.general !== void 0 && (rawSub.general.provider !== void 0 || rawSub.general.model !== void 0)
       ? { general: { ...rawSub.general } }
       : {}),
     ...(rawSub.vision !== void 0 && (rawSub.vision.provider !== void 0 || rawSub.vision.model !== void 0)
       ? { vision: { ...rawSub.vision } }
-      : {}),
-    ...(rawSub.prepareTools !== void 0 ? { prepareTools: rawSub.prepareTools } : {}),
-    ...(rawSub.retryVisionWithAux !== void 0 ? { retryVisionWithAux: rawSub.retryVisionWithAux } : {}),
-    ...(Array.isArray(rawSub.visionKeywords) ? { visionKeywords: [...rawSub.visionKeywords] } : {})
+      : {})
   };
   const defaultEnabled = {
     vision_analyze: "aux",

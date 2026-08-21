@@ -8,8 +8,11 @@
  * The page is bilingual (zh/en) and follows the DSH locale service when
  * present.
  *
- * The chip (conversation.input.left seat) renders the latest auxiliary call
- * from the `aux-status` projection.
+ * The chip (conversation.input.left seat) renders the latest auxiliary call.
+ * It uses the `aux-status` projection for presence and falls back to it when
+ * history is unavailable; when session history is readable it picks the most
+ * recent `aux/llm-call` event so per-task projection order cannot hide the
+ * true latest call.
  *
  * Bundle format mirrors the shipped client plugins: `window.__ModuleLoader__`
  * factory returning { apply, inject }.
@@ -477,7 +480,7 @@ window.__ModuleLoader__.load({
 						const items = listResponse?.result?.value?.items ?? [];
 						if (items.length === 0) throw new Error(t("status.noSession"));
 						for (const item of items) {
-							const historyResponse = await api.sessions.history({ sessionId: item.sessionId, limit: 1 });
+							const historyResponse = await api.sessions.history({ sessionId: item.sessionId, maxMessages: 1 });
 							const projections = historyResponse?.result?.value?.projections;
 							const data = projections?.values?.["aux-platform"];
 							if (data && typeof data === "object" && Array.isArray(data.items)) return data;
@@ -645,6 +648,7 @@ window.__ModuleLoader__.load({
 			};
 			const runPatch = (sourceKey) => {
 				setPatching(true);
+				setActiveIssueKey(sourceKey ?? null);
 				setPatchStatus(null);
 				Promise.resolve()
 					.then(() => runAuxCommand("/aux patch --json"))
@@ -749,20 +753,23 @@ window.__ModuleLoader__.load({
 			};
 			const group = (id, title, desc, ...children) => {
 				const open = openGroups[id] === true;
+				const bodyId = "ax-group-body-" + id;
+				const titleId = "ax-group-title-" + id;
 				return react.createElement("div", { id: "ax-group-" + id, className: "ax-group" + (open ? " ax-group-open" : "") },
 					react.createElement("button", {
 						type: "button",
 						className: "ax-group-header",
 						"aria-expanded": open,
+						"aria-controls": bodyId,
 						onClick: () => setOpenGroups((s) => ({ ...s, [id]: !s[id] }))
 					},
 						react.createElement("span", { className: "ax-group-headText" },
-							react.createElement("span", { className: "ax-group-title" }, title),
+							react.createElement("span", { id: titleId, className: "ax-group-title" }, title),
 							react.createElement("span", { className: "ax-group-desc" }, desc)
 						),
 						react.createElement("span", { className: "ax-group-chevron" + (open ? " ax-group-chevronOpen" : "") }, "▾")
 					),
-					open ? react.createElement("div", { className: "ax-group-body" }, ...children) : null
+					react.createElement("div", { id: bodyId, className: "ax-group-body", role: "region", "aria-labelledby": titleId, hidden: !open }, ...children)
 				);
 			};
 			const sub = draft?.subagent ?? {};
@@ -890,7 +897,7 @@ window.__ModuleLoader__.load({
 			const platformSelect = (key, label) => {
 				const meta = statusByKey[key] ?? null;
 				const baseState = meta?.state ?? "unknown";
-				const state = patching && meta?.action === "patch" && baseState === "unavailable" ? "fixing" : baseState;
+				const state = patching && activeIssueKey === key && meta?.action === "patch" && baseState === "unavailable" ? "fixing" : baseState;
 				const stateText = t("status.state." + state);
 				const reason = meta ? t("status.reason." + meta.reason) : stateText;
 				const patchLabel = meta?.patch ? t("status.patch." + meta.patch) : null;
@@ -978,7 +985,8 @@ window.__ModuleLoader__.load({
 							...issues.map((issue) => {
 								const label = issue.key;
 								const active = activeIssueKey === issue.key;
-								const dotClass = patching && issue.action === "patch" ? "ax-dot-fixing" : "ax-dot-unavailable";
+								const activePatch = patching && activeIssueKey === issue.key && issue.action === "patch";
+								const dotClass = activePatch ? "ax-dot-fixing" : "ax-dot-unavailable";
 								return react.createElement("div", { key: issue.key, id: "ax-issue-" + issue.key, tabIndex: -1, className: "ax-status-issue" + (active ? " ax-status-issue-active" : "") },
 									react.createElement("span", { className: "ax-dot " + dotClass, "aria-hidden": "true" }),
 									react.createElement("div", { className: "ax-status-issue-text" },
@@ -990,7 +998,7 @@ window.__ModuleLoader__.load({
 												: null
 									),
 									issue.action === "patch"
-										? react.createElement("button", { type: "button", className: "ax-repair-button", disabled: patching, onClick: () => { setActiveIssueKey(issue.key); runPatch(issue.key); } }, patching ? t("settings.patching") : t("status.action.patch"))
+										? react.createElement("button", { type: "button", className: "ax-repair-button", disabled: patching, onClick: () => { setActiveIssueKey(issue.key); runPatch(issue.key); } }, activePatch ? t("settings.patching") : t("status.action.patch"))
 										: issue.action === "configure"
 											? react.createElement("button", { type: "button", className: "ax-repair-button", onClick: () => openConfig(issue.key) }, t("status.action.configure"))
 											: null
@@ -1067,8 +1075,9 @@ window.__ModuleLoader__.load({
 						platformSelect("compactionBridge", "compactionBridge"),
 						platformSelect("skillAudit", "skillAudit"),
 						react.createElement("div", { className: "ax-row" },
-							react.createElement("label", null, t("skill.mode.label")),
+							react.createElement("label", { htmlFor: "ax-skill-mode" }, t("skill.mode.label")),
 							react.createElement("select", {
+								id: "ax-skill-mode",
 								value: draft?.skill?.mode ?? "audit",
 								disabled: false,
 								onChange: (e) => setSkillMode(e.target.value)
@@ -1083,8 +1092,9 @@ window.__ModuleLoader__.load({
 					),
 					switchRow(t("debug.fullToolTrace"), draft?.debug?.fullToolTrace === true, false, (e) => setDebug("fullToolTrace", e.target.checked)),
 					react.createElement("div", { className: "ax-row" },
-						react.createElement("label", null, t("debug.maxDebugEventBytes")),
+						react.createElement("label", { htmlFor: "ax-debug-maxDebugEventBytes" }, t("debug.maxDebugEventBytes")),
 						react.createElement("input", {
+							id: "ax-debug-maxDebugEventBytes",
 							type: "number", min: "1024", value: draft?.debug?.maxDebugEventBytes ?? 65536, disabled: false,
 							onChange: (e) => setDebug("maxDebugEventBytes", e.target.value === "" ? "" : Number(e.target.value))
 						})
@@ -1106,22 +1116,84 @@ window.__ModuleLoader__.load({
 
 		/**
 		 * Composer status chip: latest auxiliary call from the `aux-status`
-		 * projection. Renders only while the projection key exists.
+		 * projection. The projection is a per-task snapshot, not a
+		 * chronological log, so the chip also reads `aux/llm-call` events from
+		 * session history and uses the most recent event when available.
+		 * Falls back to the projection's last-inserted task if history is not
+		 * available (e.g. older hosts or a failed history read).
 		 */
 		function AuxStatusChip(props) {
 			const t = (props && props.t) || __t;
 			useLocaleRevision();
 			const projection = props.useProjection("aux-status");
+			const [historyCall, setHistoryCall] = react.useState(null);
+			const historyRequestId = react.useRef(0);
+			const loadLatestCall = react.useCallback(() => {
+				if (!props.api || !props.sessionId) return;
+				const requestId = ++historyRequestId.current;
+				setHistoryCall(null);
+				let beforeSeq;
+				const pageSize = 50;
+				Promise.resolve()
+					.then(async () => {
+						while (true) {
+							const response = await props.api.sessions.history({
+								sessionId: props.sessionId,
+								maxMessages: pageSize,
+								...(beforeSeq === void 0 ? {} : { beforeSeq })
+							});
+							if (requestId !== historyRequestId.current) return;
+							if (!response.result.ok) throw new Error(response.result.error.message);
+							const value = response.result.value;
+							const events = Array.isArray(value.events) ? value.events : [];
+							for (let i = events.length - 1; i >= 0; i--) {
+								const entry = events[i];
+								const event = entry && entry.event;
+								if (event && event.type === "aux/llm-call" && event.data && typeof event.data === "object") {
+									if (requestId === historyRequestId.current) {
+										const data = event.data;
+										setHistoryCall({
+											task: String(data.task ?? ""),
+											ok: data.ok === true,
+											fallbackUsed: data.fallbackUsed === true,
+											durationMs: typeof data.durationMs === "number" ? data.durationMs : 0,
+											seq: event.seq,
+											time: event.time
+										});
+									}
+									return;
+								}
+							}
+							if (value.hasMore !== true || events.length === 0) break;
+							const nextBeforeSeq = events[0].event.seq;
+							if (beforeSeq !== void 0 && nextBeforeSeq >= beforeSeq) break;
+							beforeSeq = nextBeforeSeq;
+						}
+						if (requestId === historyRequestId.current) setHistoryCall(null);
+					})
+					.catch(() => {
+						// History is only an enhancement; fall back to the projection below.
+					});
+			}, [props.api, props.sessionId]);
+			react.useEffect(() => {
+				historyRequestId.current++;
+				setHistoryCall(null);
+			}, [props.sessionId]);
+			react.useEffect(() => {
+				if (projection !== void 0) loadLatestCall();
+			}, [loadLatestCall, projection]);
 			if (projection === void 0) return null;
 			const tasks = projection.tasks ?? {};
 			const entries = Object.values(tasks);
-			if (entries.length === 0) return null;
-			const last = entries[entries.length - 1];
+			const projectionLast = entries.length === 0 ? null : entries[entries.length - 1];
+			const last = historyCall && historyCall.task ? historyCall : projectionLast;
+			if (last === null || last === void 0) return null;
 			const ok = last.ok === true;
 			const chipKey = "chip." + last.task;
 			const taskLabel = (zhDict[chipKey] || enDict[chipKey]) ? t(chipKey) : last.task;
 			const label = taskLabel + (ok ? " ✓" : " ✗");
-			const title = `aux ${last.task}: ${ok ? t("chip.success") : t("chip.fail")} ${last.durationMs}ms${last.fallbackUsed ? t("chip.fallback") : ""}`;
+			const durationText = typeof last.durationMs === "number" ? last.durationMs + "ms" : "-";
+			const title = `aux ${last.task}: ${ok ? t("chip.success") : t("chip.fail")} ${durationText}${last.fallbackUsed ? t("chip.fallback") : ""}`;
 			return react.createElement("span", { className: "ax-wrap", title }, react.createElement("span", {
 				className: "ax-chip " + (ok ? "ax-ok" : "ax-fail"),
 				"aria-label": title
@@ -1163,7 +1235,8 @@ window.__ModuleLoader__.load({
 			ctx.slots.inject("conversation.input.left", () => ctx.slots.register({
 				name: "conversation.input.left",
 				id: "aux-status",
-				locale: NS
+				locale: NS,
+				inject: () => ({ api: connection.api })
 			}, AuxStatusChip));
 		}
 		exports.apply = apply;

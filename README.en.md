@@ -9,7 +9,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.3.3-blue)
-![Tests](https://img.shields.io/badge/tests-304-brightgreen)
+![Tests](https://img.shields.io/badge/tests-305-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 
@@ -132,7 +132,7 @@ node scripts/doctor.mjs
 
 ### Settings
 
-Web → Settings → Auxiliary Models. Configure a model per `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. **`skill` is the skill pre-audit model** — once configured, native `skill` calls get an auxiliary pre-audit report. `web_extract` / `web_crawl` also expose `maxChars` (page character budget, default 32000). Each task can also select a "reasoning effort"; options come from the current provider/model's `reasoning.efforts`, and omitting it preserves the provider default. The settings page is grouped into collapsible "Tool Tasks / Bridge Tasks / Subagents / Global / Platform Switches" sections and is bilingual (zh/en) following the DSH language. In "Platform Switches" you can choose `native` / `aux` per tool/bridge (`compat` is reserved for the future), configure SKILL audit mode (`native` / `audit` / `report` / `report-ondemand`), and debug recording options. The settings page also has a "Diagnostics & Repair" panel at the top: each tool/bridge shows a status dot, patch badge, and unavailable reason, with one-click patch when a patch is missing; after writing patches it reminds you to restart DSH for them to take effect. You can also turn off "Show auxiliary model status chip in conversation UI" (the `aux-status` projection is then no longer exposed to Web/third-party readers; `/aux status` still works).
+Web → Settings → Auxiliary Models. Configure a model per `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. **`skill` is the skill pre-audit model** — once configured, native `skill` calls get an auxiliary pre-audit report. `web_extract` / `web_crawl` also expose `maxChars` (page character budget, default 32000). Each task can also select a "reasoning effort"; options come from the current provider/model's `reasoning.efforts`, and omitting it preserves the provider default. The settings page is grouped into collapsible "Tool Tasks / Bridge Tasks / Subagents / Global / Platform Switches" sections and is bilingual (zh/en) following the DSH language. In "Platform Switches" you can choose `native` / `aux` per tool/bridge (`compat` is reserved for the future), configure SKILL audit mode (`native` / `audit` / `report` / `report-ondemand`), and debug recording options. The settings page also has a "Diagnostics & Repair" panel at the top: each tool/bridge shows a status dot, patch badge, and unavailable reason, with one-click patch when a patch is missing; after writing patches it reminds you to restart DSH for them to take effect. Status data is read through the hidden `aux/platform-status` event and the `aux-platform` projection (a non-command channel, so it does not produce `/aux status --json` command cards in the session). You can also turn off "Show auxiliary model status chip in conversation UI" (the `aux-status` projection is then no longer exposed to Web/third-party readers; `/aux status` still works).
 
 ### web_extract
 
@@ -210,14 +210,15 @@ DSH's native `subagent` tool, as well as the **concurrently fanned-out `agent()`
 aux:
   subagent:
     mode: vision-aware        # native | manual | vision-aware
-    general: { provider: opencode-go, model: glm-5.2 }
-    vision:  { provider: opencode-go, model: kimi-k2.7-code }
+    general: { provider: opencode-go, model: glm-5.2, reasoningEffort: high }   # reasoningEffort is optional
+    vision:  { provider: opencode-go, model: kimi-k2.7-code, reasoningEffort: high }
     includeWorkflow: true      # workflow's parallel agent() children also route via AUX (default true)
     prepareTools: true         # inject AUX tools (vision_analyze etc.) as a fallback for subagents
     visionKeywords: [ "图片", "图像", "截图" ]
     retryVisionWithAux: false  # experimental: re-dispatch a failed subagent to the AUX vision route
 ```
 
+- `reasoningEffort` for `general` / `vision` is optional; when set it is forwarded to the subagent route, otherwise the provider default is used.
 - `includeWorkflow=false` means that even with `mode != native`, `workflow` children are not intercepted (only the `subagent` tool is).
 - Installation: the local patches come with `install.sh` (or `bridge/apply-patch.mjs`); `/aux status` shows `subagent-bridge` / `workflow-bridge` mode + patch state. Design: `SUBAGENT-BRIDGE.md` / `WORKFLOW-BRIDGE.md`.
 
@@ -291,7 +292,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 - **Platform**: DSH 0.1.0-rc.6 ~ 0.1.1-rc.1; Node ≥ 20.
 - **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages; no `dependencies`.
-- **Zero-dependency tests**: `node --test tests/*.test.js` (304 total; see `TESTING.md` for the file inventory and baseline).
+- **Zero-dependency tests**: `node --test tests/*.test.js` (305 total; see `TESTING.md` for the file inventory and baseline).
 
 ### Integrated Components
 
