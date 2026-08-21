@@ -9,8 +9,16 @@ import type { SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh
 
 /** Standard slot props supplied by the settings.section shell. */
 export interface AuxSettingsPageProps {
-    /** Settings wire face (settings.describe / settings.mutate). */
+    /** Settings wire face (settings.describe / settings.mutate / sessions read). */
     api: {
+        sessions: {
+            list(request: {}): Promise<{
+                result: { ok: true; value: { items: { sessionId: string }[] } } | { ok: false; error: { message: string } };
+            }>;
+            history(request: { sessionId: string; limit?: number }): Promise<{
+                result: { ok: true; value: { projections?: { values?: Record<string, unknown> } } } | { ok: false; error: { message: string } };
+            }>;
+        };
         settings: {
             describe(request: {}): Promise<{
                 result: { ok: true; value: { writable: boolean; namespaces: SettingsNamespaceView[] } } | { ok: false; error: { message: string } };

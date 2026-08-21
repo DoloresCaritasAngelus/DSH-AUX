@@ -169,6 +169,8 @@ window.__ModuleLoader__.load({
 			"status.forcedNative": "补丁未装,当前按 native 处理",
 			"status.error": "无法获取平台状态: ",
 			"status.commandFailed": "状态命令失败",
+			"status.noSession": "没有可用会话,无法读取状态",
+			"status.notReady": "平台状态尚未生成,请稍后重试",
 			"status.invalid": "状态数据异常,请刷新重试",
 			"status.core": "🔒 核心保护",
 			"status.coreDetail": "图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计(不可关闭)",
@@ -295,6 +297,8 @@ window.__ModuleLoader__.load({
 			"status.forcedNative": "Patch missing; using native",
 			"status.error": "Failed to load status: ",
 			"status.commandFailed": "Status command failed",
+			"status.noSession": "No available session to read status",
+			"status.notReady": "Platform status not generated yet; retry later",
 			"status.invalid": "Status data is invalid; refresh to retry",
 			"status.core": "🔒 Core protections",
 			"status.coreDetail": "Image lifecycle / session image safety / failure cooldown / event audit (cannot be disabled)",
@@ -460,13 +464,21 @@ window.__ModuleLoader__.load({
 				setStatusLoading(true);
 				setStatusError(null);
 				Promise.resolve()
-					.then(() => runAuxCommand("/aux status --json"))
-					.then((result) => {
+					.then(async () => {
+						// 非命令通道:通过 sessions.history 读取 aux-platform 投影,
+						// 不执行 /aux status --json,避免在会话里产生命令卡片。
+						const listResponse = await api.sessions.list({});
+						const items = listResponse?.result?.value?.items ?? [];
+						if (items.length === 0) throw new Error(t("status.noSession"));
+						const sessionId = items[0].sessionId;
+						const historyResponse = await api.sessions.history({ sessionId, limit: 1 });
+						const projections = historyResponse?.result?.value?.projections;
+						const data = projections?.values?.["aux-platform"];
+						if (!data || typeof data !== "object") throw new Error(t("status.notReady"));
+						return data;
+					})
+					.then((data) => {
 						if (!alive || !mountedRef.current || requestId !== statusRequestId.current) return;
-						if (result.kind !== "success" || typeof result.text !== "string") {
-							throw new Error(result.text ?? t("status.commandFailed"));
-						}
-						const data = JSON.parse(result.text);
 						setStatus(data);
 						setActiveIssueKey((current) =>
 							current !== null && Array.isArray(data.issues) && data.issues.some((issue) => issue.key === current)
@@ -485,7 +497,7 @@ window.__ModuleLoader__.load({
 						}
 					});
 				return () => { alive = false; };
-			}, [runAuxCommand]);
+			}, [api, t]);
 			if (state.status === "loading") return react.createElement("div", { className: "ax-section" }, t("settings.loading"));
 			if (state.status === "error") return react.createElement("div", { className: "ax-section" }, react.createElement("span", { className: "ax-error" }, t("settings.loadError") + state.error));
 			const tasks = ["vision", "web_extract", "web_crawl", "compress", "compaction", "skill"];

@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile);
 import { AUX_TASKS, resolvePrimaryRoute } from "./route.js";
 import { gcImages } from "./images/gc.js";
 import { handleMemoryCommand } from "./images/memory.js";
-import { collectPlatformStatus } from "./status.js";
+import { collectPlatformStatus, publishPlatformStatus } from "./status.js";
 import { runVision } from "./tools/vision.js";
 import { runWebExtract } from "./tools/web-extract.js";
 import { runWebCrawl } from "./tools/web-crawl.js";
@@ -375,6 +375,7 @@ export async function handlePatchCommand(service, json = false) {
   // 新补丁才会真正生效。标记后,`/aux status --json` 会返回 restartRequired。
   if (service !== void 0) {
     service._patchAppliedThisSession = changed;
+    publishPlatformStatus(service).catch(() => {});
   }
   if (json) {
     if (verificationError !== void 0) {

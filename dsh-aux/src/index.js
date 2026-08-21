@@ -49,7 +49,8 @@ import {
   validateAuxSettings
 } from "./config.js";
 import { AuxCallError, finishError, recordAuxEvent, recordDebugEvent, sessionPatchCandidates } from "./events.js";
-import { syncAuxStatusProjection } from "./projection.js";
+import { syncAuxPlatformProjection, syncAuxStatusProjection } from "./projection.js";
+import { publishPlatformStatus, publishPlatformStatusToSession } from "./status.js";
 import {
   auxPreStepReminderText,
   auxToolsGuide,
@@ -197,10 +198,12 @@ export class AuxLlmService extends Service {
         this._source = current;
         this._recomputeMerged();
         syncAuxStatusProjection(this);
+        publishPlatformStatus(this).catch(() => {});
       },
       onChange: () => {
         this._recomputeMerged();
         syncAuxStatusProjection(this);
+        publishPlatformStatus(this).catch(() => {});
       },
       validate: validateAuxSettings,
       // The settings page is a first-class capability of this plugin:
@@ -244,6 +247,13 @@ export class AuxLlmService extends Service {
     ctx.inject(["sessionProjections"], (projectionCtx) => {
       this._projectionCtx = projectionCtx;
       syncAuxStatusProjection(this);
+      syncAuxPlatformProjection(this);
+      // Seed the projection for already-attached sessions so the settings
+      // page can read status without executing a slash command.
+      publishPlatformStatus(this).catch(() => {});
+    });
+    ctx.on("session/created", (session) => {
+      publishPlatformStatusToSession(this, session).catch(() => {});
     });
     ctx.inject(["commands"], (commandCtx) => {
       commandCtx.commands.register({

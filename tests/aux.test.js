@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import fsPromises from 'node:fs/promises';
 import { Context } from '@deepseek-ai/cordis';
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic';
-import { AUX_DEBUG_EVENT, projectSettings } from '../dsh-aux/src/config.js';
+import { AUX_DEBUG_EVENT, AUX_PLATFORM_KEY, projectSettings } from '../dsh-aux/src/config.js';
 import AuxLlmService, {
   AUX_CALL_EVENT,
   AUX_SETTINGS_NAMESPACE,
@@ -523,10 +523,12 @@ test('装配: ctx.auxLlm 可用,三工具注册,投影与命令注册', async ()
   assert.ok(ctx.auxLlm instanceof AuxLlmService);
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, ['compress_text', 'vision_analyze', 'web_crawl', 'web_extract']);
-  assert.equal(projections.length, 1);
-  assert.equal(projections[0].key, AUX_STATUS_KEY);
-  assert.deepEqual(projections[0].init(), { tasks: {} });
-  assert.deepEqual(projections[0].view(projections[0].init()), { tasks: {} });
+  assert.equal(projections.length, 2);
+  assert.ok(projections.some((p) => p.key === AUX_STATUS_KEY), '应注册 aux-status 投影');
+  assert.ok(projections.some((p) => p.key === AUX_PLATFORM_KEY), '应注册 aux-platform 投影');
+  const statusProj = projections.find((p) => p.key === AUX_STATUS_KEY);
+  assert.deepEqual(statusProj.init(), { tasks: {} });
+  assert.deepEqual(statusProj.view(statusProj.init()), { tasks: {} });
   assert.equal(commands.length, 1);
   assert.equal(commands[0].name, 'aux');
   // 带参子命令必须声明 input.hint——否则 DSH 客户端 matchEnter 把
@@ -706,20 +708,22 @@ test('投影: aux/llm-call 事件折叠为每任务最近记录', async () => {
   assert.equal(state.tasks.vision.outputChars, void 0);
 });
 
-test('隐私: showStatusChip=false 时注销 aux-status 投影,重新开启后恢复', async () => {
+test('隐私: showStatusChip=false 时注销 aux-status 投影,aux-platform 保留', async () => {
   const { ctx, projections } = await makeHarness();
-  assert.equal(projections.length, 1, '默认应注册 aux-status 投影');
-  assert.equal(projections[0].key, AUX_STATUS_KEY);
+  assert.equal(projections.length, 2, '默认应注册 aux-status 与 aux-platform 投影');
+  assert.ok(projections.some((p) => p.key === AUX_STATUS_KEY));
+  assert.ok(projections.some((p) => p.key === AUX_PLATFORM_KEY));
 
-  // 关闭状态芯片 → 注销投影
+  // 关闭状态芯片 → 注销 aux-status,但 aux-platform 仍保留给设置页
   ctx.auxLlm.showStatusChip = false;
   syncAuxStatusProjection(ctx.auxLlm);
-  assert.equal(projections.length, 0, '关闭后不应暴露 aux-status 投影');
+  assert.equal(projections.length, 1, '关闭后应只剩 aux-platform');
+  assert.equal(projections[0].key, AUX_PLATFORM_KEY);
 
-  // 重新开启 → 重新注册
+  // 重新开启 → 恢复 aux-status
   ctx.auxLlm.showStatusChip = true;
   syncAuxStatusProjection(ctx.auxLlm);
-  assert.equal(projections.length, 1, '重新开启后应恢复 aux-status 投影');
+  assert.equal(projections.length, 2, '重新开启后应恢复 aux-status 投影');
 });
 
 test('投影: DSH 0.1.1-rc.1 新 API 使用 stateSchema/wire', () => {

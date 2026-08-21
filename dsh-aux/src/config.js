@@ -17,8 +17,12 @@ export const AUX_TIMEOUT_CODE = "AUX_TIMEOUT";
 export const AUX_CALL_EVENT = "aux/llm-call";
 /** Session event type recording debug/content-truth details (ignorable, not in model context). */
 export const AUX_DEBUG_EVENT = "aux/debug";
+/** Session event type carrying a full platform-status snapshot (ignorable, non-surface). */
+export const AUX_PLATFORM_EVENT = "aux/platform-status";
 /** Projection key exposing the latest per-task aux call snapshot. */
 export const AUX_STATUS_KEY = "aux-status";
+/** Projection key exposing the latest platform status snapshot for settings UI. */
+export const AUX_PLATFORM_KEY = "aux-platform";
 /** Tool names registered by dsh-aux (hidden from the `minimal` preset). */
 export const AUX_TOOL_NAMES = Object.freeze(["vision_analyze", "web_extract", "web_crawl", "compress_text"]);
 /** Interval (ms) for reconciling the session-to-image ownership map against

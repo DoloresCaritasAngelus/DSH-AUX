@@ -21,7 +21,7 @@ import {
   isCompactionTaskConfigured
 } from "./compaction-bridge.js";
 import { isSkillTaskConfigured, skillBridgeStatus } from "./skill-bridge.js";
-import { sessionEventsSupported } from "./events.js";
+import { recordPlatformEvent, sessionEventsSupported } from "./events.js";
 
 /** Tool keys that do not depend on bridge patches. */
 const TOOL_KEYS = ["vision_analyze", "web_extract", "web_crawl", "compress_text"];
@@ -268,4 +268,29 @@ export async function collectPlatformStatus(service) {
     warnings,
     issues
   };
+}
+
+/**
+ * Publish the current platform status to one session as a hidden,
+ * ignorable `aux/platform-status` event. The `aux-platform` projection folds
+ * this event, so the settings page can read the snapshot through
+ * `sessions.history` without executing a slash command.
+ */
+export async function publishPlatformStatusToSession(service, session) {
+  try {
+    const status = await collectPlatformStatus(service);
+    await recordPlatformEvent(service, session, status);
+  } catch {
+    /* status publishing must never break session lifecycle */
+  }
+}
+
+/**
+ * Publish the current platform status to every attached session. Called on
+ * service start, settings changes, and after patch runs so the settings page
+ * always has a fresh projection to read.
+ */
+export async function publishPlatformStatus(service) {
+  const sessions = service.ctx?.sessions?.list?.() ?? [];
+  await Promise.all(sessions.map((session) => publishPlatformStatusToSession(service, session)));
 }

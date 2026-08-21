@@ -4,7 +4,7 @@
  * @module @dolorescaritasangelus/dsh-aux/projection
  */
 import { z as zodz } from "zod";
-import { AUX_CALL_EVENT, AUX_STATUS_KEY } from "./config.js";
+import { AUX_CALL_EVENT, AUX_PLATFORM_EVENT, AUX_PLATFORM_KEY, AUX_STATUS_KEY } from "./config.js";
 
 const AUX_STATUS_SCHEMA = zodz.object({
   tasks: zodz.record(zodz.object({
@@ -62,6 +62,57 @@ function createAuxStatusProjectionDefinition(registry) {
     schema: AUX_STATUS_SCHEMA,
     view: (state) => state
   };
+}
+
+const AUX_PLATFORM_SCHEMA = zodz.record(zodz.unknown());
+
+function applyAuxPlatform(state, event) {
+  if (event.type === AUX_PLATFORM_EVENT) {
+    return event.data ?? {};
+  }
+  return state;
+}
+
+/**
+ * Build the `aux-platform` projection definition. It carries the latest full
+ * platform-status snapshot for the settings UI; the host publishes hidden
+ * `aux/platform-status` events on status changes so the settings page can
+ * read the projection without executing a slash command.
+ */
+function createAuxPlatformProjectionDefinition(registry) {
+  const base = {
+    key: AUX_PLATFORM_KEY,
+    init: () => ({}),
+    apply: applyAuxPlatform,
+    stateVersion: 1
+  };
+  const isNewProjectionApi = typeof registry?.stateOf === "function";
+  if (isNewProjectionApi) {
+    return {
+      ...base,
+      stateSchema: AUX_PLATFORM_SCHEMA,
+      wire: { viewSchema: AUX_PLATFORM_SCHEMA, view: (state) => state }
+    };
+  }
+  return {
+    ...base,
+    schema: AUX_PLATFORM_SCHEMA,
+    view: (state) => state
+  };
+}
+
+/**
+ * Register or unregister the `aux-platform` projection. It is always exposed
+ * while the plugin is mounted (the settings page needs it); unlike
+ * `aux-status`, it is not gated by `showStatusChip`.
+ */
+export function syncAuxPlatformProjection(service) {
+  if (service._projectionCtx === void 0) return;
+  if (service._auxPlatformProjectionDispose === void 0) {
+    service._auxPlatformProjectionDispose = service._projectionCtx.sessionProjections.register(
+      createAuxPlatformProjectionDefinition(service._projectionCtx.sessionProjections)
+    );
+  }
 }
 
 /**

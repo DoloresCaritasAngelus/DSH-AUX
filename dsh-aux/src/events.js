@@ -4,7 +4,7 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/events
  */
-import { AUX_CALL_EVENT, AUX_DEBUG_EVENT } from "./config.js";
+import { AUX_CALL_EVENT, AUX_DEBUG_EVENT, AUX_PLATFORM_EVENT } from "./config.js";
 import { readPackageFile } from "./bridge-locate.js";
 
 /** One auxiliary call outcome. */
@@ -126,5 +126,25 @@ export async function recordDebugEvent(service, session, data) {
     session.append(AUX_DEBUG_EVENT, clean, void 0, { ignorable: true });
   } catch {
     /* debug logging must never fail the call */
+  }
+}
+
+/**
+ * Log one full platform-status snapshot as an ignorable, non-surface session
+ * event. The settings page reads this through the `aux-platform` projection,
+ * so it never needs to execute a slash command (which would pollute the
+ * conversation with command cards).
+ */
+export async function recordPlatformEvent(service, session, data) {
+  if (session === void 0) return;
+  if (!await sessionEventsSupported(service)) return;
+  try {
+    const clean = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== void 0) clean[key] = value;
+    }
+    session.append(AUX_PLATFORM_EVENT, clean, void 0, { ignorable: true });
+  } catch {
+    /* platform status logging must never fail */
   }
 }
