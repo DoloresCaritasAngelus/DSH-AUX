@@ -474,7 +474,7 @@ window.__ModuleLoader__.load({
 						const historyResponse = await api.sessions.history({ sessionId, limit: 1 });
 						const projections = historyResponse?.result?.value?.projections;
 						const data = projections?.values?.["aux-platform"];
-						if (!data || typeof data !== "object") throw new Error(t("status.notReady"));
+						if (!data || typeof data !== "object" || !Array.isArray(data.items)) throw new Error(t("status.notReady"));
 						return data;
 					})
 					.then((data) => {
