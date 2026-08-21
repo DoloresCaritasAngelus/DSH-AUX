@@ -19,7 +19,7 @@
  * @module @dolorescaritasangelus/dsh-aux/skill-bridge
  */
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
-import { readFile as readFileText } from "node:fs/promises";
+import { readPackageFile } from "./bridge-locate.js";
 
 /** How many recent derived messages to include in the audit context. */
 export const SKILL_AUDIT_CONTEXT_MESSAGES = 8;
@@ -40,19 +40,7 @@ export function isSkillTaskConfigured(service) {
  * @returns "installed" | "missing" | "unknown" (not in a standard layout).
  */
 export async function skillBridgeStatus() {
-  const rels = [
-    "../../../@deepseek-ai/dsh-tool-skill/lib/index.js",
-    "../../../node_modules/@deepseek-ai/dsh-tool-skill/lib/index.js"
-  ];
-  let src;
-  for (const rel of rels) {
-    try {
-      src = await readFileText(new URL(rel, import.meta.url));
-      break;
-    } catch {
-      /* try next candidate */
-    }
-  }
+  const src = await readPackageFile("dsh-tool-skill");
   if (src === void 0) return "unknown";
   if (src.includes("skill auditor") && src.includes("task:")) return "installed";
   return "missing";

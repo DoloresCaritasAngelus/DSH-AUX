@@ -83,13 +83,13 @@ export async function handleAuxCommand(service, agent, rawInput) {
     lines.push(`  - visionFallbackToMain: ${service.visionFallbackToMain ? "开启(失败回退主模型)" : "关闭(视觉失败直接失败)"}`);
     const subMode = service.subagentMode ?? "native";
     const subBridge = await subagentBridgeStatus();
-    const subPatch = subBridge === "installed" ? "补丁已装" : subBridge === "unknown" ? "补丁未知" : "补丁未装(请跑 bridge/apply-patch.mjs)";
+    const subPatch = subBridge === "installed" ? "补丁已装" : subBridge === "unknown" ? "无法检测(请运行 install.sh 或确认安装方式)" : "补丁未装(请跑 bridge/apply-patch.mjs)";
     lines.push(`  - subagent-bridge: ${subMode === "native" ? "native(未拦截)" : subMode === "manual" ? "manual(统一 general 模型)" : "vision-aware(按需 vision / general)"}${service.subagentPrepareTools ? " + 注入 AUX 工具兜底" : ""} [${subPatch}]`);
     const wfBridge = await workflowBridgeStatus();
-    const wfPatch = wfBridge === "installed" ? "补丁已装" : wfBridge === "unknown" ? "补丁未知" : "补丁未装(请跑 bridge/apply-patch.mjs)";
+    const wfPatch = wfBridge === "installed" ? "补丁已装" : wfBridge === "unknown" ? "无法检测(请运行 install.sh 或确认安装方式)" : "补丁未装(请跑 bridge/apply-patch.mjs)";
     lines.push(`  - workflow-bridge: ${service.subagentIncludeWorkflow ? "includeWorkflow(workflow agent() 走 AUX 路由)" : "excluded(workflow 未纳入)"} [${wfPatch}]`);
     const skillPatch = await skillBridgeStatus();
-    const skillBridgeLabel = skillPatch === "installed" ? "补丁已装(task 参数可用)" : skillPatch === "unknown" ? "补丁未知" : "补丁未装(请跑 bridge/apply-patch.mjs)";
+    const skillBridgeLabel = skillPatch === "installed" ? "补丁已装(task 参数可用)" : skillPatch === "unknown" ? "无法检测(请运行 install.sh 或确认安装方式)" : "补丁未装(请跑 bridge/apply-patch.mjs)";
     lines.push(`  - skill-audit: ${isSkillTaskConfigured(service) ? "已启用(原生 skill 调用先走辅助模型预审)" : "未配置(原生直通)"} [${skillBridgeLabel}]`);
     // Compaction bridge status: when dsh-compaction-basic is present and a
     // dedicated `compaction` AUX route is configured, native session

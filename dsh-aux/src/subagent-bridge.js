@@ -8,25 +8,13 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/subagent-bridge
  */
-import { readFile as readFileText } from "node:fs/promises";
+import { readPackageFile } from "./bridge-locate.js";
 
 /**
  * @returns "installed" | "missing" | "unknown" (not in a standard layout).
  */
 export async function subagentBridgeStatus() {
-  const rels = [
-    "../../../@deepseek-ai/dsh-tool-subagent/lib/index.js",
-    "../../../node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js"
-  ];
-  let src;
-  for (const rel of rels) {
-    try {
-      src = await readFileText(new URL(rel, import.meta.url));
-      break;
-    } catch {
-      /* try next candidate */
-    }
-  }
+  const src = await readPackageFile("dsh-tool-subagent");
   if (src === void 0) return "unknown";
   if (
     src.includes("requires_vision:") &&
@@ -44,19 +32,7 @@ export async function subagentBridgeStatus() {
  * @returns "installed" | "missing" | "unknown".
  */
 export async function workflowBridgeStatus() {
-  const rels = [
-    "../../../@deepseek-ai/dsh-workflow-worker-thread/lib/index.js",
-    "../../../node_modules/@deepseek-ai/dsh-workflow-worker-thread/lib/index.js"
-  ];
-  let src;
-  for (const rel of rels) {
-    try {
-      src = await readFileText(new URL(rel, import.meta.url));
-      break;
-    } catch {
-      /* try next candidate */
-    }
-  }
+  const src = await readPackageFile("dsh-workflow-worker-thread");
   if (src === void 0) return "unknown";
   if (
     src.includes("subagentIncludeWorkflow") &&

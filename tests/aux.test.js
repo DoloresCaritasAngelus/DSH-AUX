@@ -2183,16 +2183,17 @@ test('/aux gc-images: 跳过符号链接,绝不跟随到外部目录', async () 
 });
 
 
-test('image-bridge 状态: 源码树运行(无核心包)时返回 unknown', async () => {
+test('image-bridge 状态: 通过 Node 解析能给出明确状态(不再因源码树误报 unknown)', async () => {
   const { ctx } = await makeHarness();
-  // 测试环境从源码树加载,../dsh-host-apiproxy 不存在 → unknown
+  // 以前源码树运行会因相对路径少一级而误报 unknown;现在 bridge-locate 用
+  // require.resolve 解析真实部署,测试环境有 DSH 包时应返回明确状态。
   const status = await imageBridgeStatus();
-  assert.equal(status, 'unknown');
+  assert.ok(['v3', 'v2', 'v1', 'partial', 'missing'].includes(status), `应返回明确状态而非 unknown,实际: ${status}`);
 });
 
-test('workflow-bridge 状态: 源码树运行(无核心包)时返回 unknown', async () => {
+test('workflow-bridge 状态: 通过 Node 解析能给出明确状态(不再因源码树误报 unknown)', async () => {
   const status = await workflowBridgeStatus();
-  assert.equal(status, 'unknown');
+  assert.ok(['installed', 'missing'].includes(status), `应返回明确状态而非 unknown,实际: ${status}`);
 });
 
 

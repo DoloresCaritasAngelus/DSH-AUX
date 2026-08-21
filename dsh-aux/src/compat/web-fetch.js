@@ -14,7 +14,7 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/compat/web-fetch
  */
-import { readFile as readFileText } from "node:fs/promises";
+import { readPackageFile } from "../bridge-locate.js";
 import { fetchPage } from "../crawl/fetch-page.js";
 import { assertSafeFetchUrlForService } from "../fetch.js";
 import { DEFAULT_MAX_CHARS } from "../route.js";
@@ -55,19 +55,7 @@ export async function runWebFetchCompat(service, input, exec) {
  * @returns "installed" | "missing" | "unknown" (not in a standard layout).
  */
 export async function webFetchCompatStatus() {
-  const rels = [
-    "../../../@deepseek-ai/dsh-tool-web/lib/index.js",
-    "../../../node_modules/@deepseek-ai/dsh-tool-web/lib/index.js"
-  ];
-  let src;
-  for (const rel of rels) {
-    try {
-      src = await readFileText(new URL(rel, import.meta.url));
-      break;
-    } catch {
-      /* try next candidate */
-    }
-  }
+  const src = await readPackageFile("dsh-tool-web");
   if (src === void 0) return "unknown";
   if (src.includes("dsh-aux web_fetch compat (local patch)")) return "installed";
   return "missing";
