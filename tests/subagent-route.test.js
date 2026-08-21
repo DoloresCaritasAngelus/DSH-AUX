@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import {
   detectNeedsVision,
   resolveSubagentRoute,
@@ -155,6 +156,39 @@ test('includeWorkflow 不进入纯函数(仅 workflow 调用点门控,保护 sub
   assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'glm-5.2' })
 })
 
-// 注:/aux patch --json 的运行时行为由 commands.js 内部的 collectPlatformStatus
-// 校验覆盖;这里不保留依赖 child_process 全局桩的测试,避免并行测试进程下
-// 导入顺序/执行顺序差异导致 CI 偶发失败。
+test('/aux patch --json: handlePatchCommand 返回结构化步骤(stub execFileAsync)', async () => {
+  // handlePatchCommand 在每次调用时才 promisify(childProcess.execFile),
+  // 因此无论 commands.js 是否已被其他测试文件导入,这里替换 cp.execFile 都能生效。
+  // 这比“先删测试掩盖问题”更稳:保留对真实 JSON 结构的回归覆盖。
+  const require = createRequire(import.meta.url)
+  const cp = require('node:child_process')
+  const originalExecFile = cp.execFile
+  const calls = []
+  cp.execFile = (file, args, options, callback) => {
+    calls.push({ file, args, options })
+    if (args[0] === 'bridge/apply-patch.mjs') {
+      callback(null, { stdout: 'apply output\n', stderr: '' })
+    } else if (args[0] === 'bridge/self-heal.mjs') {
+      callback(null, { stdout: 'self-heal output\n', stderr: '' })
+    } else {
+      callback(new Error('unexpected script: ' + args[0]))
+    }
+  }
+  try {
+    const { handlePatchCommand } = await import('../dsh-aux/src/commands.js')
+    const result = await handlePatchCommand(void 0, true)
+    assert.equal(result.kind, 'success')
+    const data = JSON.parse(result.text)
+    assert.equal(typeof data.ok, 'boolean')
+    assert.equal(data.restartRequired, false)
+    assert.ok(Array.isArray(data.steps), '应返回 steps 数组')
+    assert.equal(data.steps.length, 2)
+    assert.deepEqual(data.steps.map((s) => s.name), ['apply-patch', 'self-heal'])
+    assert.ok(data.steps.every((s) => s.ok === true && typeof s.output === 'string'))
+    assert.deepEqual(data.remaining, [])
+    assert.equal(calls.length, 2)
+    assert.ok(calls.every((c) => c.args[0].endsWith('.mjs')))
+  } finally {
+    cp.execFile = originalExecFile
+  }
+})
