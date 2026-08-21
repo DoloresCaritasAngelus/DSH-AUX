@@ -97,7 +97,6 @@ node apply-patch.mjs        # 自动识别状态:原始 → 已补丁 / 中间�
                             #   dsh-tool-subagent(schema + request)
                             #   dsh-workflow-worker-thread(startChild)
                             #   dsh-tool-skill(schema: 可选 task 参数)
-                            #   dsh-tool-web(web_fetch compat: 原生表面 + AUX 抓取内核)
 # 重启 DSH 生效(改的是 node_modules 内文件,必须重启)
 ```
 
@@ -133,7 +132,6 @@ node apply-patch.mjs --rollback    # 回滚到最近一次备份(各目标各自
   - `orig-agent-loop-block.txt` / `patched-agent-loop-block.txt`(agent-loop 方法定义)
   - `orig-select-model-block.txt` / `patched-select-model-block.txt`(api-proxy selectModel 门控)
   - `orig-skill-tool-block.txt` / `patched-skill-tool-block.txt`(skill 工具 schema 可选 task 参数)
-  - `orig-web-fetch-block.txt` / `patched-web-fetch-block.txt`(web_fetch compat: 原生表面 + AUX 抓取内核)
   - 校验不匹配则跳过不打,绝不破坏文件。
 
 ## 卸载

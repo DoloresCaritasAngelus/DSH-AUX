@@ -11,9 +11,8 @@
 - **状态图标 UI / host→client 状态通道**:新增 `/aux status --json` 结构化状态(工具/桥接逐项 mode/state/reason/patch/action + 核心保护 + 事件记录 + restartRequired);设置页新增「诊断与修复」面板、状态点、补丁徽标与悬停原因。
 - **设置页补丁状态展示**:每个工具/桥接显示可用状态与补丁状态;`unavailable` 项列出原因,可一键打补丁或提示配置。
 - **重启生效提示**:运行中打补丁后,`/aux status --json` 返回 `restartRequired:true`;设置页「诊断与修复」面板显示“补丁已写入,重启 DSH 后生效”。
-- **compat 第一期白名单(web_extract)**:`web_extract=compat` 时不再暴露 AUX `web_extract` 工具,模型看到原生 `web_fetch`,底层由 AUX 抓取内核增强(SSRF/重定向/字符集/JS Challenge/文本清洗);新增 `bridge/apply-patch.mjs` 的 `dsh-tool-web (web_fetch compat)` 补丁目标。
 - **非标准安装路径补丁检测**:新增 `dsh-aux/src/bridge-locate.js`,统一用 `require.resolve` + 多级相对路径解析 DSH 包;修复源码树/自定义布局下 bridge 状态误报 `unknown` 的问题;`unknown` 文案改为“请运行 install.sh 或确认安装方式”。
-- 测试基线更新为 301。
+- 测试基线更新为 300。
 
 ## 0.3.3(2026-08-21)— 设置页 UI 重构 + reasoningEffort + 双语
 
