@@ -34,7 +34,12 @@
 				const admit = async () => {
 					try {
 						const durable = await durablePromptContent(ctx, content);
-						if (hasImage) await ensureImageHardlinks(durable);
+						let imageBridgeOn = true;
+						try {
+							const aux = ctx.get?.("auxLlm");
+							imageBridgeOn = aux?._enabled?.imageBridge !== "native";
+						} catch { /* auxLlm absent during early boot */ }
+						if (hasImage && imageBridgeOn) await ensureImageHardlinks(durable);
 						const message = createUserMessage({ content: durable, source });
 						if (mode === "steer") agent.steer(message);
 						else agent.followup(message);

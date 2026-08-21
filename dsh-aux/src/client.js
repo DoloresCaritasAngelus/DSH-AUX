@@ -114,6 +114,23 @@ window.__ModuleLoader__.load({
 			"global.forceAuxVision": "强制原生图片也走 AUX 视觉 (forceAuxVision)",
 			"global.visionFallbackToMain": "视觉辅助失败时降级到主模型 (visionFallbackToMain)",
 			"global.showStatusChip": "在对话界面显示辅助模型状态芯片",
+
+			"group.platform": "平台开关",
+			"group.platform.desc": "选择每个工具/桥接使用原生、AUX 还是未来深耕模式。",
+			"field.mode": "模式",
+			"mode.native": "native (原生)",
+			"mode.aux": "aux (使用 AUX)",
+			"mode.compat": "compat (未来深耕,暂不可用)",
+			"skill.mode.label": "SKILL 模式",
+			"skill.mode.native": "native (不审计)",
+			"skill.mode.audit": "audit (原文+报告)",
+			"skill.mode.report": "report (仅报告)",
+			"skill.mode.report-ondemand": "report-ondemand (仅报告,可按需取原文)",
+			"skill.mode.auto": "auto (未来)",
+			"debug.fullToolTrace": "记录完整工具调用/反馈 (fullToolTrace)",
+			"debug.maxDebugEventBytes": "单条 debug 事件大小上限 (字节)",
+			"debug.debugEventsInHistory": "debug 事件混入 /aux history",
+			"debug.redactSecrets": "记录时排除疑似密钥/PII (redactSecrets)",
 			"chip.vision": "视觉",
 			"chip.web_extract": "网页",
 			"chip.web_crawl": "站点",
@@ -170,6 +187,23 @@ window.__ModuleLoader__.load({
 			"global.forceAuxVision": "Force native images through AUX vision (forceAuxVision)",
 			"global.visionFallbackToMain": "Fall back to main model when vision fails (visionFallbackToMain)",
 			"global.showStatusChip": "Show auxiliary model status chip in conversation UI",
+
+			"group.platform": "Platform Switches",
+			"group.platform.desc": "Choose native, AUX, or future deep-compat mode for each tool/bridge.",
+			"field.mode": "Mode",
+			"mode.native": "native",
+			"mode.aux": "aux",
+			"mode.compat": "compat (future, unavailable)",
+			"skill.mode.label": "SKILL mode",
+			"skill.mode.native": "native (no audit)",
+			"skill.mode.audit": "audit (original + report)",
+			"skill.mode.report": "report (report only)",
+			"skill.mode.report-ondemand": "report-ondemand (report only, original on demand)",
+			"skill.mode.auto": "auto (future)",
+			"debug.fullToolTrace": "Record full tool calls/results (fullToolTrace)",
+			"debug.maxDebugEventBytes": "Max debug event bytes",
+			"debug.debugEventsInHistory": "Include debug events in /aux history",
+			"debug.redactSecrets": "Redact likely secrets/PII when recording (redactSecrets)",
 			"chip.vision": "Vision",
 			"chip.web_extract": "Web",
 			"chip.web_crawl": "Crawl",
@@ -368,6 +402,21 @@ window.__ModuleLoader__.load({
 					if (draft.showStatusChip === false) ops.push({ op: "set", path: ["showStatusChip"], value: false });
 					else ops.push({ op: "unset", path: ["showStatusChip"] });
 				}
+				const enabledKeys = ["vision_analyze", "web_extract", "web_crawl", "compress_text", "imageBridge", "subagentBridge", "workflowBridge", "compactionBridge", "skillAudit"];
+				for (const key of enabledKeys) {
+					const val = draft?.enabled?.[key];
+					if (val !== void 0 && val !== "aux") ops.push({ op: "set", path: ["enabled", key], value: val });
+					else ops.push({ op: "unset", path: ["enabled", key] });
+				}
+				const skillMode = draft?.skill?.mode;
+				if (skillMode !== void 0 && skillMode !== "audit") ops.push({ op: "set", path: ["skill", "mode"], value: skillMode });
+				else ops.push({ op: "unset", path: ["skill", "mode"] });
+				const debugDefaults = { fullToolTrace: false, maxDebugEventBytes: 65536, debugEventsInHistory: false, redactSecrets: true };
+				for (const key of Object.keys(debugDefaults)) {
+					const val = draft?.debug?.[key];
+					if (val !== void 0 && val !== debugDefaults[key]) ops.push({ op: "set", path: ["debug", key], value: key === "maxDebugEventBytes" ? Number(val) : val });
+					else ops.push({ op: "unset", path: ["debug", key] });
+				}
 				api.settings.mutate({ ns: "aux", ops, expectedRevision: state.revision }).then((response) => {
 					setSaving(false);
 					if (!response.result.ok) {
@@ -477,6 +526,51 @@ window.__ModuleLoader__.load({
 			};
 			const switchRow = (label, checked, disabled, onChange) => react.createElement("label", { className: "ax-switch" },
 				react.createElement("input", { type: "checkbox", checked, disabled: disabled || !state.writable, onChange }), label);
+			const setEnabled = (key, value) => {
+				setSaved(false);
+				setSaveError(null);
+				setDraft((d) => {
+					const next = structuredClone(d ?? {});
+					next.enabled = next.enabled ?? {};
+					if (value === "aux") delete next.enabled[key];
+					else next.enabled[key] = value;
+					return next;
+				});
+			};
+			const setSkillMode = (value) => {
+				setSaved(false);
+				setSaveError(null);
+				setDraft((d) => {
+					const next = structuredClone(d ?? {});
+					next.skill = next.skill ?? {};
+					if (value === "audit") delete next.skill.mode;
+					else next.skill.mode = value;
+					return next;
+				});
+			};
+			const setDebug = (key, value) => {
+				setSaved(false);
+				setSaveError(null);
+				setDraft((d) => {
+					const next = structuredClone(d ?? {});
+					next.debug = next.debug ?? {};
+					if (value === "" || value === false || value === 65536) delete next.debug[key];
+					else next.debug[key] = value;
+					return next;
+				});
+			};
+			const platformSelect = (key, label) => react.createElement("div", { className: "ax-row" },
+				react.createElement("label", null, label),
+				react.createElement("select", {
+					value: draft?.enabled?.[key] ?? "aux",
+					disabled: !state.writable,
+					onChange: (e) => setEnabled(key, e.target.value)
+				},
+					react.createElement("option", { value: "native" }, t("mode.native")),
+					react.createElement("option", { value: "aux" }, t("mode.aux")),
+					react.createElement("option", { value: "compat", disabled: true }, t("mode.compat"))
+				)
+			);
 			return react.createElement("div", { className: "ax-section" },
 				group("tools", t("group.tools"), t("group.tools.desc"),
 					tasks.filter((x) => ["vision", "web_extract", "web_crawl", "compress"].includes(x)).map(taskCard)
@@ -509,6 +603,43 @@ window.__ModuleLoader__.load({
 					switchRow(t("global.forceAuxVision"), draft?.forceAuxVision === true, false, (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.forceAuxVision = e.target.checked; return next; }); }),
 					switchRow(t("global.visionFallbackToMain"), draft?.visionFallbackToMain !== false, false, (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.visionFallbackToMain = e.target.checked; return next; }); }),
 					switchRow(t("global.showStatusChip"), draft?.showStatusChip !== false, false, (e) => { setSaved(false); setSaveError(null); setDraft((d) => { const next = structuredClone(d ?? {}); next.showStatusChip = e.target.checked; return next; }); })
+				),
+				group("platform", t("group.platform"), t("group.platform.desc"),
+					react.createElement("div", { className: "ax-grid" },
+						platformSelect("vision_analyze", "vision_analyze"),
+						platformSelect("web_extract", "web_extract"),
+						platformSelect("web_crawl", "web_crawl"),
+						platformSelect("compress_text", "compress_text"),
+						platformSelect("imageBridge", "imageBridge"),
+						platformSelect("subagentBridge", "subagentBridge"),
+						platformSelect("workflowBridge", "workflowBridge"),
+						platformSelect("compactionBridge", "compactionBridge"),
+						platformSelect("skillAudit", "skillAudit"),
+						react.createElement("div", { className: "ax-row" },
+							react.createElement("label", null, t("skill.mode.label")),
+							react.createElement("select", {
+								value: draft?.skill?.mode ?? "audit",
+								disabled: !state.writable,
+								onChange: (e) => setSkillMode(e.target.value)
+							},
+								react.createElement("option", { value: "native" }, t("skill.mode.native")),
+								react.createElement("option", { value: "audit" }, t("skill.mode.audit")),
+								react.createElement("option", { value: "report" }, t("skill.mode.report")),
+								react.createElement("option", { value: "report-ondemand" }, t("skill.mode.report-ondemand")),
+								react.createElement("option", { value: "auto", disabled: true }, t("skill.mode.auto"))
+							)
+						)
+					),
+					switchRow(t("debug.fullToolTrace"), draft?.debug?.fullToolTrace === true, false, (e) => setDebug("fullToolTrace", e.target.checked)),
+					react.createElement("div", { className: "ax-row" },
+						react.createElement("label", null, t("debug.maxDebugEventBytes")),
+						react.createElement("input", {
+							type: "number", min: "1024", value: draft?.debug?.maxDebugEventBytes ?? 65536, disabled: !state.writable,
+							onChange: (e) => setDebug("maxDebugEventBytes", e.target.value === "" ? "" : Number(e.target.value))
+						})
+					),
+					switchRow(t("debug.debugEventsInHistory"), draft?.debug?.debugEventsInHistory === true, false, (e) => setDebug("debugEventsInHistory", e.target.checked)),
+					switchRow(t("debug.redactSecrets"), draft?.debug?.redactSecrets !== false, false, (e) => setDebug("redactSecrets", e.target.checked))
 				),
 				react.createElement("div", { className: "ax-actions" },
 					react.createElement("button", { type: "button", className: "ax-save", disabled: saving || !state.writable, onClick: save }, saving ? t("settings.saving") : t("settings.save")),

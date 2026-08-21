@@ -16,6 +16,7 @@ export function registerAuxTools(service) {
   // the attachments-injected scope (mirrors dsh-tool-fs read_image), so
   // `ctx.get("attachments")` resolves inside execution even under a
   // subagent-scoped context. The other two tools need no image store.
+  if (service.isToolExposed("vision_analyze")) {
   ctx.inject(["attachments"], (imageCtx) => {
     service._imageCtx = imageCtx;
     imageCtx.tools.register(defineTool({
@@ -46,6 +47,8 @@ export function registerAuxTools(service) {
       execute: (args, exec) => runVision(service, args, exec)
     }));
   });
+  }
+  if (service.isToolExposed("web_extract")) {
   ctx.tools.register(defineTool({
     name: "web_extract",
     description: "Fetch a web page (or a same-origin set of pages via followLinks) and summarize it with the auxiliary model: returns a factual summary plus key points. Fetches static HTML only — no JavaScript rendering. Use when you need the essence of a page (or doc set) without carrying its full text.",
@@ -86,6 +89,8 @@ export function registerAuxTools(service) {
     isConcurrencySafe: () => true,
     execute: (args, exec) => runWebExtract(service, args, exec)
   }));
+  }
+  if (service.isToolExposed("web_crawl")) {
   ctx.tools.register(defineTool({
     name: "web_crawl",
     description: "Crawl a documentation site (or a whitelisted host set) starting from a seed URL and summarize the whole site with the auxiliary model: returns an overall summary plus per-page metadata. Respects robots.txt and per-host rate limits by default; every page and hop is SSRF-checked. Fetches static HTML only — no JavaScript rendering.",
@@ -141,6 +146,8 @@ export function registerAuxTools(service) {
     isConcurrencySafe: () => false,
     execute: (args, exec) => runWebCrawl(service, args, exec)
   }));
+  }
+  if (service.isToolExposed("compress_text")) {
   ctx.tools.register(defineTool({
     name: "compress_text",
     description: "Compress long text with the auxiliary model, preserving factual details (numbers, paths, identifiers). Use to shrink oversized tool output, research notes, or logs before they enter context.",
@@ -178,4 +185,5 @@ export function registerAuxTools(service) {
     isConcurrencySafe: () => true,
     execute: (args, exec) => runCompress(service, args, exec)
   }));
+  }
 }

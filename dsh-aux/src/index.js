@@ -301,13 +301,44 @@ export class AuxLlmService extends Service {
     }
     this._merged = merged;
     this._subagentSettings = settings.subagent ?? {};
-    this.subagentMode = this._subagentSettings.mode ?? "native";
-    this.subagentPrepareTools = this._subagentSettings.prepareTools !== false;
-    this.subagentIncludeWorkflow = this._subagentSettings.includeWorkflow !== false;
     this.fallbackToMain = settings.fallbackToMain ?? true;
     this.forceAuxVision = settings.forceAuxVision ?? false;
     this.visionFallbackToMain = settings.visionFallbackToMain ?? true;
     this.showStatusChip = settings.showStatusChip ?? true;
+    const defaultEnabled = {
+      vision_analyze: "aux",
+      web_extract: "aux",
+      web_crawl: "aux",
+      compress_text: "aux",
+      imageBridge: "aux",
+      subagentBridge: "aux",
+      workflowBridge: "aux",
+      compactionBridge: "aux",
+      skillAudit: "aux"
+    };
+    this._enabled = { ...defaultEnabled, ...(settings.enabled ?? {}) };
+    this.subagentMode = this._enabled.subagentBridge === "native"
+      ? "native"
+      : (this._subagentSettings.mode ?? "native");
+    this.subagentPrepareTools = this._subagentSettings.prepareTools !== false;
+    this.subagentIncludeWorkflow = this._enabled.workflowBridge !== "native" && this._subagentSettings.includeWorkflow !== false;
+    this.skillMode = settings.skill?.mode ?? "audit";
+    this.debugConfig = {
+      fullToolTrace: settings.debug?.fullToolTrace ?? false,
+      maxDebugEventBytes: settings.debug?.maxDebugEventBytes ?? 65536,
+      debugEventsInHistory: settings.debug?.debugEventsInHistory ?? false,
+      redactSecrets: settings.debug?.redactSecrets ?? true
+    };
+  }
+
+  /** Mode of one tool/bridge switch: 'native' | 'aux' | 'compat'. */
+  toolBridgeMode(name) {
+    return this._enabled?.[name] ?? "aux";
+  }
+
+  /** Whether a tool should be exposed to the model catalog (only aux exposes). */
+  isToolExposed(name) {
+    return this.toolBridgeMode(name) === "aux";
   }
 
   /** Settings schema snapshot for UIs. */
@@ -639,6 +670,9 @@ export class AuxLlmService extends Service {
    * @param payload { prompt?, requiresVision?, existingAllow?, existingDeny? }
    */
   subagentRoute(payload) {
+    if (this._enabled?.subagentBridge === "native") {
+      return { settled: false };
+    }
     return resolveSubagentRoute(this._subagentSettings, payload ?? {});
   }
 

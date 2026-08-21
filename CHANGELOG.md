@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — 平台化开关 + SKILL 模式
+
+- **工具/桥接三态开关**:`native` / `aux` / `compat`(compat 预留);关闭时工具从模型目录隐藏,桥接走原生;补丁不受开关影响。
+- **SKILL 模式**:`native` / `audit` / `report` / `report-ondemand`;`report-ondemand` 支持 `includeOriginal` 取原文;`auto` 预留。
+- **配置 schema**:新增 `aux.enabled`、`aux.skill.mode`、`aux.debug`(fullToolTrace / maxDebugEventBytes / debugEventsInHistory / redactSecrets),默认保守。
+- **imageBridge 运行时门控**:补丁仍在,但 `imageBridge=native` 时不改写图片/不建硬链接。
+- 测试基线更新为 296。
+
 ## 0.3.3(2026-08-21)— 设置页 UI 重构 + reasoningEffort + 双语
 
 - **设置页 UI 重构**:分组可折叠卡片(工具任务 / 桥接任务 / 子代理 / 全局),每个任务两列网格布局。

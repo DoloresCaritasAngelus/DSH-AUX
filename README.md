@@ -9,7 +9,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.3.3-blue)
-![Tests](https://img.shields.io/badge/tests-291-brightgreen)
+![Tests](https://img.shields.io/badge/tests-296-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 
@@ -126,7 +126,7 @@ node scripts/doctor.mjs
 
 ### 设置页
 
-Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型。其中 **`compaction` 就是会话压缩模型**——配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。**`skill` 就是技能预审模型**——配置后原生 `skill` 工具调用会先由辅助模型出预审报告。`web_extract` / `web_crawl` 还可单独配置 `maxChars`(页面字符预算,默认 32000)。每个任务还可选「思考档位」,选项来自当前 provider/model 支持的 `reasoning.efforts`,不传则沿用 provider 默认。设置页按「工具任务 / 桥接任务 / 子代理 / 全局」分组折叠,并支持中英双语跟随 DSH 语言。也可关闭「在对话界面显示辅助模型状态芯片」(关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 不受影响)。
+Web → 设置 → 辅助模型,可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型。其中 **`compaction` 就是会话压缩模型**——配置后原生 DSH 的自动/手动压缩会走 AUX 辅助模型。**`skill` 就是技能预审模型**——配置后原生 `skill` 工具调用会先由辅助模型出预审报告。`web_extract` / `web_crawl` 还可单独配置 `maxChars`(页面字符预算,默认 32000)。每个任务还可选「思考档位」,选项来自当前 provider/model 支持的 `reasoning.efforts`,不传则沿用 provider 默认。设置页按「工具任务 / 桥接任务 / 子代理 / 全局 / 平台开关」分组折叠,并支持中英双语跟随 DSH 语言。在「平台开关」中可为每个工具/桥接选择 `native` / `aux`(`compat` 为未来预留),并可配置 SKILL 审计模式(`native` / `audit` / `report` / `report-ondemand`)与 debug 记录选项。也可关闭「在对话界面显示辅助模型状态芯片」(关闭后不再向 Web/第三方暴露 `aux-status` 投影,`/aux status` 不受影响)。
 
 ### 网页提取 (web_extract)
 

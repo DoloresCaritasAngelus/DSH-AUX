@@ -1217,6 +1217,29 @@ test('projectSettings: reasoningEffort 透传', () => {
   assert.equal(projected.tasks.skill.reasoningEffort, void 0);
 });
 
+test('projectSettings: enabled/skill/debug 默认值及透传', () => {
+  const projected = projectSettings({});
+  assert.equal(projected.enabled.vision_analyze, 'aux');
+  assert.equal(projected.enabled.skillAudit, 'aux');
+  assert.equal(projected.skill.mode, 'audit');
+  assert.equal(projected.debug.fullToolTrace, false);
+  assert.equal(projected.debug.maxDebugEventBytes, 65536);
+  assert.equal(projected.debug.redactSecrets, true);
+  const custom = projectSettings({
+    enabled: { vision_analyze: 'native', subagentBridge: 'native' },
+    skill: { mode: 'report' },
+    debug: { fullToolTrace: true, maxDebugEventBytes: 4096, debugEventsInHistory: true, redactSecrets: false }
+  });
+  assert.equal(custom.enabled.vision_analyze, 'native');
+  assert.equal(custom.enabled.subagentBridge, 'native');
+  assert.equal(custom.enabled.web_extract, 'aux');
+  assert.equal(custom.skill.mode, 'report');
+  assert.equal(custom.debug.fullToolTrace, true);
+  assert.equal(custom.debug.maxDebugEventBytes, 4096);
+  assert.equal(custom.debug.debugEventsInHistory, true);
+  assert.equal(custom.debug.redactSecrets, false);
+});
+
 test('projectSettings: subagent 段透传', () => {
   const projected = projectSettings({
     subagent: {
@@ -1269,6 +1292,13 @@ test('subagentRoute: native / manual / vision-aware 服务方法', async () => {
   assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: '描述 imagePath=/tmp/a.png', requiresVision: 'auto' }).agentOptions, { provider: 'opencode-go', model: 'kimi-k2.7-code' });
 });
 
+test('平台开关: subagentBridge=native 时 subagentRoute 直接原生', async () => {
+  const { ctx } = await makeHarness();
+  ctx.auxLlm._enabled = { ...ctx.auxLlm._enabled, subagentBridge: 'native' };
+  ctx.auxLlm._subagentSettings = { mode: 'manual', general: { provider: 'opencode-go', model: 'glm-5.2' } };
+  assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: 'x' }), { settled: false });
+});
+
 test('settings source 接线: forceAuxVision / visionFallbackToMain / subagent 联动', async () => {
   const { ctx } = await makeHarness();
   ctx.auxLlm._source = () => ({
@@ -1286,6 +1316,10 @@ test('settings source 接线: forceAuxVision / visionFallbackToMain / subagent �
   ctx.auxLlm._source = () => ({ subagent: { mode: 'native' } });
   ctx.auxLlm._recomputeMerged();
   assert.equal(ctx.auxLlm.subagentIncludeWorkflow, true);
+  // workflowBridge=native → includeWorkflow 强制 false
+  ctx.auxLlm._source = () => ({ enabled: { workflowBridge: 'native' } });
+  ctx.auxLlm._recomputeMerged();
+  assert.equal(ctx.auxLlm.subagentIncludeWorkflow, false);
 });
 
 test('visionFallbackToMain=false 且未配置 vision 主路线 → 主模型仍作为唯一路线可用', async () => {

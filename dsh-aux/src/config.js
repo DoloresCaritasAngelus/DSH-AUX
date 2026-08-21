@@ -92,6 +92,26 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     prepareTools: z.boolean().default(true),
     retryVisionWithAux: z.boolean().default(false),
     visionKeywords: z.array(z.string()).default([])
+  }),
+  enabled: z.object({
+    vision_analyze: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    web_extract: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    web_crawl: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    compress_text: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    imageBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    subagentBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    workflowBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    compactionBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
+    skillAudit: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux")
+  }),
+  skill: z.object({
+    mode: z.union([z.const("native"), z.const("audit"), z.const("report"), z.const("report-ondemand"), z.const("auto")]).default("audit")
+  }),
+  debug: z.object({
+    fullToolTrace: z.boolean().default(false),
+    maxDebugEventBytes: z.number().step(1).min(1024).default(65536),
+    debugEventsInHistory: z.boolean().default(false),
+    redactSecrets: z.boolean().default(true)
   })
 });
 
@@ -130,7 +150,30 @@ export function projectSettings(settings) {
     ...(rawSub.retryVisionWithAux !== void 0 ? { retryVisionWithAux: rawSub.retryVisionWithAux } : {}),
     ...(Array.isArray(rawSub.visionKeywords) ? { visionKeywords: [...rawSub.visionKeywords] } : {})
   };
-  return { fallbackToMain, forceAuxVision, visionFallbackToMain, showStatusChip, tasks, subagent };
+  const defaultEnabled = {
+    vision_analyze: "aux",
+    web_extract: "aux",
+    web_crawl: "aux",
+    compress_text: "aux",
+    imageBridge: "aux",
+    subagentBridge: "aux",
+    workflowBridge: "aux",
+    compactionBridge: "aux",
+    skillAudit: "aux"
+  };
+  const rawEnabled = settings?.enabled ?? {};
+  const enabled = { ...defaultEnabled, ...rawEnabled };
+  const skill = {
+    mode: settings?.skill?.mode ?? "audit"
+  };
+  const rawDebug = settings?.debug ?? {};
+  const debug = {
+    fullToolTrace: rawDebug.fullToolTrace ?? false,
+    maxDebugEventBytes: rawDebug.maxDebugEventBytes ?? 65536,
+    debugEventsInHistory: rawDebug.debugEventsInHistory ?? false,
+    redactSecrets: rawDebug.redactSecrets ?? true
+  };
+  return { fallbackToMain, forceAuxVision, visionFallbackToMain, showStatusChip, tasks, subagent, enabled, skill, debug };
 }
 
 /**

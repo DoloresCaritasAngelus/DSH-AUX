@@ -12,6 +12,13 @@
 	async bridgeImagesForModel(messages, provider, model, llm, signal) {
 		const hasImage = Array.isArray(messages) && messages.some((m) => Array.isArray(m?.content) && m.content.some((b) => b?.type === "image"));
 		if (!hasImage) return messages;
+		let aux;
+		try {
+			aux = this.loopCtx?.get?.("auxLlm");
+		} catch { /* auxLlm may be absent during early boot */ }
+		// dsh-aux platform switch: imageBridge=native disables runtime image
+		// rewriting entirely; the patch stays installed but behaves natively.
+		if (aux?._enabled?.imageBridge === "native") return messages;
 		let modalities;
 		try {
 			const info = await llm.resolveModelInfo(provider, model, signal);
@@ -19,11 +26,7 @@
 		} catch { modalities = void 0; }
 		// Non-empty and image-capable: the model sees images natively, unless
 		// dsh-aux asks us to force every image through vision_analyze.
-		let forceAuxVision = false;
-		try {
-			const aux = this.loopCtx?.get?.("auxLlm");
-			forceAuxVision = aux?.forceAuxVision === true;
-		} catch { /* auxLlm may be absent during early boot */ }
+		const forceAuxVision = aux?.forceAuxVision === true;
 		if (!forceAuxVision && Array.isArray(modalities) && modalities.includes("image")) return messages;
 		const { link } = await import("node:fs/promises");
 		const home = process.env.DSH_HOME || (typeof process !== "undefined" && process.env.HOME ? `${process.env.HOME}/.dsh` : void 0);

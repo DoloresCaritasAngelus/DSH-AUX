@@ -217,6 +217,8 @@ export function attachSkillBridge(service) {
       // are intentionally left native.
       if (exec.name !== "skill" || exec.parent !== void 0 || result.isError) return decision;
       if (!isSkillTaskConfigured(service)) return decision;
+      if (service._enabled?.skillAudit === "native" || service.skillMode === "native") return decision;
+      const mode = service.skillMode === "auto" ? "audit" : (service.skillMode ?? "audit");
       const value = result.value;
       if (value === null || typeof value !== "object" || typeof value.content !== "string") return decision;
       const task =
@@ -249,10 +251,22 @@ export function attachSkillBridge(service) {
           // SKILL.md result is returned instead.
           allowMainFallback: false
         });
-        const combined = renderRawSkillForAudit(value) + "\n\n" + output.text;
+        const reportText = output.text + (mode === "report" || mode === "report-ondemand"
+          ? "\n\n如需核对原文,请用 skill(name, { includeOriginal: true })。"
+          : "");
+        let finalText;
+        if (mode === "report") {
+          finalText = reportText;
+        } else if (mode === "report-ondemand") {
+          finalText = exec.arguments?.includeOriginal === true
+            ? renderRawSkillForAudit(value)
+            : reportText;
+        } else {
+          finalText = renderRawSkillForAudit(value) + "\n\n" + output.text;
+        }
         return {
           ...decision,
-          content: [{ type: "text", text: combined }]
+          content: [{ type: "text", text: finalText }]
         };
       } catch (error) {
         service.ctx.logger?.warn?.(
