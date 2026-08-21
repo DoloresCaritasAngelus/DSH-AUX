@@ -769,22 +769,32 @@ window.__ModuleLoader__.load({
 			const subModelOptionsFor = (group) => {
 				const pid = subField(group, "provider") ?? "";
 				if (pid === "") return [];
-				const ids = catalog.models.filter((m) => m.provider === pid).map((m) => m.id);
+				const models = catalog.models ?? [];
+				const ids = models.filter((m) => m.provider === pid).map((m) => m.id);
 				return [...new Set(ids)];
 			};
 			const subReasoningOptionsFor = (group) => {
 				const pid = subField(group, "provider") ?? "";
 				const mid = subField(group, "model") ?? "";
 				if (!pid || !mid) return [];
-				return catalog.reasoning[pid + "\u0000" + mid] ?? [];
+				const reasoning = catalog?.reasoning ?? {};
+				return reasoning[pid + "\u0000" + mid] ?? [];
 			};
-			const subReasoningSelect = (group) => react.createElement("select", {
-				id: "ax-sub-" + group + "-reasoningEffort",
-				value: subField(group, "reasoningEffort") ?? "",
-				disabled: subReasoningOptionsFor(group).length === 0,
-				onChange: (e) => setSubGroup(group, "reasoningEffort", e.target.value)
-			}, react.createElement("option", { value: "" }, t("placeholder.inheritDefault")),
-				subReasoningOptionsFor(group).map((o) => react.createElement("option", { key: o.id, value: o.id }, o.name ?? o.id)));
+			const subReasoningSelect = (group) => {
+				let options = [];
+				try {
+					options = subReasoningOptionsFor(group);
+				} catch {
+					options = [];
+				}
+				return react.createElement("select", {
+					id: "ax-sub-" + group + "-reasoningEffort",
+					value: subField(group, "reasoningEffort") ?? "",
+					disabled: options.length === 0,
+					onChange: (e) => setSubGroup(group, "reasoningEffort", e.target.value)
+				}, react.createElement("option", { value: "" }, t("placeholder.inheritDefault")),
+					options.map((o) => react.createElement("option", { key: o.id, value: o.id }, o.name ?? o.id)));
+			};
 			const switchRow = (label, checked, disabled, onChange) => react.createElement("label", { className: "ax-switch" },
 				react.createElement("input", { type: "checkbox", checked, disabled: disabled, onChange }), label);
 			const setEnabled = (key, value) => {
