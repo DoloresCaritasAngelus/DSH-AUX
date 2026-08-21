@@ -172,6 +172,7 @@ window.__ModuleLoader__.load({
 			"status.reason.mode-native": "当前为 native,未使用 AUX",
 			"status.reason.mode-aux": "当前为 aux,使用 AUX 实现",
 			"status.reason.mode-compat": "compat 为规划中模式,暂不可用",
+			"status.reason.compat-enabled": "compat 已启用:模型看到原生 web_fetch,底层走 AUX 增强",
 			"status.reason.patch-ok": "补丁已安装",
 			"status.reason.patch-v1": "旧版 v1 补丁,建议升级",
 			"status.reason.patch-partial": "补丁部分安装,需重打",
@@ -285,6 +286,7 @@ window.__ModuleLoader__.load({
 			"status.reason.mode-native": "Currently native; AUX not used",
 			"status.reason.mode-aux": "Currently aux; AUX implementation used",
 			"status.reason.mode-compat": "compat is planned and not available yet",
+			"status.reason.compat-enabled": "compat enabled: model sees native web_fetch, AUX enhances underneath",
 			"status.reason.patch-ok": "Patch installed",
 			"status.reason.patch-v1": "Old v1 patch; upgrade recommended",
 			"status.reason.patch-partial": "Patch partially installed; re-run patch",
@@ -724,7 +726,7 @@ window.__ModuleLoader__.load({
 					},
 						react.createElement("option", { value: "native" }, t("mode.native")),
 						react.createElement("option", { value: "aux", disabled: meta?.state === "unavailable" && meta?.action === "patch" }, t("mode.aux")),
-						react.createElement("option", { value: "compat", disabled: true }, t("mode.compat"))
+						react.createElement("option", { value: "compat", disabled: key !== "web_extract" }, t("mode.compat"))
 					)
 				);
 			};

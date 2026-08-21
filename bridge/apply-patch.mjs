@@ -28,7 +28,7 @@
  * 用法:
  *   node apply-patch.mjs            # 应用/升级补丁(自动定位、备份、替换、校验)
  *   node apply-patch.mjs --dry-run  # 只检查,不修改
- *   node apply-patch.mjs --rollback # 回滚到最近一次备份(七个目标各自回滚)
+ *   node apply-patch.mjs --rollback # 回滚到最近一次备份(各目标各自回滚)
  */
 import { readFile, writeFile, copyFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -62,6 +62,10 @@ const SKILL_TOOL_FILE = guardTarget(deployedFile(
   "../../../@deepseek-ai/dsh-tool-skill/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-tool-skill/lib/index.js"
 ), "dsh-skill-bridge");
+const WEB_FETCH_TOOL_FILE = guardTarget(deployedFile(
+  "../../../@deepseek-ai/dsh-tool-web/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-tool-web/lib/index.js"
+), "dsh-web-fetch-compat");
 
 const TARGETS = [
   {
@@ -142,6 +146,17 @@ const TARGETS = [
       { name: "original", detect: (d) => d.includes("parameters: { name: {"), block: await readFile(join(HERE, "orig-skill-tool-block.txt"), "utf8"), action: "replace" }
     ],
     patched: await readFile(join(HERE, "patched-skill-tool-block.txt"), "utf8"),
+    backupPrefix: "index.js.bak-"
+  },
+  {
+    label: "dsh-tool-web (web_fetch compat)",
+    file: WEB_FETCH_TOOL_FILE,
+    mark: "dsh-aux web_fetch compat (local patch)",
+    states: [
+      { name: "patched", detect: (d) => d.includes("dsh-aux web_fetch compat (local patch)"), action: "skip" },
+      { name: "original", detect: (d) => d.includes("const result = await ctx.web.fetch({ url: input.url }, exec.signal);"), block: await readFile(join(HERE, "orig-web-fetch-block.txt"), "utf8"), action: "replace" }
+    ],
+    patched: await readFile(join(HERE, "patched-web-fetch-block.txt"), "utf8"),
     backupPrefix: "index.js.bak-"
   }
 ];

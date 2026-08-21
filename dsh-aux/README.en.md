@@ -14,7 +14,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.3.3-blue)
-![Tests](https://img.shields.io/badge/tests-300-brightgreen)
+![Tests](https://img.shields.io/badge/tests-301-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 
@@ -132,7 +132,7 @@ node scripts/doctor.mjs
 
 ### Settings
 
-Web → Settings → Auxiliary Models. Configure a model per `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. **`skill` is the skill pre-audit model** — once configured, native `skill` calls get an auxiliary pre-audit report. `web_extract` / `web_crawl` also expose `maxChars` (page character budget, default 32000). Each task can also select a "reasoning effort"; options come from the current provider/model's `reasoning.efforts`, and omitting it preserves the provider default. The settings page is grouped into collapsible "Tool Tasks / Bridge Tasks / Subagents / Global / Platform Switches" sections and is bilingual (zh/en) following the DSH language. In "Platform Switches" you can choose `native` / `aux` per tool/bridge (`compat` is reserved for the future), configure SKILL audit mode (`native` / `audit` / `report` / `report-ondemand`), and debug recording options. The settings page also has a "Diagnostics & Repair" panel at the top: each tool/bridge shows a status dot, patch badge, and unavailable reason, with one-click patch when a patch is missing; after writing patches it reminds you to restart DSH for them to take effect. You can also turn off "Show auxiliary model status chip in conversation UI" (the `aux-status` projection is then no longer exposed to Web/third-party readers; `/aux status` still works).
+Web → Settings → Auxiliary Models. Configure a model per `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. **`compaction` is the session-compaction model** — once configured, native DSH automatic/manual compaction routes through the AUX model. **`skill` is the skill pre-audit model** — once configured, native `skill` calls get an auxiliary pre-audit report. `web_extract` / `web_crawl` also expose `maxChars` (page character budget, default 32000). Each task can also select a "reasoning effort"; options come from the current provider/model's `reasoning.efforts`, and omitting it preserves the provider default. The settings page is grouped into collapsible "Tool Tasks / Bridge Tasks / Subagents / Global / Platform Switches" sections and is bilingual (zh/en) following the DSH language. In "Platform Switches" you can choose `native` / `aux` per tool/bridge (`compat` is now available for `web_extract`: the model sees native `web_fetch` while AUX enhances underneath; the rest remain reserved), configure SKILL audit mode (`native` / `audit` / `report` / `report-ondemand`), and debug recording options. The settings page also has a "Diagnostics & Repair" panel at the top: each tool/bridge shows a status dot, patch badge, and unavailable reason, with one-click patch when a patch is missing; after writing patches it reminds you to restart DSH for them to take effect. You can also turn off "Show auxiliary model status chip in conversation UI" (the `aux-status` projection is then no longer exposed to Web/third-party readers; `/aux status` still works).
 
 ### web_extract
 
@@ -291,7 +291,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 - **Platform**: DSH 0.1.0-rc.6 ~ 0.1.1-rc.1; Node ≥ 20.
 - **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages; no `dependencies`.
-- **Zero-dependency tests**: `node --test tests/*.test.js` (300 total; see `TESTING.md` for the file inventory and baseline).
+- **Zero-dependency tests**: `node --test tests/*.test.js` (301 total; see `TESTING.md` for the file inventory and baseline).
 
 ### Integrated Components
 

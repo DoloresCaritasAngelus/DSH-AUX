@@ -22,6 +22,7 @@ import {
   isCompactionTaskConfigured
 } from "./compaction-bridge.js";
 import { isSkillTaskConfigured, skillBridgeStatus } from "./skill-bridge.js";
+import { webFetchCompatStatus } from "./compat/web-fetch.js";
 import { sessionEventsSupported } from "./events.js";
 
 /** Tool keys that do not depend on bridge patches. */
@@ -119,12 +120,22 @@ function item(entry) {
  * Status for one model-facing tool. Tools are available whenever the plugin
  * is mounted; only the user's mode switch changes their state.
  */
-function toolStatus(service, key) {
+function toolStatus(service, key, webFetchCompat) {
   const mode = service.toolBridgeMode(key);
   if (mode === "native") {
     return item({ key, kind: "tool", mode, state: "disabled", reason: "mode-native", action: "none" });
   }
   if (mode === "compat") {
+    if (key === "web_extract") {
+      switch (webFetchCompat) {
+        case "installed":
+          return item({ key, kind: "tool", mode, state: "enabled", reason: "compat-enabled", action: "none", patch: "installed" });
+        case "missing":
+          return item({ key, kind: "tool", mode, state: "unavailable", reason: "patch-missing", action: "patch", patch: "missing" });
+        default:
+          return item({ key, kind: "tool", mode, state: "unknown", reason: "patch-unknown", action: "none", patch: "unknown" });
+      }
+    }
     return item({ key, kind: "tool", mode, state: "unavailable", reason: "mode-compat", action: "none" });
   }
   return item({ key, kind: "tool", mode, state: "enabled", reason: "mode-aux", action: "none" });
@@ -230,19 +241,20 @@ function skillBridgeStatusItem(service, status) {
  * @returns {Promise<object>} JSON-safe status object.
  */
 export async function collectPlatformStatus(service) {
-  const [image, sub, workflow, skill, events, restartRequired] = await Promise.all([
+  const [image, sub, workflow, skill, events, webFetchCompat, restartRequired] = await Promise.all([
     imageBridgeStatus(),
     subagentBridgeStatus(),
     workflowBridgeStatus(),
     skillBridgeStatus(),
     sessionEventsSupported(service),
+    webFetchCompatStatus(),
     service._patchAppliedThisSession === true
       ? Promise.resolve(true)
       : anyPatchFileNewerThanProcessStart()
   ]);
 
   const items = [];
-  for (const key of TOOL_KEYS) items.push(toolStatus(service, key));
+  for (const key of TOOL_KEYS) items.push(toolStatus(service, key, webFetchCompat));
   items.push(imageBridgeStatusItem(service, image));
   items.push(filePatchBridgeStatusItem(service, "subagentBridge", sub));
   items.push(filePatchBridgeStatusItem(service, "workflowBridge", workflow));

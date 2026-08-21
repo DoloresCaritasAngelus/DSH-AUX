@@ -11,7 +11,7 @@
  *
  * 职责(AUX 自持,不碰其它插件):
  *   1. dsh-aux 插件 symlink 存在(缺失重建);
- *   2. P1-P6 + P11 桥接补丁(image/subagent/workflow/skill-audit):
+ *   2. P1-P6 + P11 + P12 桥接补丁(image/subagent/workflow/skill-audit/web_fetch compat):
  *      重跑 bridge/apply-patch.mjs(幂等);
  *   3. P7 session append ignorable 写入口:缺失时外科式补上(专用块,不做白名单整跑);
  *   4. P8 白名单:保证 lib/index.js 与 lib/types/known-event-types.js 都含
@@ -115,7 +115,7 @@ function main() {
     try { fn(); } catch (error) { log(`${name} 失败(继续): ${error?.message ?? error}`); }
   };
   step("symlink", () => ensureSymlink(root));
-  step("P1-P6/P11", () => { log("重跑 P1-P6/P11 桥接补丁(幂等)..."); runNode(join(HERE, "apply-patch.mjs")); });
+  step("P1-P6/P11/P12", () => { log("重跑 P1-P6/P11/P12 桥接补丁(幂等)..."); runNode(join(HERE, "apply-patch.mjs")); });
   step("P7", () => ensureSessionAppendIgnorable());
   step("P8", () => ensureWhitelist(root));
   step("P9/P10", () => {

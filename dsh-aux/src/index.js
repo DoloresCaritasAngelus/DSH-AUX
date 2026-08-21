@@ -62,6 +62,7 @@ import { onSessionDisposed, reconcileSessionImages } from "./images/ownership.js
 import { handleAuxCommand } from "./commands.js";
 import { prepareCompactionMessages } from "./compaction-messages.js";
 import { attachSkillBridge } from "./skill-bridge.js";
+import { runWebFetchCompat } from "./compat/web-fetch.js";
 
 export { AUX_SETTINGS_NAMESPACE, AUX_TIMEOUT_CODE, AUX_CALL_EVENT, AUX_STATUS_KEY, validateAuxSettings } from "./config.js";
 export { AuxCallError, sessionPatchCandidates } from "./events.js";
@@ -725,6 +726,18 @@ export class AuxLlmService extends Service {
       return { settled: false };
     }
     return resolveSubagentRoute(this._subagentSettings, payload ?? {});
+  }
+
+  /**
+   * Compat adapter for the native `web_fetch` tool. The patched dsh-tool-web
+   * calls this when `aux.enabled.web_extract === "compat"`; the model still
+   * sees the native tool surface, while fetching/cleaning runs through AUX.
+   * @param input native web_fetch parsed arguments (`{ url }`).
+   * @param exec tool execution context.
+   * @returns native web_fetch result shape.
+   */
+  webFetchCompat(input, exec) {
+    return runWebFetchCompat(this, input, exec);
   }
 
   /**

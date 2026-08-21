@@ -69,6 +69,7 @@ import {
   recordAttachmentOwnership
 } from '../dsh-aux/src/images/ownership.js';
 import { runWebExtract } from '../dsh-aux/src/tools/web-extract.js';
+import { runWebFetchCompat } from '../dsh-aux/src/compat/web-fetch.js';
 import { fetchWithSsrf } from '../dsh-aux/src/fetch.js';
 import { resolveImageRef } from '../dsh-aux/src/images/resolve.js';
 import { imageBridgeStatus } from '../dsh-aux/src/image-bridge.js';
@@ -1568,6 +1569,19 @@ test('/aux status --json 命令: 返回结构化平台状态', async () => {
   assert.ok(data.core.count >= 4, '核心保护数量应 >= 4');
   assert.equal(typeof data.eventsSupported, 'boolean');
   assert.equal(typeof data.restartRequired, 'boolean', '应返回是否需要重启 DSH');
+});
+
+test('web_fetch compat: 原生返回形状由 AUX 抓取内核产出', async () => {
+  const { ctx } = await makeHarness();
+  const exec = { signal: new AbortController().signal };
+  const html = await runWebFetchCompat(ctx.auxLlm, { url: 'https://example.com/htmlpage' }, exec);
+  assert.equal(html.statusCode, 200);
+  assert.equal(html.body.kind, 'html');
+  assert.ok(html.body.content.includes('HTML 页面标题'));
+  assert.equal(typeof html.truncated, 'boolean');
+  const text = await runWebFetchCompat(ctx.auxLlm, { url: 'https://example.com/page' }, exec);
+  assert.equal(text.body.kind, 'text');
+  assert.ok(text.body.content.includes('PAGE CONTENT'));
 });
 
 test('/aux history: 简要溯源按新→旧显示最近 N 次', async () => {
