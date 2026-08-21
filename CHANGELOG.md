@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — 平台化开关 + SKILL 模式
+## 0.4.0(2026-08-22)— 平台化开关 + SKILL 模式 + 状态/UX 升级
 
 - **工具/桥接三态开关**:`native` / `aux` / `compat`(compat 预留);关闭时工具从模型目录隐藏,桥接走原生;补丁不受开关影响。
 - **SKILL 模式**:`native` / `audit` / `report` / `report-ondemand`;`report-ondemand` 支持 `includeOriginal` 取原文;`auto` 预留。
@@ -21,7 +21,7 @@
 - **非命令状态通道**:新增 `aux/platform-status` 隐藏事件 + `aux-platform` 投影;设置页通过 `sessions.history` 只读读取状态,不再执行 `/aux status --json`,消除会话命令卡片污染。
 - **子代理设置优化**:general / vision 分为独立卡片排版;子代理 general/vision 新增 `reasoningEffort`(思考强度)配置,并透传到子代理路由。
 - **PR 前审查修复**:修复同进程打补丁后写入非 ignorable 事件的风险、强制 native 保存、任务 reasoningEffort 孤立、redactSecrets 开关、group 渲染等问题;新增 README 命令表与投影/路由测试。
-- 测试基线更新为 304。
+- 测试基线更新为 305。
 
 ## 0.3.3(2026-08-21)— 设置页 UI 重构 + reasoningEffort + 双语
 
