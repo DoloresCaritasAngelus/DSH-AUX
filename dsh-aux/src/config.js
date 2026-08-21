@@ -15,6 +15,8 @@ export const AUX_SETTINGS_NAMESPACE = settingsNamespace("aux");
 export const AUX_TIMEOUT_CODE = "AUX_TIMEOUT";
 /** Session event type recording one auxiliary call. */
 export const AUX_CALL_EVENT = "aux/llm-call";
+/** Session event type recording debug/content-truth details (ignorable, not in model context). */
+export const AUX_DEBUG_EVENT = "aux/debug";
 /** Projection key exposing the latest per-task aux call snapshot. */
 export const AUX_STATUS_KEY = "aux-status";
 /** Tool names registered by dsh-aux (hidden from the `minimal` preset). */

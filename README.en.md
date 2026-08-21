@@ -9,7 +9,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.3.3-blue)
-![Tests](https://img.shields.io/badge/tests-296-brightgreen)
+![Tests](https://img.shields.io/badge/tests-298-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 

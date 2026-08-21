@@ -5,7 +5,7 @@
  * @module @dolorescaritasangelus/dsh-aux/events
  */
 import { readFile as readFileText } from "node:fs/promises";
-import { AUX_CALL_EVENT } from "./config.js";
+import { AUX_CALL_EVENT, AUX_DEBUG_EVENT } from "./config.js";
 
 /** One auxiliary call outcome. */
 export class AuxCallError extends Error {
@@ -117,5 +117,25 @@ export async function recordAuxEvent(service, session, data) {
     session.append(AUX_CALL_EVENT, clean, void 0, { ignorable: true });
   } catch {
     /* event logging must never fail the call */
+  }
+}
+
+/**
+ * Log one debug/content-truth event. Used when `aux.debug.fullToolTrace` is
+ * enabled or for explicit diagnostic records. The event is `ignorable` and
+ * non-surface by convention: it stays in the session log for `/aux debug`
+ * but never enters the model context.
+ */
+export async function recordDebugEvent(service, session, data) {
+  if (session === void 0) return;
+  if (!await sessionEventsSupported(service)) return;
+  try {
+    const clean = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== void 0) clean[key] = value;
+    }
+    session.append(AUX_DEBUG_EVENT, clean, void 0, { ignorable: true });
+  } catch {
+    /* debug logging must never fail the call */
   }
 }

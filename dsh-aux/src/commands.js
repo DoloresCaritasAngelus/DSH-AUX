@@ -3,7 +3,7 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/commands
  */
-import { AUX_CALL_EVENT, AUX_SETTINGS_NAMESPACE } from "./config.js";
+import { AUX_CALL_EVENT, AUX_DEBUG_EVENT, AUX_SETTINGS_NAMESPACE } from "./config.js";
 import { AUX_TASKS, resolvePrimaryRoute } from "./route.js";
 import { gcImages } from "./images/gc.js";
 import { handleMemoryCommand } from "./images/memory.js";
@@ -43,6 +43,9 @@ export async function handleAuxCommand(service, agent, rawInput) {
   }
   if (sub === "history") {
     return await handleHistoryCommand(agent, args.slice(1));
+  }
+  if (sub === "debug") {
+    return handleDebugCommand(agent, args.slice(1));
   }
   if (sub === "status" || sub === "") {
     // Reconcile first so the status view reflects any deleted-session
@@ -186,6 +189,43 @@ export function handleHistoryCommand(agent, args) {
     ? `全部溯源(共 ${rows.length} 次${Number.isFinite(limit) ? `,显示最近 ${chosen.length} 次` : ""}):`
     : `简要溯源(最近 ${chosen.length} 次,共 ${rows.length} 次);完整信息用 /aux history full:`;
   return { kind: "success", text: [header, ...chosen.reverse()].join("\n") };
+}
+
+/**
+ * /aux debug [N] — 查看当前会话的 AUX debug/内容真相事件(默认最近 10 条)。
+ * 这些事件带 ignorable 标记,不进模型上下文;需要完整工具追踪时先开启
+ * aux.debug.fullToolTrace。
+ */
+export function handleDebugCommand(agent, args) {
+  const limitArg = args[0];
+  let limit = 10;
+  if (limitArg !== void 0) {
+    limit = Number(limitArg);
+    if (!Number.isInteger(limit) || limit < 0) {
+      return { kind: "error", text: "用法: /aux debug [N] — N 为非负整数条数" };
+    }
+  }
+  const events = (agent?.session?.events ?? []).filter((event) => event?.type === AUX_DEBUG_EVENT);
+  if (events.length === 0) {
+    return {
+      kind: "success",
+      text: "当前会话暂无 AUX debug 事件。开启 aux.debug.fullToolTrace 后,后续辅助调用会记录内容真相。"
+    };
+  }
+  const rows = events.map((event, index) => {
+    const d = event.data ?? {};
+    const seq = event.seq ?? index + 1;
+    const parts = [`#${seq} ${d.kind ?? "debug"}`, d.task ?? "", d.ok === true ? "成功" : d.ok === false ? "失败" : ""];
+    if (typeof d.provider === "string" && d.provider !== "") parts.push(`路由 ${d.provider}/${d.model ?? ""}`);
+    if (typeof d.durationMs === "number") parts.push(`${d.durationMs}ms`);
+    if (d.error !== void 0) parts.push(`error=${typeof d.error === "string" ? d.error : JSON.stringify(d.error)}`);
+    if (d.purpose !== void 0) parts.push(`purpose=${d.purpose}`);
+    if (d.input !== void 0) parts.push(`input=${typeof d.input === "string" ? d.input.slice(0, 200) : JSON.stringify(d.input).slice(0, 200)}`);
+    if (d.output !== void 0) parts.push(`output=${typeof d.output === "string" ? d.output.slice(0, 200) : JSON.stringify(d.output).slice(0, 200)}`);
+    return `  ${parts.filter(Boolean).join(" | ")}`;
+  });
+  const chosen = Number.isFinite(limit) ? rows.slice(-limit) : rows;
+  return { kind: "success", text: [`AUX debug(共 ${rows.length} 条,显示最近 ${chosen.length} 条):`, ...chosen.reverse()].join("\n") };
 }
 
 /** Handle the /aux model subcommand: read or write one task's route. */

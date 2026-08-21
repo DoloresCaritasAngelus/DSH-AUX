@@ -48,7 +48,7 @@ import {
   projectSettings,
   validateAuxSettings
 } from "./config.js";
-import { AuxCallError, finishError, recordAuxEvent, sessionPatchCandidates } from "./events.js";
+import { AuxCallError, finishError, recordAuxEvent, recordDebugEvent, sessionPatchCandidates } from "./events.js";
 import { syncAuxStatusProjection } from "./projection.js";
 import {
   auxPreStepReminderText,
@@ -65,6 +65,18 @@ import { attachSkillBridge } from "./skill-bridge.js";
 
 export { AUX_SETTINGS_NAMESPACE, AUX_TIMEOUT_CODE, AUX_CALL_EVENT, AUX_STATUS_KEY, validateAuxSettings } from "./config.js";
 export { AuxCallError, sessionPatchCandidates } from "./events.js";
+
+/** Truncate a debug payload to a bounded size for session-event storage. */
+function truncateForDebug(value, max) {
+  let text;
+  try {
+    text = typeof value === "string" ? value : JSON.stringify(value);
+  } catch {
+    text = String(value);
+  }
+  if (text.length > max) return text.slice(0, max) + "…[truncated]";
+  return text;
+}
 
 /**
  * `ctx.auxLlm`: the unified auxiliary-model router. Owns task definitions,
@@ -245,7 +257,7 @@ export class AuxLlmService extends Service {
         // actually run. Mirror of how official /goal /plan /preset /echo
         // register their argument-taking commands.
         input: {
-          hint: "status | history [N] | history full [N] | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory"
+          hint: "status | history [N] | history full [N] | debug [N] | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory"
         },
         handler: ({ agent, rawInput }) => handleAuxCommand(this, agent, rawInput)
       });
@@ -431,6 +443,21 @@ export class AuxLlmService extends Service {
             outputChars: output.length,
             purpose: request.purpose
           });
+          if (this.debugConfig?.fullToolTrace === true) {
+            const max = this.debugConfig.maxDebugEventBytes ?? 65536;
+            await recordDebugEvent(this, request.session, {
+              task,
+              kind: "call",
+              ok: true,
+              provider: candidate.provider,
+              model: candidate.model,
+              input: truncateForDebug(request.messages, max),
+              output: truncateForDebug(output, max),
+              purpose: request.purpose,
+              reasoningEffort: request.reasoningEffort ?? definition.reasoningEffort,
+              durationMs: Date.now() - startedAt
+            });
+          }
           return { text: output, provider: candidate.provider, model: candidate.model };
         } catch (error) {
           const kind = classifyFailure(error, request.signal);
@@ -456,6 +483,22 @@ export class AuxLlmService extends Service {
         fallbackUsed: attempts.length > 1,
         purpose: request.purpose
       });
+      if (this.debugConfig?.fullToolTrace === true) {
+        const max = this.debugConfig.maxDebugEventBytes ?? 65536;
+        await recordDebugEvent(this, request.session, {
+          task,
+          kind: "call",
+          ok: false,
+          provider: attempts[0]?.provider ?? "",
+          model: attempts[0]?.model ?? "",
+          input: truncateForDebug(request.messages, max),
+          error: truncateForDebug(lastError?.message ?? String(lastError ?? ""), max),
+          attempts: truncateForDebug(attempts.map((a) => ({ provider: a.provider, model: a.model, kind: a.kind, error: a.error?.message })), max),
+          purpose: request.purpose,
+          reasoningEffort: request.reasoningEffort ?? definition.reasoningEffort,
+          durationMs: Date.now() - startedAt
+        });
+      }
       throw new AuxCallError(task, attempts);
     } finally {
       release();

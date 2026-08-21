@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import fsPromises from 'node:fs/promises';
 import { Context } from '@deepseek-ai/cordis';
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic';
-import { projectSettings } from '../dsh-aux/src/config.js';
+import { AUX_DEBUG_EVENT, projectSettings } from '../dsh-aux/src/config.js';
 import AuxLlmService, {
   AUX_CALL_EVENT,
   AUX_SETTINGS_NAMESPACE,
@@ -55,6 +55,7 @@ import {
   isPrivateIpv6
 } from '../dsh-aux/src/url-policy.js';
 import { syncAuxStatusProjection } from '../dsh-aux/src/projection.js';
+import { handleDebugCommand } from '../dsh-aux/src/commands.js';
 import {
   auxPreStepReminderText,
   auxToolsGuide,
@@ -786,6 +787,31 @@ test('call: request.reasoningEffort 覆盖任务配置', async () => {
   });
   await ctx.auxLlm.call('compress', { messages: [], session: makeSession(), reasoningEffort: 'low' });
   assert.equal(streams[0].reasoningEffort, 'low');
+});
+
+test('call: fullToolTrace=true 时写入 aux/debug 事件', async () => {
+  const { ctx } = await makeHarness();
+  ctx.auxLlm.debugConfig = { fullToolTrace: true, maxDebugEventBytes: 65536, debugEventsInHistory: false, redactSecrets: true };
+  const session = makeSession();
+  await ctx.auxLlm.call('compress', { messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }], id: 'm1', source: { kind: 'plugin', plugin: 'test' } }], session });
+  const debugEvents = session.events.filter((e) => e.type === AUX_DEBUG_EVENT);
+  assert.equal(debugEvents.length, 1);
+  assert.equal(debugEvents[0].data.task, 'compress');
+  assert.equal(debugEvents[0].data.ok, true);
+  assert.ok(debugEvents[0].data.output.includes('OUTPUT_TEXT'));
+});
+
+test('/aux debug: 展示当前会话 debug 事件', () => {
+  const session = {
+    events: [
+      { seq: 1, type: AUX_DEBUG_EVENT, data: { kind: 'call', task: 'compress', ok: true, output: 'OUTPUT' } }
+    ]
+  };
+  const result = handleDebugCommand({ session }, []);
+  assert.equal(result.kind, 'success');
+  assert.match(result.text, /AUX debug/);
+  assert.match(result.text, /compress/);
+  assert.match(result.text, /OUTPUT/);
 });
 
 test('call: compaction 任务可显式配置并记录事件', async () => {
