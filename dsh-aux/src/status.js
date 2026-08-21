@@ -181,6 +181,9 @@ function skillBridgeStatusItem(service, status) {
   if (mode === "compat") {
     return item({ key: "skillAudit", kind: "bridge", mode, state: "unavailable", reason: "mode-compat", action: "none", patch: status });
   }
+  if (status === "unknown") {
+    return item({ key: "skillAudit", kind: "bridge", mode, state: "unknown", reason: "patch-unknown", action: "none", patch: "unknown" });
+  }
   if (status !== "installed") {
     return item({ key: "skillAudit", kind: "bridge", mode, state: "unavailable", reason: "patch-missing", action: "patch", patch: status });
   }
@@ -277,6 +280,9 @@ export async function collectPlatformStatus(service) {
  * `sessions.history` without executing a slash command.
  */
 export async function publishPlatformStatusToSession(service, session) {
+  // 同进程内刚打过补丁时,当前 dsh-session 仍是旧代码,不能写需要 ignorable
+  // 标记的新事件;等重启后由启动发布再写入。
+  if (service._patchAppliedThisSession === true) return;
   try {
     const status = await collectPlatformStatus(service);
     await recordPlatformEvent(service, session, status);

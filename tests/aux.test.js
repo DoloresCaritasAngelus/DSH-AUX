@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import fsPromises from 'node:fs/promises';
 import { Context } from '@deepseek-ai/cordis';
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic';
-import { AUX_DEBUG_EVENT, AUX_PLATFORM_KEY, projectSettings } from '../dsh-aux/src/config.js';
+import { AUX_DEBUG_EVENT, AUX_PLATFORM_EVENT, AUX_PLATFORM_KEY, projectSettings } from '../dsh-aux/src/config.js';
 import AuxLlmService, {
   AUX_CALL_EVENT,
   AUX_SETTINGS_NAMESPACE,
@@ -749,6 +749,15 @@ test('投影: DSH 0.1.1-rc.1 新 API 使用 stateSchema/wire', () => {
   assert.deepEqual(captured.wire.view(captured.init()), { tasks: {} });
 });
 
+test('投影: aux-platform 折叠 aux/platform-status 整值事件', async () => {
+  const { projections } = await makeHarness();
+  const def = projections.find((p) => p.key === AUX_PLATFORM_KEY);
+  assert.ok(def, '应注册 aux-platform');
+  const status = { items: [{ key: 'vision_analyze', state: 'enabled' }], issues: [] };
+  const state = def.apply({}, { type: AUX_PLATFORM_EVENT, data: status });
+  assert.deepEqual(state, status);
+});
+
 test('call: 未配置任务用默认辅助模型,成功返回文本与路由', async () => {
   const { ctx, streams } = await makeHarness();
   const session = makeSession();
@@ -1333,6 +1342,10 @@ test('validateAuxSettings: 拒绝 subagent.general/vision 半配置', () => {
     /subagent\.vision provider and model must be supplied together/
   );
   validateAuxSettings({ subagent: { general: { provider: 'p', model: 'm' } } });
+  assert.throws(
+    () => validateAuxSettings({ subagent: { general: { reasoningEffort: 'high' } } }),
+    /subagent\.general reasoningEffort requires provider and model/
+  );
 });
 
 test('subagentRoute: native / manual / vision-aware 服务方法', async () => {

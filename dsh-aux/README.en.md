@@ -14,7 +14,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.3.3-blue)
-![Tests](https://img.shields.io/badge/tests-302-brightgreen)
+![Tests](https://img.shields.io/badge/tests-304-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 
@@ -122,8 +122,13 @@ node scripts/doctor.mjs
 | Command | Purpose |
 |---|---|
 | `/aux status` | Show routes and recent auxiliary calls |
+| `/aux status --json` | Return structured platform status (settings/diagnostics) |
 | `/aux history [N]` | Brief trace: last N auxiliary calls (default 10) |
 | `/aux history full [N]` | Full trace: complete event fields (defaults to all) |
+| `/aux debug [N]` | Show AUX content-truth/debug events |
+| `/aux debug <target> [N]` | Read another session (@this / session id / prefix / cwd) |
+| `/aux patch` | Install all patches needed by the current DSH and self-heal |
+| `/aux patch --json` | Same, returning structured step results |
 | `/aux model <task> [provider/model]` | View/set a task's auxiliary model |
 | `/aux vision <path> <question...>` | Analyze an image from the command line |
 | `/aux test <task>` | Self-test a task route |
@@ -291,7 +296,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 - **Platform**: DSH 0.1.0-rc.6 ~ 0.1.1-rc.1; Node ≥ 20.
 - **Zero runtime third-party dependencies**: all peerDependencies are official DSH packages; no `dependencies`.
-- **Zero-dependency tests**: `node --test tests/*.test.js` (302 total; see `TESTING.md` for the file inventory and baseline).
+- **Zero-dependency tests**: `node --test tests/*.test.js` (304 total; see `TESTING.md` for the file inventory and baseline).
 
 ### Integrated Components
 

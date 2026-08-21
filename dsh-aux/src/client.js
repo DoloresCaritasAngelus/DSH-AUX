@@ -461,7 +461,7 @@ window.__ModuleLoader__.load({
 			const [statusLoading, setStatusLoading] = react.useState(false);
 			const [statusError, setStatusError] = react.useState(null);
 			const auxForcedNative = (key) => {
-				const item = status?.items?.find((entry) => entry.key === key);
+				const item = (status?.items ?? []).find((entry) => entry !== null && typeof entry === "object" && entry.key === key);
 				return item?.state === "unavailable" && item?.action === "patch";
 			};
 			const loadStatus = react.useCallback(() => {
@@ -476,12 +476,13 @@ window.__ModuleLoader__.load({
 						const listResponse = await api.sessions.list({});
 						const items = listResponse?.result?.value?.items ?? [];
 						if (items.length === 0) throw new Error(t("status.noSession"));
-						const sessionId = items[0].sessionId;
-						const historyResponse = await api.sessions.history({ sessionId, limit: 1 });
-						const projections = historyResponse?.result?.value?.projections;
-						const data = projections?.values?.["aux-platform"];
-						if (!data || typeof data !== "object" || !Array.isArray(data.items)) throw new Error(t("status.notReady"));
-						return data;
+						for (const item of items) {
+							const historyResponse = await api.sessions.history({ sessionId: item.sessionId, limit: 1 });
+							const projections = historyResponse?.result?.value?.projections;
+							const data = projections?.values?.["aux-platform"];
+							if (data && typeof data === "object" && Array.isArray(data.items)) return data;
+						}
+						throw new Error(t("status.notReady"));
 					})
 					.then((data) => {
 						if (!alive || !mountedRef.current || requestId !== statusRequestId.current) return;
@@ -559,12 +560,10 @@ window.__ModuleLoader__.load({
 					}
 					const effort = entry.reasoningEffort;
 					const effortPath = [...base, "reasoningEffort"];
-					if (hasProvider && hasModel) {
-						if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
-						else ops.push({ op: "unset", path: effortPath });
-					} else {
-						ops.push({ op: "unset", path: effortPath });
-					}
+					// 任务级 reasoningEffort 可以独立于 provider/model 存在
+					// (插件配置可能提供路由),不能因为设置里没填 provider/model 就删掉。
+					if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
+					else ops.push({ op: "unset", path: effortPath });
 				}
 				const sub = draft?.subagent ?? {};
 				if (sub.mode !== void 0 && sub.mode !== "native") ops.push({ op: "set", path: ["subagent", "mode"], value: sub.mode });
@@ -613,8 +612,10 @@ window.__ModuleLoader__.load({
 				for (const key of enabledKeys) {
 					const val = draft?.enabled?.[key];
 					// 设计意图 A22 10.5:补丁未装时,aux 不可选/强制 native。
-					// 即使草稿里还是 aux,保存时也落成 native,避免存一个当前不可用的模式。
-					const effectiveVal = auxForcedNative(key) && val === "aux" ? "native" : val;
+					// 即使草稿里还是 aux(含默认缺省),保存时也落成 native,
+					// 避免存一个当前不可用的模式。
+					const rawVal = val ?? "aux";
+					const effectiveVal = auxForcedNative(key) && rawVal === "aux" ? "native" : val;
 					if (effectiveVal !== void 0 && effectiveVal !== "aux") ops.push({ op: "set", path: ["enabled", key], value: effectiveVal });
 					else ops.push({ op: "unset", path: ["enabled", key] });
 				}
@@ -635,6 +636,7 @@ window.__ModuleLoader__.load({
 					}
 					setSaved(true);
 					setState((s) => ({ ...s, revision: response.result.value.revision, value: response.result.value.value }));
+					setDraft(structuredClone(response.result.value.value ?? {}));
 					loadStatus();
 				}).catch((error) => {
 					setSaving(false);
@@ -697,7 +699,10 @@ window.__ModuleLoader__.load({
 				onChange: (e) => {
 					const value = e.target.value;
 					setField(task, key, value);
-					if (key === "provider") setField(task, "model", "");
+					if (key === "provider") {
+						setField(task, "model", "");
+						setField(task, "reasoningEffort", "");
+					}
 				}
 			}, react.createElement("option", { value: "" }, placeholder),
 				options.map((o) => react.createElement("option", { key: o.value, value: o.value }, o.label)));
@@ -768,7 +773,7 @@ window.__ModuleLoader__.load({
 				id: "ax-sub-" + group + "-" + key,
 				value: subField(group, key) ?? "",
 				disabled: options.length === 0,
-				onChange: (e) => { const value = e.target.value; setSubGroup(group, key, value); if (key === "provider") setSubGroup(group, "model", ""); }
+				onChange: (e) => { const value = e.target.value; setSubGroup(group, key, value); if (key === "provider") { setSubGroup(group, "model", ""); setSubGroup(group, "reasoningEffort", ""); } }
 			}, react.createElement("option", { value: "" }, placeholder),
 				options.map((o) => react.createElement("option", { key: o.value, value: o.value }, o.label)));
 			const subModelOptionsFor = (group) => {
@@ -830,14 +835,18 @@ window.__ModuleLoader__.load({
 				setDraft((d) => {
 					const next = structuredClone(d ?? {});
 					next.debug = next.debug ?? {};
-					if (value === "" || value === false || value === 65536) delete next.debug[key];
+					// redactSecrets 默认 true,用户取消时必须显式存 false;
+					// 其他布尔默认 false,取消时删除即可恢复默认。
+					if (value === "" || (value === false && key !== "redactSecrets") || value === 65536) delete next.debug[key];
 					else next.debug[key] = value;
 					return next;
 				});
 			};
 			const statusByKey = {};
 			if (status !== null && Array.isArray(status.items)) {
-				for (const it of status.items) statusByKey[it.key] = it;
+				for (const it of status.items) {
+					if (it !== null && typeof it === "object") statusByKey[it.key] = it;
+				}
 			}
 			const openIssue = (key) => {
 				setOpenGroups((s) => ({ ...s, diagnostics: true, platform: true }));
@@ -974,9 +983,11 @@ window.__ModuleLoader__.load({
 									react.createElement("span", { className: "ax-dot " + dotClass, "aria-hidden": "true" }),
 									react.createElement("div", { className: "ax-status-issue-text" },
 										label + ": " + t("status.reason." + issue.reason),
-										active && patchStatus !== null && patchStatus.ok === false && patchStatus.key === issue.key
+										active && patchStatus !== null && patchStatus.key === issue.key && patchStatus.ok === false
 											? react.createElement("div", { className: "ax-status-summary ax-error", role: "alert" }, patchStatus.text)
-											: null
+											: active && patchStatus !== null && patchStatus.key === issue.key && patchStatus.ok === true
+												? react.createElement("div", { className: "ax-status-summary ax-ok-text", role: "status" }, patchStatus.text)
+												: null
 									),
 									issue.action === "patch"
 										? react.createElement("button", { type: "button", className: "ax-repair-button", disabled: patching, onClick: () => { setActiveIssueKey(issue.key); runPatch(issue.key); } }, patching ? t("settings.patching") : t("status.action.patch"))
@@ -1081,7 +1092,7 @@ window.__ModuleLoader__.load({
 					switchRow(t("debug.debugEventsInHistory"), draft?.debug?.debugEventsInHistory === true, false, (e) => setDebug("debugEventsInHistory", e.target.checked)),
 					switchRow(t("debug.redactSecrets"), draft?.debug?.redactSecrets !== false, false, (e) => setDebug("redactSecrets", e.target.checked)),
 					react.createElement("div", { className: "ax-actions" },
-						react.createElement("button", { type: "button", className: "ax-save", disabled: patching, onClick: runPatch }, patching ? t("settings.patching") : t("settings.patch")),
+						react.createElement("button", { type: "button", className: "ax-save", disabled: patching, onClick: () => runPatch() }, patching ? t("settings.patching") : t("settings.patch")),
 						patchStatus !== null && react.createElement("span", { className: "ax-status " + (patchStatus.ok ? "ax-ok-text" : "ax-error"), role: "status" }, patchStatus.text)
 					)
 				),

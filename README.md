@@ -9,7 +9,7 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-0.3.3-blue)
-![Tests](https://img.shields.io/badge/tests-302-brightgreen)
+![Tests](https://img.shields.io/badge/tests-304-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 
@@ -116,8 +116,13 @@ node scripts/doctor.mjs
 | 命令 | 作用 |
 |---|---|
 | `/aux status` | 查看各任务路由与最近调用 |
+| `/aux status --json` | 返回结构化平台状态(设置页/诊断用) |
 | `/aux history [N]` | 简要溯源:最近 N 次辅助调用(默认 10) |
 | `/aux history full [N]` | 全部溯源:完整事件字段(默认全部) |
+| `/aux debug [N]` | 查看 AUX 内容真相/debug 事件 |
+| `/aux debug <目标> [N]` | 跨会话查看(@this / session id / 前缀 / cwd) |
+| `/aux patch` | 一键安装当前 DSH 所需全部补丁并自愈 |
+| `/aux patch --json` | 同上,返回结构化步骤结果 |
 | `/aux model <task> [provider/model]` | 查看/设置某任务的辅助模型 |
 | `/aux vision <path> <question...>` | 命令行直接看图 |
 | `/aux test <task>` | 自检某任务路由 |
@@ -285,7 +290,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 - **平台**:DSH 0.1.0-rc.6 ~ 0.1.1-rc.1;Node ≥ 20。
 - **运行时零第三方依赖**:peerDependencies 全部是 DSH 官方包(环境自带),无 `dependencies`。
-- **测试零依赖**:`node --test tests/*.test.js`(302 项;文件清单与基线见 `TESTING.md`)。
+- **测试零依赖**:`node --test tests/*.test.js`(304 项;文件清单与基线见 `TESTING.md`)。
 
 ### 集成组件
 

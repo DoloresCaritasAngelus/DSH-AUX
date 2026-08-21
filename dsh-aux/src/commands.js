@@ -369,21 +369,30 @@ export async function handlePatchCommand(service, json = false) {
   const eventsOk = status?.eventsSupported !== false;
   const stepsOk = steps.every((step) => step.ok);
   const verificationOk = status !== void 0 && patchIssues.length === 0 && eventsOk;
-  const ok = stepsOk && verificationOk;
+  // 以最终校验为准:脚本步骤可能“退出非 0 但最终状态已修好”,反之亦然。
+  const ok = verificationOk;
   const changed = status?.restartRequired === true;
   // 补丁写的是 node_modules 源码文件;当前进程已加载旧模块,必须重启 DSH
   // 新补丁才会真正生效。标记后,`/aux status --json` 会返回 restartRequired。
   if (service !== void 0) {
     service._patchAppliedThisSession = changed;
-    publishPlatformStatus(service).catch(() => {});
+    // 同进程内打补丁后不写 aux/platform-status 事件:当前加载的 dsh-session
+    // 仍是旧代码,无法正确处理 ignorable 标记;等重启后由启动发布再写入。
+    if (changed === false) {
+      publishPlatformStatus(service).catch(() => {});
+    }
   }
   if (json) {
     if (verificationError !== void 0) {
       steps.push({ name: "verify", ok: false, output: "", error: verificationError });
     }
+    const remaining = [...patchIssues];
+    if (eventsOk === false) {
+      remaining.push({ key: "session-events", reason: "patch-missing", action: "patch" });
+    }
     return {
       kind: "success",
-      text: JSON.stringify({ ok, restartRequired: changed, steps, remaining: patchIssues })
+      text: JSON.stringify({ ok, restartRequired: changed, steps, remaining })
     };
   }
   if (!ok) {

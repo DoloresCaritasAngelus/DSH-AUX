@@ -40,45 +40,45 @@ export const AUX_SETTINGS_SCHEMA = z.object({
   showStatusChip: z.boolean().default(true),
   tasks: z.object({
     vision: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
     }),
     web_extract: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       maxChars: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
     }),
     web_crawl: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       maxChars: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
     }),
     compress: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
     }),
     compaction: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
     }),
     skill: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1)
@@ -88,13 +88,13 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     mode: z.union([z.const("native"), z.const("manual"), z.const("vision-aware")]).default("native"),
     includeWorkflow: z.boolean().default(true),
     general: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       reasoningEffort: z.string().min(1)
     }),
     vision: z.object({
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().min(1),
+      model: z.string().min(1),
       reasoningEffort: z.string().min(1)
     }),
     prepareTools: z.boolean().default(true),
@@ -208,6 +208,11 @@ export function validateAuxSettings(value) {
     if (hasProvider !== hasModel) {
       throw new Error(
         `aux settings: subagent.${group} provider and model must be supplied together`
+      );
+    }
+    if (!hasProvider && entry?.reasoningEffort !== void 0) {
+      throw new Error(
+        `aux settings: subagent.${group} reasoningEffort requires provider and model`
       );
     }
   }

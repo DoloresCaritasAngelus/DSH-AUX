@@ -20,7 +20,8 @@
 - **补丁未装强制 native**:补丁缺失时 `aux` 选项禁用,UI 显示“当前按 native 处理”,保存时也会把 `aux` 落成 `native`。
 - **非命令状态通道**:新增 `aux/platform-status` 隐藏事件 + `aux-platform` 投影;设置页通过 `sessions.history` 只读读取状态,不再执行 `/aux status --json`,消除会话命令卡片污染。
 - **子代理设置优化**:general / vision 分为独立卡片排版;子代理 general/vision 新增 `reasoningEffort`(思考强度)配置,并透传到子代理路由。
-- 测试基线更新为 302。
+- **PR 前审查修复**:修复同进程打补丁后写入非 ignorable 事件的风险、强制 native 保存、任务 reasoningEffort 孤立、redactSecrets 开关、group 渲染等问题;新增 README 命令表与投影/路由测试。
+- 测试基线更新为 304。
 
 ## 0.3.3(2026-08-21)— 设置页 UI 重构 + reasoningEffort + 双语
 

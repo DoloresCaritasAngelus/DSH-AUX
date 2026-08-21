@@ -45,6 +45,15 @@ test('vision-aware + 显式 true → vision', () => {
   assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'kimi-k2.7-code' })
 })
 
+test('vision-aware + vision.reasoningEffort 透传到 agentOptions', () => {
+  const r = resolveSubagentRoute(
+    { mode: 'vision-aware', general: { provider: 'opencode-go', model: 'glm-5.2' }, vision: { provider: 'opencode-go', model: 'kimi-k2.7-code', reasoningEffort: 'high' } },
+    { prompt: '随便', requiresVision: true }
+  )
+  assert.equal(r.settled, true)
+  assert.deepEqual(r.agentOptions, { provider: 'opencode-go', model: 'kimi-k2.7-code', reasoningEffort: 'high' })
+})
+
 test('vision-aware + 显式 false → general', () => {
   const r = resolveSubagentRoute(visionAwareSettings, { prompt: '看图用文字描述', requiresVision: false })
   assert.equal(r.settled, true)
