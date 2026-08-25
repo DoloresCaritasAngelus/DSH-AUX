@@ -293,6 +293,10 @@ export class AsyncSemaphore {
   }
 
   release() {
+    // Double-release guard: only ever release what was acquired. Prevents
+    // `active` going negative (which would let the semaphore over-admit)
+    // when a caller releases twice or after an abort.
+    if (this.active <= 0) return;
     this.active -= 1;
     const next = this.queue.shift();
     if (next !== void 0) next();

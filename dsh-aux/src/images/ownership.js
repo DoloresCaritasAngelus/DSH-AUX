@@ -109,6 +109,24 @@ function mapToOwnershipObject(map) {
 }
 
 /**
+ * Whether any session other than `sessionId` references `attachmentId`.
+ * Checks BOTH the on-disk map and the in-memory live map: the debounced
+ * ownership save can lag behind memory, and a cleanup must not delete an
+ * image the live (in-memory) map still considers shared.
+ */
+function hasOtherReference(map, memory, sessionId, attachmentId) {
+  for (const [sid, ids] of map) {
+    if (sid !== sessionId && ids.has(attachmentId)) return true;
+  }
+  if (memory instanceof Map) {
+    for (const [sid, ids] of memory) {
+      if (sid !== sessionId && ids.has(attachmentId)) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Serialize a session-images.json write on the service's per-service promise
  * queue. Repeated writers (debounced saves, cleanup persistence, concurrent
  * multi-image turns) chain through one queue so the read-modify-write of the
@@ -229,8 +247,16 @@ export function installShutdownHook(service) {
     service._shuttingDown = true;
   };
   process.once("beforeExit", markShuttingDown);
-  process.once("SIGTERM", markShuttingDown);
-  process.once("SIGINT", markShuttingDown);
+  // On a graceful signal, flush any debounced ownership writes before exit so
+  // the latest references are not lost in the crash window.
+  process.once("SIGTERM", () => {
+    markShuttingDown();
+    saveSessionImages(service).catch(() => {}).finally(() => process.exit(0));
+  });
+  process.once("SIGINT", () => {
+    markShuttingDown();
+    saveSessionImages(service).catch(() => {}).finally(() => process.exit(0));
+  });
 }
 
 /**
@@ -272,12 +298,12 @@ export async function cleanupSessionImages(service, sessionId) {
       } catch { /* best-effort */ }
       return;
     }
-    // Which other sessions reference each id?
+    // Which other sessions reference each id? Check disk + live memory: the
+    // debounced save may lag behind memory, so a live shared reference must
+    // still protect the file.
     let removed = 0;
     for (const attachmentId of mine) {
-      const referencedElsewhere = [...map.entries()].some(([sid, ids]) =>
-        sid !== sessionId && ids.has(attachmentId)
-      );
+      const referencedElsewhere = hasOtherReference(map, service._sessionImages, sessionId, attachmentId);
       if (referencedElsewhere) continue;
       const match = /^sha256:([a-f0-9]{64})$/.exec(String(attachmentId));
       if (match === null) continue;

@@ -255,6 +255,17 @@ test('AsyncSemaphore: 并发上限与 FIFO 释放', async () => {
   r2();
 });
 
+test('AsyncSemaphore: 重复 release 不把 active 减成负数', async () => {
+  const semaphore = new AsyncSemaphore(1);
+  const r = await semaphore.acquire();
+  r();
+  r(); // 二次 release 应被忽略
+  assert.equal(semaphore.active, 0, '重复 release 不得把 active 减成负数');
+  const r2 = await semaphore.acquire();
+  assert.equal(semaphore.active, 1);
+  r2();
+});
+
 // ── prompt.js ────────────────────────────────────────────────────────────
 
 test('clampTargetRatio: 边界钳制与缺省', () => {

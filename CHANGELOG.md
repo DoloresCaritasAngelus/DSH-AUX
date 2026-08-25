@@ -7,7 +7,9 @@
   - `image-memory.json` 损坏时隔离旧文件并继续追加,新记忆能落盘,不再静默吞写。
   - `cleanupSessionImages` 移除空 session 条目;共享图片的已删除 owner 会被及时摘除,多个会话共享的图片在最后一个引用删除后能被回收。
   - `ensureSessionImagesLoaded` 读取失败不再标记 loaded,瞬时错误可重试。
-- 新增 `tests/lifecycle-durability.test.js`(7 项)覆盖以上路径;测试基线 305 → 312。
+  - cleanup 判断“是否被其他会话引用”时同时看内存 + 磁盘 map,消除 debounce 窗口内共享图片被误删的竞态;`SIGTERM/SIGINT` 时 flush 未落盘的 ownership 写入。
+  - `AsyncSemaphore.release()` 增加重复释放保护(`active <= 0` 直接返回),防止 active 被减成负数导致并发超放。
+- 新增 `tests/lifecycle-durability.test.js`(8 项)与 AsyncSemaphore 回归测试;测试基线 305 → 314。
 
 ## 0.4.0(2026-08-22)— 平台化开关 + SKILL 模式 + 状态/UX 升级
 

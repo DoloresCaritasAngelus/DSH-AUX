@@ -215,3 +215,30 @@ test('D7: 共享图片只删除一个会话 → 文件保留,已删会话的 own
     await fsPromises.rm(tmp, { recursive: true, force: true });
   }
 });
+
+test('D8: debounce 窗口内,内存中的共享引用保护图片不被误删', async () => {
+  const tmp = await makeTmp('aux-d8');
+  const prev = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  try {
+    const hash = 'ab' + 'c'.repeat(62);
+    await fsPromises.mkdir(tmp + '/attachments/v1/objects/ab', { recursive: true });
+    await fsPromises.writeFile(tmp + '/attachments/v1/objects/ab/' + hash, 'X');
+    const x = 'sha256:' + hash;
+    // 磁盘只认 sess-A;内存里 sess-B 刚记录还没落盘(debounce 窗口)
+    await fsPromises.writeFile(sessionImagesPath(), JSON.stringify({ 'sess-A': [x] }));
+    const svc = makeService();
+    svc._sessionImages.set('sess-B', new Set([x]));
+
+    await cleanupSessionImages(svc, 'sess-A');
+
+    const files = await fsPromises.readdir(tmp + '/attachments/v1/objects/ab');
+    assert.ok(files.includes(hash), '内存中仍有共享引用时不得删除文件,实际: ' + files.join(','));
+    const map = JSON.parse(await fsPromises.readFile(sessionImagesPath(), 'utf8'));
+    assert.equal(map['sess-A'], void 0, '已删会话的 owner 应移除');
+    assert.ok(svc._sessionImages.has('sess-B'), '内存中的新 owner 应保留');
+  } finally {
+    process.env.DSH_HOME = prev;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
+});
