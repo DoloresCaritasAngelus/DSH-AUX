@@ -10,7 +10,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **305**(2026-08-22)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **312**(2026-08-22)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 
@@ -26,6 +26,7 @@ node --test tests/*.test.js
 | `tests/fetch-vision-review.test.js` | 抓取/视觉链路回归 |
 | `tests/fs-boundary.test.js` | 文件系统边界(图片/附件路径安全) |
 | `tests/images-review.test.js` | 图片归属/回收/记忆 |
+| `tests/lifecycle-durability.test.js` | 生命周期持久化损坏恢复/空条目清理/共享引用回收/加载重试 |
 | `tests/memory-race.test.js` | 图片记忆并发/竞态 |
 | `tests/readme-sync.test.js` | U1:包内 README == 根 README 生成快照(防漂移) |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |

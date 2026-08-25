@@ -12,21 +12,100 @@ export function sessionImagesPath() {
   return home === void 0 ? void 0 : home + "/attachments/v1/session-images.json";
 }
 
-/** Load the ownership map from disk (missing/corrupt → empty). */
-export async function loadSessionImages() {
-  const path = sessionImagesPath();
-  if (path === void 0) return new Map();
+/** Path to the previous-good copy of the ownership map (crash/corruption fallback). */
+export function sessionImagesBackupPath() {
+  const base = sessionImagesPath();
+  return base === void 0 ? void 0 : base + ".bak";
+}
+
+/** Sentinel: a file existed but could not be parsed. */
+const CORRUPT = Symbol("session-images.corrupt");
+
+/**
+ * Read one ownership-map file. Returns:
+ *   - a Map on success,
+ *   - CORRUPT when the file exists but is unparsable/malformed,
+ *   - undefined when the file is absent,
+ * and rethrows unexpected filesystem errors (so callers can retry).
+ */
+async function readOwnershipMapFile(path) {
+  let raw;
   try {
-    const raw = await readFileText(path);
+    raw = await readFileText(path);
+  } catch (error) {
+    if (error?.code === "ENOENT") return void 0;
+    throw error;
+  }
+  try {
     const parsed = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return CORRUPT;
     const map = new Map();
     for (const [sid, ids] of Object.entries(parsed)) {
       if (Array.isArray(ids)) map.set(sid, new Set(ids));
     }
     return map;
   } catch {
-    return new Map();
+    return CORRUPT;
   }
+}
+
+/** Move a corrupt file aside instead of silently overwriting it. */
+async function quarantineFile(path) {
+  try {
+    await renameFile(path, path + ".corrupt-" + Date.now());
+  } catch {
+    /* best-effort: quarantine is a diagnostic nicety, never fatal */
+  }
+}
+
+/**
+ * Load the ownership map from disk, with crash/corruption fallback:
+ * try the main file, then the `.bak` previous-good copy; corrupt files are
+ * quarantined (renamed aside) rather than silently overwritten.
+ */
+export async function loadSessionImages() {
+  const path = sessionImagesPath();
+  if (path === void 0) return new Map();
+  const main = await readOwnershipMapFile(path);
+  if (main instanceof Map) return main;
+  if (main === CORRUPT) await quarantineFile(path);
+  const bakPath = sessionImagesBackupPath();
+  if (bakPath !== void 0) {
+    const backup = await readOwnershipMapFile(bakPath);
+    if (backup instanceof Map) return backup;
+    if (backup === CORRUPT) await quarantineFile(bakPath);
+  }
+  return new Map();
+}
+
+/** Atomically write both the main map and its previous-good `.bak` copy. */
+async function writeSessionImagesAtomically(obj) {
+  const path = sessionImagesPath();
+  if (path === void 0) return;
+  const tmp = path + ".tmp";
+  const payload = JSON.stringify(obj);
+  await writeFileText(tmp, payload);
+  await renameFile(tmp, path);
+  const bakPath = sessionImagesBackupPath();
+  if (bakPath !== void 0) {
+    const bakTmp = bakPath + ".tmp";
+    await writeFileText(bakTmp, payload);
+    await renameFile(bakTmp, bakPath);
+  }
+}
+
+/** Convert the in-memory map to the plain-object shape used on disk. */
+function toOwnershipObject(service) {
+  return mapToOwnershipObject(service._sessionImages);
+}
+
+/** Convert a Map<sid, Set<id>> to the plain-object shape used on disk. */
+function mapToOwnershipObject(map) {
+  const obj = {};
+  for (const [sid, ids] of map) {
+    obj[sid] = [...ids];
+  }
+  return obj;
 }
 
 /**
@@ -46,16 +125,9 @@ function enqueueSessionImagesWrite(service, write) {
 /** Persist the ownership map atomically (tmp + rename), serialized. */
 export async function saveSessionImages(service) {
   return enqueueSessionImagesWrite(service, async () => {
-    const path = sessionImagesPath();
-    if (path === void 0) return;
-    const obj = {};
-    for (const [sid, ids] of service._sessionImages) {
-      obj[sid] = [...ids];
-    }
+    if (sessionImagesPath() === void 0) return;
     try {
-      const tmp = path + ".tmp";
-      await writeFileText(tmp, JSON.stringify(obj));
-      await renameFile(tmp, path);
+      await writeSessionImagesAtomically(toOwnershipObject(service));
     } catch { /* best-effort: ownership recording must never break vision calls */ }
   });
 }
@@ -65,14 +137,16 @@ export async function saveSessionImages(service) {
  * a fresh process (restart) would persist ONLY the sessions seen since
  * startup, overwriting the disk map and losing every older session's
  * ownership — their images would then never be cleaned on deletion.
+ * Only marks the cache loaded after a successful read, so a transient
+ * filesystem error is retried on the next call instead of being swallowed.
  */
 export async function ensureSessionImagesLoaded(service) {
   if (service._sessionImagesLoaded) return;
-  service._sessionImagesLoaded = true;
   const disk = await loadSessionImages();
   for (const [sid, ids] of disk) {
     if (!service._sessionImages.has(sid)) service._sessionImages.set(sid, ids);
   }
+  service._sessionImagesLoaded = true;
 }
 
 /**
@@ -186,7 +260,18 @@ export async function cleanupSessionImages(service, sessionId) {
     const objectsRoot = home + "/attachments/v1/objects";
     const map = await loadSessionImages();
     const mine = map.get(sessionId);
-    if (mine === void 0 || mine.size === 0) return;
+    if (mine === void 0) return;
+    // Empty entry (or a session whose images were already fully reclaimed):
+    // still remove the key so `session-images.json` never accumulates empty
+    // sessions. Keep the in-memory cache consistent too.
+    if (mine.size === 0) {
+      map.delete(sessionId);
+      service._sessionImages.delete(sessionId);
+      try {
+        await writeSessionImagesAtomically(mapToOwnershipObject(map));
+      } catch { /* best-effort */ }
+      return;
+    }
     // Which other sessions reference each id?
     let removed = 0;
     for (const attachmentId of mine) {
@@ -210,21 +295,15 @@ export async function cleanupSessionImages(service, sessionId) {
       }
       removed += 1;
     }
-    if (removed > 0) {
-      map.delete(sessionId);
-      // Keep the in-memory cache consistent: a later debounced save must not
-      // resurrect the deleted session's entries from the stale cache.
-      service._sessionImages.delete(sessionId);
-      const obj = {};
-      for (const [sid, ids] of map) obj[sid] = [...ids];
-      try {
-        const path = sessionImagesPath();
-        if (path !== void 0) {
-          const tmp = path + ".tmp";
-          await writeFileText(tmp, JSON.stringify(obj));
-          await renameFile(tmp, path);
-        }
-      } catch { /* best-effort */ }
-    }
+    // Always drop the deleted session from the map, even when every image was
+    // shared (removed === 0). Otherwise the stale owner stays forever and the
+    // last remaining owner can never reclaim the shared image.
+    map.delete(sessionId);
+    // Keep the in-memory cache consistent: a later debounced save must not
+    // resurrect the deleted session's entries from the stale cache.
+    service._sessionImages.delete(sessionId);
+    try {
+      await writeSessionImagesAtomically(mapToOwnershipObject(map));
+    } catch { /* best-effort */ }
   });
 }

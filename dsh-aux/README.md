@@ -14,7 +14,7 @@
 > 需要我的时候，直接叫我就好～
 
 ![Version](https://img.shields.io/badge/version-0.4.0-blue)
-![Tests](https://img.shields.io/badge/tests-305-brightgreen)
+![Tests](https://img.shields.io/badge/tests-312-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
 
@@ -348,7 +348,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 - **平台**：DSH 0.1.0-rc.6 ~ 0.1.1-rc.1（已验证 rc.6 / rc.7 / rc.8 / 0.1.1-rc.1）；Node ≥ 20。
 - **运行时零第三方依赖**：peerDependencies 全部是 DSH 官方包（环境自带），无 `dependencies`。
-- **测试零依赖**：`node --test tests/*.test.js`（305 项；文件清单与基线见 `TESTING.md`）。
+- **测试零依赖**：`node --test tests/*.test.js`（312 项；文件清单与基线见 `TESTING.md`）。
 
 ### 集成组件
 

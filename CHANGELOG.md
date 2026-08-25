@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **生命周期持久化加固**:
+  - `session-images.json` 增加 `.bak` 上一份好快照:主文件损坏时自动回退,损坏文件隔离保留(`.corrupt-*`),不再被下一次保存静默覆盖。
+  - `image-memory.json` 损坏时隔离旧文件并继续追加,新记忆能落盘,不再静默吞写。
+  - `cleanupSessionImages` 移除空 session 条目;共享图片的已删除 owner 会被及时摘除,多个会话共享的图片在最后一个引用删除后能被回收。
+  - `ensureSessionImagesLoaded` 读取失败不再标记 loaded,瞬时错误可重试。
+- 新增 `tests/lifecycle-durability.test.js`(7 项)覆盖以上路径;测试基线 305 → 312。
+
 ## 0.4.0(2026-08-22)— 平台化开关 + SKILL 模式 + 状态/UX 升级
 
 - **工具/桥接三态开关**:`native` / `aux` / `compat`(compat 预留);关闭时工具从模型目录隐藏,桥接走原生;补丁不受开关影响。
