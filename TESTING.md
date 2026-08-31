@@ -10,9 +10,22 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **305**(2026-08-22)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **319**(2026-08-31)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
+
+## CI 辅助脚本
+
+```bash
+node scripts/install-dsh-version.mjs --version <DSH-VERSION>  # 临时切换 @deepseek-ai/* 版本(自动恢复 package.json)
+node scripts/ci-syntax-check.mjs                              # 全仓 JS/MJS 语法检查
+node scripts/ci-fake-dsh.mjs                                  # fake DSH 根 + bridge patch dry-run
+node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + 实际补丁 + doctor(CI 专用)
+```
+
+- 当前 DSH 兼容矩阵:`0.1.0-rc.6` / `0.1.0-rc.8` / `0.1.1-rc.1`。
+- `0.1.1-rc.2` 的 `dsh-host-apiproxy` selectModel 代码块已变化,补丁尚未适配;
+  CI 注释里保留了原因,等补丁更新后再加入矩阵。
 
 ## 测试文件清单
 
@@ -20,12 +33,13 @@ node --test tests/*.test.js
 |---|---|
 | `tests/aux.test.js` | 服务装配/路由/命令(/aux status、history、model、test、vision…)/事件/GC |
 | `tests/bridge.test.js` | image-bridge `bridgeImagesForModel`(纯文本→路径文本、多模态保留、保守转换、透传) |
-| `tests/bridge-target.test.js` | bridge 目标路径安全校验(`assertSafeTarget`) |
+| `tests/bridge-target.test.js` | bridge 目标路径安全校验(`assertSafeTarget`)+ `DSH_ROOT` fake 部署覆盖(`deployedFile`) |
 | `tests/compression.test.js` | `compress_text` 压缩逻辑与 schema |
 | `tests/core-review.test.js` | 核心链路评审回归(路由/降级/能力门) |
 | `tests/fetch-vision-review.test.js` | 抓取/视觉链路回归 |
 | `tests/fs-boundary.test.js` | 文件系统边界(图片/附件路径安全) |
 | `tests/images-review.test.js` | 图片归属/回收/记忆 |
+| `tests/lifecycle-durability.test.js` | 生命周期持久化损坏恢复/空条目清理/共享引用回收/加载重试 |
 | `tests/memory-race.test.js` | 图片记忆并发/竞态 |
 | `tests/readme-sync.test.js` | U1:包内 README == 根 README 生成快照(防漂移) |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
@@ -66,5 +80,6 @@ node scripts/doctor.mjs                         # 部署健康检查(symlink/pro
 
 - 新增/删除测试文件 → 更新本表;
 - 基线数字变化 → 更新"运行"节的数字;
+- CI 辅助脚本行为/DSH 兼容矩阵变化 → 更新"CI 辅助脚本";
 - 新增契约 → 在"约定"加一行先例;
 - 桥接/自愈脚本行为变化 → 更新"bridge / 自愈怎么验"。

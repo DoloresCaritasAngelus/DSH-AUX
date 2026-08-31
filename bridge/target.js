@@ -19,11 +19,32 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /**
+ * When DSH_ROOT is set (CI/fake-deployment smoke), bridge scripts resolve
+ * targets directly under that deployment root instead of relying on the
+ * repository's physical depth relative to a real DSH install.
+ * Both legacy relative forms ("../../../@deepseek-ai/..." and
+ * "../../../node_modules/@deepseek-ai/...") map to
+ * "$DSH_ROOT/node_modules/@deepseek-ai/...".
+ */
+function dshRootCandidate(rel) {
+  const root = process.env.DSH_ROOT;
+  if (!root) return null;
+  const withoutDots = rel.replace(/^(?:\.\.\/)+/, "");
+  const withoutNodeModules = withoutDots.replace(/^node_modules\//, "");
+  return join(root, "node_modules", withoutNodeModules);
+}
+
+/**
  * Resolve a patch target from the two supported deployment layouts.
  * Returns the first existing candidate, or the first candidate when neither
  * exists (so callers can still produce a useful "not found" error).
+ * When DSH_ROOT is set, targets are resolved under that fake/real DSH root.
  */
 export function deployedFile(symlinkRel, sourceRel) {
+  if (process.env.DSH_ROOT) {
+    const override = dshRootCandidate(symlinkRel) ?? dshRootCandidate(sourceRel);
+    if (override) return override;
+  }
   const candidates = [
     join(HERE, symlinkRel),
     join(HERE, sourceRel)

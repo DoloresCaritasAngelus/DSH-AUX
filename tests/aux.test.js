@@ -255,6 +255,33 @@ test('AsyncSemaphore: 并发上限与 FIFO 释放', async () => {
   r2();
 });
 
+test('AsyncSemaphore: 重复 release 不把 active 减成负数', async () => {
+  const semaphore = new AsyncSemaphore(1);
+  const r = await semaphore.acquire();
+  r();
+  r(); // 二次 release 应被忽略
+  assert.equal(semaphore.active, 0, '重复 release 不得把 active 减成负数');
+  const r2 = await semaphore.acquire();
+  assert.equal(semaphore.active, 1);
+  r2();
+});
+
+test('AsyncSemaphore: 旧 release 句柄不能释放新持有者的许可', async () => {
+  const semaphore = new AsyncSemaphore(1);
+  const r1 = await semaphore.acquire();
+  r1();
+  const r2 = await semaphore.acquire();
+  r1(); // 旧句柄再次调用必须被忽略,不能释放 r2 的许可
+  assert.equal(semaphore.active, 1, '旧 release 不得减少 active');
+  let thirdAcquired = false;
+  const third = semaphore.acquire().then(() => { thirdAcquired = true; });
+  await settle();
+  assert.equal(thirdAcquired, false, '旧 release 不得让第三个任务提前进入');
+  r2();
+  await third;
+  assert.equal(thirdAcquired, true);
+});
+
 // ── prompt.js ────────────────────────────────────────────────────────────
 
 test('clampTargetRatio: 边界钳制与缺省', () => {

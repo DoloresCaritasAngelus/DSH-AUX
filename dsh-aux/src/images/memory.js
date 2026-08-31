@@ -5,6 +5,7 @@
  * @module @dolorescaritasangelus/dsh-aux/images/memory
  */
 import { readFile as readFileText, rename as renameFile, writeFile as writeFileText } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 
 /** Path to the image-memory journal (path/question -> summary). */
 export function imageMemoryPath() {
@@ -20,13 +21,34 @@ export function recordImageMemory(service, sessionId, attachmentId, question, su
   return service._memoryQueue;
 }
 
+/** Move a corrupt journal aside so a fresh file can take its place (evidence preserved). */
+async function quarantineJournalFile(path) {
+  try {
+    await renameFile(path, path + ".corrupt-" + Date.now() + "-" + randomUUID());
+  } catch {
+    /* best-effort: quarantine is a diagnostic nicety, never fatal */
+  }
+}
+
 /** The serialized journal append; never rejects (best-effort). */
 async function recordImageMemoryCore(sessionId, attachmentId, question, summary) {
   const path = imageMemoryPath();
   if (path === void 0) return;
   try {
     const raw = await readFileText(path).catch(() => "{}");
-    const parsed = JSON.parse(raw);
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // Corrupt journal: quarantine it and start fresh so future records can
+      // still land. Never silently swallow the write (old + new both lost).
+      await quarantineJournalFile(path);
+      parsed = {};
+    }
+    if (parsed === null || typeof parsed !== "object") {
+      await quarantineJournalFile(path);
+      parsed = {};
+    }
     const entries = Array.isArray(parsed.entries) ? parsed.entries : [];
     entries.push({
       sessionId,

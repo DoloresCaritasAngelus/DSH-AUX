@@ -35,14 +35,16 @@ const TARGET = guardTarget(deployedFile(
   "../../../node_modules/@deepseek-ai/dsh-session/lib/index.js"
 ), "dsh-session-ignorable");
 const MARK = "dsh-aux ignorable (local patch)";
+/** dsh-aux session event name; also used as a fingerprint for rc.7+ clean packages. */
+const AUX_CALL_EVENT = "aux/llm-call";
 
 async function block(name) {
   return (await readFile(join(HERE, name), "utf8")).trim();
 }
-const STEPS = [
-  ["append", "orig-session-append.txt", "patched-session-append.txt"],
-  ["白名单", "orig-session-whitelist.txt", "patched-session-whitelist.txt"]
+const APPEND_STEPS = [
+  ["append", "orig-session-append.txt", "patched-session-append.txt"]
 ];
+const WHITELIST_STEP = ["白名单", "orig-session-whitelist.txt", "patched-session-whitelist.txt"];
 
 function log(msg) { console.log("[dsh-session-ignorable] " + msg); }
 
@@ -72,22 +74,35 @@ if (rollbackMode) {
 
 const data = await readFile(TARGET, "utf8");
 if (data.includes(MARK)) { log("已是补丁状态,跳过"); process.exit(0); }
+const whitelistOrig = await block(WHITELIST_STEP[1]);
+const whitelistApplicable = data.includes(whitelistOrig);
+// rc.7+/干净 npm 包可能没有 thinking/language 白名单锚点;白名单统一由
+// self-heal P8 以 KNOWN_SESSION_EVENT_TYPES 起始标记兜底插入,这里不硬失败。
+if (!whitelistApplicable && !data.includes(AUX_CALL_EVENT)) {
+  log("白名单原块未命中,跳过(由 self-heal P8 兜底)");
+}
+const steps = [...APPEND_STEPS];
+if (whitelistApplicable) steps.push(WHITELIST_STEP);
+
 const missing = [];
-for (const [name, origFile] of STEPS) {
+for (const [name, origFile] of APPEND_STEPS) {
   if (!data.includes(await block(origFile))) missing.push(name);
 }
 if (missing.length > 0) { log("版本不匹配,缺失块: " + missing.join(", ")); process.exit(1); }
-if (dryRun) { log("[dry-run] 可打补丁(" + STEPS.length + " 处)"); process.exit(0); }
+if (dryRun) {
+  log(`[dry-run] 可打补丁(${APPEND_STEPS.length} 处${whitelistApplicable ? " + 白名单" : ";白名单跳过"})`);
+  process.exit(0);
+}
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 const bak = join(dirname(TARGET), "index.js.bak-" + stamp);
 await copyFile(TARGET, bak);
 log("备份: " + bak);
 let patched = data;
-for (const [name, origFile, patchedFile] of STEPS) {
+for (const [name, origFile, patchedFile] of steps) {
   patched = patched.replace(await block(origFile), await block(patchedFile));
 }
 if (!patched.includes(MARK)) { log("替换失败,回滚"); await copyFile(bak, TARGET); process.exit(1); }
 await writeFile(TARGET, patched);
-log("已打补丁(" + STEPS.length + " 处)");
+log("已打补丁(" + steps.length + " 处)");
 syntaxCheck(TARGET);
