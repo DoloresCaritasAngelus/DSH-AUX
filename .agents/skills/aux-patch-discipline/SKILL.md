@@ -24,6 +24,13 @@ user-invocable: false
    (🔻易腐烂·枚举清单 —— *image-bridge / subagent-bridge / workflow-bridge /
    compaction-bridge / skill-audit / 会话事件记录*,以 `/aux status` 当前输出为准,种类会增长)。
 
+## CI 防漂移 / 多版本验证
+- 补丁/锚点改动后先跑 `node scripts/ci-fake-dsh.mjs`(dry-run)与全量测试。
+- 多版本兼容矩阵由 `scripts/install-dsh-version.mjs` 切换 `@deepseek-ai/*` 版本;
+  版本接入规则见 `aux-dsh-follow`。
+- 只有所有目标 DSH 版本都 dry-run 通过,才把新版本加入 CI 绿门矩阵。
+- 当前 `0.1.1-rc.2` 的 selectModel 锚点不匹配,暂不进矩阵。
+
 ## 记账
 - 新补丁 / 补丁目标变化 → 更新 `02-patch-ledger.md`(位置/为何/无它会怎样/退役判据)。
 - 说明理由时用"版本检测+动态补丁"叙词:只对缺能力/旧版本打,旧版本事实绝迹才

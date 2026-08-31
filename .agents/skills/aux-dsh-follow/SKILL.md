@@ -29,13 +29,35 @@ user-invocable: false
    补丁块,再继续;**宁可跳过也不硬替换**。
 5. 重跑 `install.sh`(幂等;`--dry-run` 可先看)。升级后**必须重打自定义事件白名单**
    (官方 `KNOWN_SESSION_EVENT_TYPES` 是生成式打包产物,每次升级都丢 aux/llm-call)。
-6. 跑全量测试(`aux-test-baseline`,🔻易腐烂·快照*286*,以跑出 #pass 为准)与
+6. 跑全量测试(`aux-test-baseline`,🔻易腐烂·快照*319*,以跑出 #pass 为准)与
    `npm run gen-package-readme -- --check`。
 7. `/aux status` 逐项确认:(🔻易腐烂·枚举清单 *image-bridge / subagent-bridge /
    workflow-bridge / compaction-bridge / skill-audit / 会话事件记录* —— bridge 种类会增长,
    **以 `/aux status` 当前输出清单为准**)各状态。
 8. **向后兼容检查**:对仍需支持的旧版 DSH 验证"缺补丁也能降级不爆炸"
    (ignorable 缺失 → 不写事件;detect 不中 → 跳过;能力不确定 → 兜底/放行)。
+
+## DSH 版本兼容矩阵 / CI 接入
+CI 已支持“包级 DSH 版本矩阵”(不跑完整容器),用于提前发现 DSH 升级后
+补丁锚点/API 不兼容。
+
+1. 新版本接入流程:
+   ```bash
+   node scripts/install-dsh-version.mjs --version <V>
+   node --test tests/*.test.js
+   node scripts/ci-fake-dsh.mjs            # 补丁 dry-run:锚点是否全部命中
+   ```
+2. 全部通过后才把 `<V>` 加入 `.github/workflows/ci.yml` 的 `compat` matrix,
+   并同步 `TESTING.md`、`CHANGELOG.md`。
+3. **锚点不匹配 = 暂不进绿门矩阵**:
+   - 先读官方新源码,更新 `bridge/*` 检测块/补丁块;
+   - 更新后再跑 `ci-fake-dsh.mjs --dry-run`;
+   - 在 CI 注释/TESTING/CHANGELOG 记录原因。
+4. 当前已知未适配:
+   - `0.1.1-rc.2`:`dsh-host-apiproxy` selectModel 代码块已变化,补丁尚未适配,
+     所以绿门矩阵停在 `0.1.0-rc.6` / `0.1.0-rc.8` / `0.1.1-rc.1`。
+5. 矩阵验证不只测一个包:安装脚本会抽查 `dsh-agent` / `dsh-session` /
+   `dsh-host-apiproxy` / `dsh-tool-skill` 的版本一致。
 
 ## 启动自愈
 - `~/dsh/start-dsh.sh` 已在启动前调用 `bridge/self-heal.mjs`(幂等,失败不阻塞):
