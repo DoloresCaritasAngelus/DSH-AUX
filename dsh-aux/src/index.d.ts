@@ -17,7 +17,6 @@ import { Context, Service } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm';
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session';
-import type { SettingsNamespace } from '@deepseek-ai/dsh-settings';
 
 /** The built-in auxiliary task keys. */
 export type AuxTaskKey = 'vision' | 'web_extract' | 'web_crawl' | 'compress' | 'compaction' | 'skill';
@@ -163,7 +162,7 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /** Settings namespace carrying the aux configuration section. */
-export declare const AUX_SETTINGS_NAMESPACE: SettingsNamespace;
+export declare const AUX_SETTINGS_NAMESPACE: string;
 /** Timeout code stamped onto aux deadline timeouts. */
 export declare const AUX_TIMEOUT_CODE: 'AUX_TIMEOUT';
 /** Session event type recording one auxiliary call. */

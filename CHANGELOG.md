@@ -11,12 +11,12 @@
   - `AsyncSemaphore.release()` 增加重复释放保护(`active <= 0` 直接返回),防止 active 被减成负数导致并发超放。
 - 新增 `tests/lifecycle-durability.test.js`(11 项)与 AsyncSemaphore 回归测试;测试基线 305 → 314。
 - **CI 完善**:
-  - 新增 DSH 包级兼容矩阵(`0.1.0-rc.6` / `0.1.0-rc.8` / `0.1.1-rc.1`),通过 `scripts/install-dsh-version.mjs` 临时切换 `@deepseek-ai/*` 版本并加 overrides,无需容器化完整 DSH。
+  - 新增 DSH 包级兼容矩阵(`0.1.0-rc.6` / `0.1.0-rc.7` / `0.1.0-rc.8` / `0.1.1-rc.1` / `0.1.1-rc.2` / `0.1.2-alpha.2`),通过 `scripts/install-dsh-version.mjs` 临时切换 `@deepseek-ai/*` 版本并加 overrides,无需容器化完整 DSH。
   - 新增 `scripts/ci-fake-dsh.mjs`:构造 fake DSH 根,做 bridge 补丁 dry-run / 实际补丁 + self-heal + doctor 冒烟。
   - `bridge/target.js` 支持 `DSH_ROOT` 环境变量,补丁脚本可在 CI/fake 部署根下解析目标。
   - `patch-session-ignorable` 白名单步骤改为可选:干净 rc.7+ 包没有 thinking/language 锚点时跳过,由 self-heal P8 兜底,不再硬失败。
   - 新增全仓 JS/MJS 语法检查与 shell 语法检查。
-  - 记录:`0.1.1-rc.2` 的 `dsh-host-apiproxy` selectModel 代码块已变化,补丁尚未适配,暂不进绿门矩阵。
+  - 记录:`0.1.2-alpha.1` 只有 GitHub release、无 npm 包,因此不进入 npm 矩阵;源码差异已纳入研究。
 - 测试基线 314 → 319(新增 `deployedFile` DSH_ROOT 回归、AsyncSemaphore 旧句柄回归、image-memory `{}` 兼容、cleanup 内存 pending 等)。
 - **PR #7 review 修复**:
   - `recordAttachmentOwnership` 捕获瞬时读取错误,避免 fire-and-forget 产生 unhandled rejection。
@@ -26,6 +26,13 @@
   - `image-memory` 对空对象 `{}` 宽容,不隔离为 corrupt。
   - corrupt 隔离文件名增加 UUID 后缀,避免同毫秒冲突。
   - 四个 README 测试基线同步到 319。
+- **DSH 0.1.2-alpha.2 兼容**:
+  - 保留 `0.1.0-rc.6` 最低支持;CI 绿门矩阵覆盖 rc.6 / rc.7 / rc.8 / 0.1.1-rc.1 / rc.2 / 0.1.2-alpha.2。
+  - `0.1.1-rc.2` 官方移除了 selectModel 图片门控,`apply-patch` 增加 `native-rc2` 跳过态,`imageBridgeStatus` 识别原生 v3。
+  - `0.1.2-alpha.2` 移除 `settingsNamespace` / `installSettingsSection` / `dsh-llm.deepFreeze`:改为 namespace import + `ctx.settings.installSection` 双兼容,本地实现 `deepFreeze`。
+  - `dsh-tool-subagent` request 在 alpha.2 改为 `requestedChildAgentOptions`,补丁增加 `original-alpha2` 状态,合并 AUX 路由与官方子代理模型选择。
+  - `scripts/install-dsh-version.mjs` 支持版本例外(npm 未按同版本发布的包,如 `dsh-host-apiproxy` 在 alpha.2 仍为 rc.2)与新增 controller devDependencies。
+  - peerDependencies 增加 `|| ^0.1.2-alpha.2`,`dsh-client-runtime` 标记 optional。
 
 ## 0.4.0(2026-08-22)— 平台化开关 + SKILL 模式 + 状态/UX 升级
 

@@ -106,7 +106,16 @@ if (rollbackMode) {
   process.exit(0);
 }
 
-const data = await readFile(TARGET, "utf8");
+let data;
+try {
+  data = await readFile(TARGET, "utf8");
+} catch (error) {
+  if (error?.code === "ENOENT") {
+    log("目标不存在(dsh-host-apiproxy),跳过(0.1.2-alpha.x 已移除该包)");
+    process.exit(0);
+  }
+  throw error;
+}
 if (data.includes(MARK_V2)) { log("已是 v2,跳过"); process.exit(0); }
 // rc.7+ 原生动态暴露:h-api 直接 settings.describe() 暴露所有已注册命名空间,
 // WEB_SETTINGS_NAMESPACES 白名单常量已删除 → 本补丁(以及动态 expose 补丁)

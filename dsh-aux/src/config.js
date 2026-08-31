@@ -4,13 +4,19 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/config
  */
-import { settingsNamespace } from "@deepseek-ai/dsh-settings";
+import * as dshSettings from "@deepseek-ai/dsh-settings";
 import z from "@deepseek-ai/schemastery";
 import { MAX_TIMER_DELAY_MS } from "@deepseek-ai/dsh-timeout";
 import { AUX_TASKS } from "./route.js";
 
-/** Settings namespace carrying the aux configuration section. */
-export const AUX_SETTINGS_NAMESPACE = settingsNamespace("aux");
+/**
+ * Settings namespace carrying the aux configuration section.
+ * Old DSH exports `settingsNamespace("aux")`; 0.1.2-alpha.2 removed that
+ * helper and accepts plain string namespaces directly.
+ */
+export const AUX_SETTINGS_NAMESPACE = typeof dshSettings.settingsNamespace === "function"
+  ? dshSettings.settingsNamespace("aux")
+  : "aux";
 /** Timeout code stamped onto aux deadline timeouts. */
 export const AUX_TIMEOUT_CODE = "AUX_TIMEOUT";
 /** Session event type recording one auxiliary call. */

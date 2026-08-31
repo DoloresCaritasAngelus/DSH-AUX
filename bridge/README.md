@@ -51,6 +51,9 @@ v3 修复**模型切换**:旧版 DSH 在 `selectModel` 里会检查"如果会话
 > 供应商返回 `429 invalid_request_error`。v3 直接把门控去掉,让桥接按真实
 > 模态工作。
 
+> `0.1.1-rc.2+` 官方已原生移除 selectModel 的图片门控,DSH-AUX 不再打
+> selectModel 补丁,`apply-patch` 会识别为 `native-rc2` 并跳过。
+
 v3 还支持**强制原生视觉走 AUX**(设置页 `forceAuxVision` 开关):当主模型
 声明了 `image` 能力、但你想让它把图片都交给更便宜/更合适的 AUX 视觉辅助
 模型时,开启后 bridge 对**多模态主模型**也改写为 `vision_analyze`:
@@ -82,8 +85,9 @@ dsh-aux 还接管原生 `skill` 工具的结果,让主模型在真正执行 SKIL
 
 ## 前置
 
-1. DSH 0.1.0-rc.6 及以上(已验证 rc.6 / rc.7 / rc.8 / 0.1.1-rc.1;
-   `@deepseek-ai/dsh-host-apiproxy`、`@deepseek-ai/dsh-agent-loop` 同版本)
+1. DSH 0.1.0-rc.6 及以上(已验证 rc.6 / rc.7 / rc.8 / 0.1.1-rc.1 / 0.1.1-rc.2 /
+   `0.1.2-alpha.2`;`@deepseek-ai/dsh-host-apiproxy`、`@deepseek-ai/dsh-agent-loop`
+   同版本;alpha.2 的 host-apiproxy npm 仍为 rc.2)
 2. dsh-aux 已挂载(提供 `vision_analyze` 工具;默认辅助模型 `opencode-go/kimi-k2.7-code` 已实测支持图像)
 
 ## 安装 / 升级
@@ -92,7 +96,8 @@ dsh-aux 还接管原生 `skill` 工具的结果,让主模型在真正执行 SKIL
 cd <本仓库路径>/bridge
 node apply-patch.mjs        # 自动识别状态:原始 → 已补丁 / 中间态 → 最终态 / 已补丁 → 跳过
                             # 目标:
-                            #   dsh-host-apiproxy(admit + selectModel)
+                            #   dsh-host-apiproxy(admit + selectModel;rc.2+ selectModel 原生跳过)
+                            #   dsh-api-session-controller(prompt 图片门控,0.1.2-alpha.x)
                             #   dsh-agent-loop(buildRequest + forceAuxVision)
                             #   dsh-tool-subagent(schema + request)
                             #   dsh-workflow-worker-thread(startChild)
