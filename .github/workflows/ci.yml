@@ -16,8 +16,51 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - name: 安装测试依赖(DSH 官方包)
-        run: npm install --no-package-lock
+        run: npm install --no-package-lock --no-audit --no-fund
       - name: 全量测试(零第三方运行时依赖)
         run: node --test tests/*.test.js
       - name: README 单一真相检查
         run: node scripts/gen-package-readme.mjs --check
+      - name: 全仓语法检查
+        run: node scripts/ci-syntax-check.mjs
+      - name: shell 脚本语法检查
+        run: bash -n install.sh update.sh
+      - name: Bridge 补丁 dry-run(当前 DSH)
+        run: node scripts/ci-fake-dsh.mjs
+
+  # 包级 DSH 版本兼容矩阵:不需要容器,直接用 npm 切换 @deepseek-ai/* 版本。
+  # 当前已验证支持:rc.6(旧线)、rc.8(主用)、0.1.1-rc.1(新线)。
+  # 0.1.1-rc.2 的 dsh-host-apiproxy selectModel 代码块已变化,补丁尚未适配,
+  # 所以不放入绿门矩阵;等补丁更新后再加回。
+  compat:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dsh-version: [0.1.0-rc.6, 0.1.0-rc.8, 0.1.1-rc.1]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 切换到 DSH ${{ matrix.dsh-version }}
+        run: node scripts/install-dsh-version.mjs --version ${{ matrix.dsh-version }}
+      - name: 全量测试(DSH ${{ matrix.dsh-version }})
+        run: node --test tests/*.test.js
+      - name: Bridge 补丁 dry-run(DSH ${{ matrix.dsh-version }})
+        run: node scripts/ci-fake-dsh.mjs
+      - name: README 单一真相检查
+        run: node scripts/gen-package-readme.mjs --check
+
+  # 真实补丁落盘 + doctor 冒烟:在 fake DSH 根里实际打一遍补丁并跑 self-heal,
+  # 最后用 doctor 验证 deployment 状态。只在当前 DSH 默认版本上跑,控制成本。
+  patch-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 安装测试依赖
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: 实际补丁 + self-heal + doctor(fake DSH 根)
+        run: node scripts/ci-fake-dsh.mjs --apply

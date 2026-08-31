@@ -29,3 +29,6 @@ tmp-*.mjs
 scripts/*
 !scripts/gen-package-readme.mjs
 !scripts/doctor.mjs
+!scripts/install-dsh-version.mjs
+!scripts/ci-fake-dsh.mjs
+!scripts/ci-syntax-check.mjs
