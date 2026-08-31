@@ -23,9 +23,10 @@ node scripts/ci-fake-dsh.mjs                                  # fake DSH 根 + b
 node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + 实际补丁 + doctor(CI 专用)
 ```
 
-- 当前 DSH 兼容矩阵:`0.1.0-rc.6` / `0.1.0-rc.8` / `0.1.1-rc.1`。
-- `0.1.1-rc.2` 的 `dsh-host-apiproxy` selectModel 代码块已变化,补丁尚未适配;
-  CI 注释里保留了原因,等补丁更新后再加入矩阵。
+- 当前 DSH 兼容矩阵:`0.1.0-rc.6` / `0.1.0-rc.7` / `0.1.0-rc.8` /
+  `0.1.1-rc.1` / `0.1.1-rc.2` / `0.1.2-alpha.2`。
+- `0.1.2-alpha.1` 只有 GitHub release,没有对应 npm 包发布,因此无法进入 npm 矩阵;
+  源码差异仍纳入研究,但 CI 绿门以 npm 可安装版本为准。
 
 ## 测试文件清单
 

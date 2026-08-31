@@ -20,9 +20,9 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { Service } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
-import { BlockAssembler, createUserMessage, deepFreeze } from "@deepseek-ai/dsh-llm";
+import { BlockAssembler, createUserMessage } from "@deepseek-ai/dsh-llm";
 import { deadline, MAX_TIMER_DELAY_MS } from "@deepseek-ai/dsh-timeout";
-import { installSettingsSection } from "@deepseek-ai/dsh-settings";
+import * as dshSettings from "@deepseek-ai/dsh-settings";
 import {
   AUX_TASKS,
   AsyncSemaphore,
@@ -66,6 +66,15 @@ import { attachSkillBridge } from "./skill-bridge.js";
 
 export { AUX_SETTINGS_NAMESPACE, AUX_TIMEOUT_CODE, AUX_CALL_EVENT, AUX_STATUS_KEY, validateAuxSettings } from "./config.js";
 export { AuxCallError, sessionPatchCandidates } from "./events.js";
+
+/** Recursively freeze an options object (replaces `deepFreeze` removed from dsh-llm). */
+function deepFreeze(value) {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const key of Object.keys(value)) deepFreeze(value[key]);
+  }
+  return value;
+}
 
 /** Truncate a debug payload to a bounded size for session-event storage. */
 function truncateForDebug(value, max) {
@@ -202,7 +211,7 @@ export class AuxLlmService extends Service {
         text: (context) => auxToolsGuide(this, context)
       });
     }
-    installSettingsSection(ctx, AUX_SETTINGS_NAMESPACE, AUX_SETTINGS_SCHEMA, projectSettings({}), {
+    const settingsHooks = {
       setSource: (current) => {
         this._source = current;
         this._recomputeMerged();
@@ -214,13 +223,31 @@ export class AuxLlmService extends Service {
         syncAuxStatusProjection(this);
         publishPlatformStatus(this).catch(() => {});
       },
-      validate: validateAuxSettings,
-      // The settings page is a first-class capability of this plugin:
-      // declare the namespace exposed to the Web configuration client
-      // (requires the dynamic-expose patch on dsh-settings + api-proxy,
-      // see bridge/patch-settings-dynamic-expose.mjs).
-      exposedToWeb: true
-    });
+      validate: validateAuxSettings
+    };
+    if (typeof dshSettings.installSettingsSection === "function") {
+      // Old DSH API (rc.6 / rc.7 / rc.8 / 0.1.1-rc.x)
+      dshSettings.installSettingsSection(ctx, AUX_SETTINGS_NAMESPACE, AUX_SETTINGS_SCHEMA, projectSettings({}), {
+        ...settingsHooks,
+        // The settings page is a first-class capability of this plugin:
+        // declare the namespace exposed to the Web configuration client
+        // (requires the dynamic-expose patch on dsh-settings + api-proxy,
+        // see bridge/patch-settings-dynamic-expose.mjs).
+        exposedToWeb: true
+      });
+    } else {
+      // 0.1.2-alpha.x removed installSettingsSection; the settings provider
+      // exposes installSection() directly and accepts plain string namespaces.
+      const settingsService = ctx.settings;
+      const installSection = settingsService?.installSection?.bind(settingsService);
+      if (typeof installSection === "function") {
+        installSection(ctx, AUX_SETTINGS_NAMESPACE, AUX_SETTINGS_SCHEMA, projectSettings({}), settingsHooks);
+      } else if (typeof dshSettings.SettingsProvider === "function" && settingsService instanceof dshSettings.SettingsProvider) {
+        throw new Error("dsh-aux: unsupported DSH settings API (no installSection on SettingsProvider)");
+      }
+      // Otherwise the host/test context does not provide a settings service;
+      // skip registration rather than crashing (matches old test stubs).
+    }
     registerAuxTools(this);
     this._toolsInitialized = true;
     attachSkillBridge(this);

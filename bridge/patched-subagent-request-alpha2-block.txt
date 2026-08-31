@@ -1,0 +1,23 @@
+						const auxRoute = (() => {
+							try {
+								const aux = ctx.get("auxLlm");
+								return aux?.subagentRoute ? aux.subagentRoute({
+									prompt: args.prompt,
+									requiresVision: args.requires_vision,
+									existingAllow: config.toolFilter?.allow,
+									existingDeny: config.toolFilter?.deny
+								}) : {};
+							} catch { return {}; }
+						})();
+						const request = {
+							label: args.description,
+							prompt: [{
+								type: "text",
+								text: args.prompt
+							}],
+							parent,
+							...(auxRoute.agentOptions ?? requestedChildAgentOptions) !== void 0 ? { agentOptions: { ...requestedChildAgentOptions, ...(auxRoute.agentOptions ?? {}) } } : {},
+							...config.persona !== void 0 ? { persona: config.persona } : {},
+							...(auxRoute.toolFilter ?? config.toolFilter) !== void 0 ? { toolFilter: auxRoute.toolFilter ?? config.toolFilter } : {},
+							...maxDepth !== void 0 ? { maxDepth } : {}
+						};

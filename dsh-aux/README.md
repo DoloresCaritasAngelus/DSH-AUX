@@ -346,7 +346,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 ## 兼容性与依赖
 
-- **平台**：DSH 0.1.0-rc.6 ~ 0.1.1-rc.1（已验证 rc.6 / rc.7 / rc.8 / 0.1.1-rc.1）；Node ≥ 20。
+- **平台**：DSH 0.1.0-rc.6 ~ 0.1.2-alpha.2（已验证 rc.6 / rc.7 / rc.8 / 0.1.1-rc.1 / rc.2 / 0.1.2-alpha.2）；Node ≥ 20。
 - **运行时零第三方依赖**：peerDependencies 全部是 DSH 官方包（环境自带），无 `dependencies`。
 - **测试零依赖**：`node --test tests/*.test.js`（319 项；文件清单与基线见 `TESTING.md`）。
 

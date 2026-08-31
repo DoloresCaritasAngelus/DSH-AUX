@@ -62,6 +62,10 @@ const SKILL_TOOL_FILE = guardTarget(deployedFile(
   "../../../@deepseek-ai/dsh-tool-skill/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-tool-skill/lib/index.js"
 ), "dsh-skill-bridge");
+const SESSION_CONTROLLER_FILE = guardTarget(deployedFile(
+  "../../../@deepseek-ai/dsh-api-session-controller/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js"
+), "dsh-image-bridge-alpha2");
 
 const TARGETS = [
   {
@@ -84,6 +88,13 @@ const TARGETS = [
       { name: "v3", detect: (d) => d.includes("image-bridge v2 (local patch)") && d.includes("await this.bridgeImagesForModel(boundaryMessages") && d.includes("forceAuxVision"), action: "skip" },
       { name: "v2", detect: (d) => d.includes("image-bridge v2 (local patch)") && d.includes("await this.bridgeImagesForModel(boundaryMessages") && !d.includes("forceAuxVision"), block: 'if (Array.isArray(modalities) && modalities.includes("image")) return messages;', replacement: 'let forceAuxVision = false;\n\t\t\ttry {\n\t\t\t\tconst aux = this.loopCtx?.get?.("auxLlm");\n\t\t\t\tforceAuxVision = aux?.forceAuxVision === true;\n\t\t\t} catch { /* auxLlm may be absent during early boot */ }\n\t\t\tif (!forceAuxVision && Array.isArray(modalities) && modalities.includes("image")) return messages;', action: "replace" },
       { name: "half", detect: (d) => d.includes("image-bridge v2 (local patch)"), block: "messages: boundaryMessages,", replacement: "messages: await this.bridgeImagesForModel(boundaryMessages, config.provider, config.model, this.loopCtx.llm, signal),", action: "replace" },
+      {
+        name: "original-alpha2",
+        detect: (d) => d.includes("Compose one frozen request and bind it to the adapter registration") && d.includes("startsRequestSeries, surfaceGeneration, signal"),
+        block: await readFile(join(HERE, "orig-agent-loop-alpha2-block.txt"), "utf8"),
+        replacement: await readFile(join(HERE, "patched-agent-loop-alpha2-block.txt"), "utf8"),
+        action: "replace"
+      },
       { name: "original", detect: (d) => d.includes("Compose one frozen request and bind it to the adapter registration"), block: await readFile(join(HERE, "orig-agent-loop-block.txt"), "utf8"), action: "replace" }
     ],
     patched: await readFile(join(HERE, "patched-agent-loop-block.txt"), "utf8"),
@@ -95,9 +106,29 @@ const TARGETS = [
     mark: "dsh-image bridge v3 (local patch)",
     states: [
       { name: "v3", detect: (d) => d.includes("dsh-image bridge v3 (local patch)"), action: "skip" },
+      // 0.1.1-rc.2+ 官方移除了 selectModel 的图片门控,原生行为等价 v3,
+      // 不再需要本地补丁。
+      { name: "native-rc2", detect: (d) => d.includes("async selectModel(request)") && !d.includes("does not accept image input, but this session already contains images"), action: "skip" },
       { name: "original", detect: (d) => d.includes("does not accept image input, but this session already contains images"), block: await readFile(join(HERE, "orig-select-model-block.txt"), "utf8"), action: "replace" }
     ],
     patched: await readFile(join(HERE, "patched-select-model-block.txt"), "utf8"),
+    backupPrefix: "index.js.bak-"
+  },
+  {
+    label: "dsh-api-session-controller (prompt)",
+    file: SESSION_CONTROLLER_FILE,
+    mark: "dsh-aux image bridge v3 (local patch)",
+    states: [
+      { name: "patched", detect: (d) => d.includes("dsh-aux image bridge v3 (local patch)"), action: "skip" },
+      {
+        name: "original-alpha2",
+        detect: (d) => d.includes("Model \"${current.model}\" does not support image input."),
+        block: await readFile(join(HERE, "orig-session-controller-prompt-block.txt"), "utf8"),
+        replacement: await readFile(join(HERE, "patched-session-controller-prompt-block.txt"), "utf8"),
+        action: "replace"
+      }
+    ],
+    patched: await readFile(join(HERE, "patched-session-controller-prompt-block.txt"), "utf8"),
     backupPrefix: "index.js.bak-"
   },
   {
@@ -106,6 +137,13 @@ const TARGETS = [
     mark: "requires_vision",
     states: [
       { name: "patched", detect: (d) => d.includes("requires_vision:"), action: "skip" },
+      {
+        name: "original-alpha2",
+        detect: (d) => d.includes("Adapter-owned reasoning effort for the effective child route.") || d.includes("providerRouteDefaults !== void 0"),
+        block: await readFile(join(HERE, "orig-subagent-schema-alpha2-block.txt"), "utf8"),
+        replacement: await readFile(join(HERE, "patched-subagent-schema-alpha2-block.txt"), "utf8"),
+        action: "replace"
+      },
       { name: "original", detect: (d) => d.includes("...backgroundEnabled ? { run_in_background:"), block: await readFile(join(HERE, "orig-subagent-schema-block.txt"), "utf8"), action: "replace" }
     ],
     patched: await readFile(join(HERE, "patched-subagent-schema-block.txt"), "utf8"),
@@ -117,6 +155,13 @@ const TARGETS = [
     mark: 'ctx.get("auxLlm")',
     states: [
       { name: "patched", detect: (d) => d.includes("ctx.get(\"auxLlm\")") && d.includes("subagentRoute"), action: "skip" },
+      {
+        name: "original-alpha2",
+        detect: (d) => d.includes("...requestedChildAgentOptions !== void 0 ? { agentOptions: requestedChildAgentOptions } : {}"),
+        block: await readFile(join(HERE, "orig-subagent-request-alpha2-block.txt"), "utf8"),
+        replacement: await readFile(join(HERE, "patched-subagent-request-alpha2-block.txt"), "utf8"),
+        action: "replace"
+      },
       { name: "original", detect: (d) => d.includes("...config.agentOptions !== void 0 ? { agentOptions: config.agentOptions } : {}"), block: await readFile(join(HERE, "orig-subagent-request-block.txt"), "utf8"), action: "replace" }
     ],
     patched: await readFile(join(HERE, "patched-subagent-request-block.txt"), "utf8"),
@@ -233,7 +278,7 @@ async function applyOne(target, dryRun) {
           log(`${target.label} 语法检查失败,已恢复备份`);
         }
       } else {
-        log(`${target.label} 已是 v2,跳过: ${file}`);
+        log(`${target.label} 已是 ${state.name},跳过: ${file}`);
       }
       return;
     }

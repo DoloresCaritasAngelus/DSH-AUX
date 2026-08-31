@@ -1,0 +1,5 @@
+				if (hasImage) {
+					const current = this.agents.selectionFor(agent).current;
+					const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model);
+					if (model.inputModalities !== void 0 && !model.inputModalities.includes("image")) throw new RemoteError("session/attachment-invalid", `Model "${current.model}" does not support image input.`, { reason: "MODEL_DOES_NOT_SUPPORT_IMAGES" });
+				}

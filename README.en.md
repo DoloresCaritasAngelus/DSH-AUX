@@ -341,7 +341,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 ## Compatibility & Dependencies
 
-- **Platform**: DSH 0.1.0-rc.6 ~ 0.1.1-rc.1 (verified on rc.6 / rc.7 / rc.8 / 0.1.1-rc.1); Node ≥ 20.
+- **Platform**: DSH 0.1.0-rc.6 ~ 0.1.2-alpha.2 (verified on rc.6 / rc.7 / rc.8 / 0.1.1-rc.1 / rc.2 / 0.1.2-alpha.2); Node ≥ 20.
 - **Zero third-party runtime deps**: peerDependencies are all official DSH packages (bundled with the platform); no `dependencies`.
 - **Zero test deps**: `node --test tests/*.test.js` (319 tests; file list and baseline in `TESTING.md`).
 

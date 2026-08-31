@@ -53,6 +53,29 @@ const DSH_VERSIONED_PACKAGES = [
   "dsh-workflow-worker-thread"
 ];
 
+// Packages introduced after the rc line; they only exist in newer DSH releases
+// and are added to the temporary package.json when the target version has them.
+const EXTRA_DEV_PACKAGES = {
+  "0.1.2-alpha.2": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
+  "0.1.2-alpha.3": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"]
+};
+
+// Some DSH releases do not publish every @deepseek-ai/dsh-* package at the
+// same version. For example, dsh-host-apiproxy is removed from the source
+// tree in 0.1.2-alpha.x and its last npm release stays at 0.1.1-rc.2.
+const DSH_VERSION_EXCEPTIONS = {
+  "0.1.2-alpha.2": {
+    "dsh-host-apiproxy": "0.1.1-rc.2"
+  },
+  "0.1.2-alpha.3": {
+    "dsh-host-apiproxy": "0.1.1-rc.2"
+  }
+};
+
+function packageVersion(name) {
+  return DSH_VERSION_EXCEPTIONS[version]?.[name] ?? version;
+}
+
 // All @deepseek-ai/dsh-* packages share the DSH release line. Forcing them all
 // (including transitive packages such as dsh-system-prompt) to the same version
 // prevents npm from resolving a newer DSH transitive package that conflicts
@@ -64,6 +87,9 @@ const DSH_OVERRIDE_PACKAGES = [
   "dsh-agent-presets",
   "dsh-api-gateway",
   "dsh-api-remotes",
+  "dsh-api-session-controller",
+  "dsh-api-settings-controller",
+  "dsh-api-workspace-controller",
   "dsh-atomic-write",
   "dsh-attachment",
   "dsh-brand",
@@ -132,11 +158,16 @@ let changed = 0;
 for (const name of DSH_VERSIONED_PACKAGES) {
   const key = `@deepseek-ai/${name}`;
   if (Object.hasOwn(devDeps, key)) {
-    devDeps[key] = version;
+    devDeps[key] = packageVersion(name);
     changed += 1;
   } else {
     console.warn(`[install-dsh-version] 跳过未声明依赖: ${key}`);
   }
+}
+for (const name of EXTRA_DEV_PACKAGES[version] ?? []) {
+  const key = `@deepseek-ai/${name}`;
+  devDeps[key] = packageVersion(name);
+  changed += 1;
 }
 if (changed === 0) {
   console.error("[install-dsh-version] package.json 中没有可替换的 @deepseek-ai/* DSH devDependencies");
@@ -145,7 +176,7 @@ if (changed === 0) {
 
 const overrides = pkg.overrides ?? {};
 for (const name of DSH_OVERRIDE_PACKAGES) {
-  overrides[`@deepseek-ai/${name}`] = version;
+  overrides[`@deepseek-ai/${name}`] = packageVersion(name);
 }
 pkg.overrides = overrides;
 
@@ -176,8 +207,8 @@ try {
     );
     const installed = pkgJson.version;
     console.log(`[install-dsh-version] 已安装 @deepseek-ai/${name}@${installed}`);
-    if (installed !== version) {
-      console.error(`[install-dsh-version] 版本不匹配: @deepseek-ai/${name} 期望 ${version},实际 ${installed}`);
+    if (installed !== packageVersion(name)) {
+      console.error(`[install-dsh-version] 版本不匹配: @deepseek-ai/${name} 期望 ${packageVersion(name)},实际 ${installed}`);
       process.exit(1);
     }
   }
