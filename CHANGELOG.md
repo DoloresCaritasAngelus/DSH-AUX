@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **DSH 0.1.2-alpha.3 兼容**:
+  - CI 兼容矩阵新增 `0.1.2-alpha.3`。
+  - alpha.3 为小幅修复版:`dsh-agent-loop` / `dsh-tool-subagent` / `dsh-session` / `dsh-settings` / `dsh-tool-skill` / `dsh-workflow-worker-thread` 等 lib 无变化。
+  - `dsh-api-session-controller` 有内部重构,但 prompt 图片门控补丁锚点不变。
+  - README / TESTING 平台支持范围更新到 `0.1.2-alpha.3`。
+
 ## 0.4.1(2026-08-31)— DSH 0.1.2-alpha.2 兼容 + 稳定加固
 
 > 本版本重点：全面兼容 DSH 0.1.2-alpha.2，同时保留 0.1.0-rc.6 最低支持；
