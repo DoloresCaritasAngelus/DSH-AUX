@@ -35,6 +35,8 @@ const TARGET = guardTarget(deployedFile(
   "../../../node_modules/@deepseek-ai/dsh-session/lib/index.js"
 ), "dsh-session-ignorable");
 const MARK = "dsh-aux ignorable (local patch)";
+/** dsh-aux session event name; also used as a fingerprint for rc.7+ clean packages. */
+const AUX_CALL_EVENT = "aux/llm-call";
 
 async function block(name) {
   return (await readFile(join(HERE, name), "utf8")).trim();
@@ -76,7 +78,7 @@ const whitelistOrig = await block(WHITELIST_STEP[1]);
 const whitelistApplicable = data.includes(whitelistOrig);
 // rc.7+/干净 npm 包可能没有 thinking/language 白名单锚点;白名单统一由
 // self-heal P8 以 KNOWN_SESSION_EVENT_TYPES 起始标记兜底插入,这里不硬失败。
-if (!whitelistApplicable && !data.includes("aux/llm-call")) {
+if (!whitelistApplicable && !data.includes(AUX_CALL_EVENT)) {
   log("白名单原块未命中,跳过(由 self-heal P8 兜底)");
 }
 const steps = [...APPEND_STEPS];

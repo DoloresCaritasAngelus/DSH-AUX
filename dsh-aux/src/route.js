@@ -280,22 +280,34 @@ export class AsyncSemaphore {
   }
 
   async acquire() {
+    // Tokenized release: each acquired permit owns exactly one release
+    // function. Calling it more than once — or holding an old release past a
+    // later acquire/release cycle — cannot release another permit.
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      if (this.active <= 0) return;
+      this.active -= 1;
+      const next = this.queue.shift();
+      if (next !== void 0) next();
+    };
     if (this.active < this.limit) {
       this.active += 1;
-      return () => this.release();
+      return release;
     }
     return new Promise((resolve) => {
       this.queue.push(resolve);
     }).then(() => {
       this.active += 1;
-      return () => this.release();
+      return release;
     });
   }
 
   release() {
-    // Double-release guard: only ever release what was acquired. Prevents
-    // `active` going negative (which would let the semaphore over-admit)
-    // when a caller releases twice or after an abort.
+    // Retained for API compatibility. Prefer the tokenized function returned
+    // by acquire(); this direct form only guards against `active` going
+    // negative, not against a stale external handle.
     if (this.active <= 0) return;
     this.active -= 1;
     const next = this.queue.shift();

@@ -6,7 +6,7 @@
  * Usage:
  *   node scripts/ci-syntax-check.mjs
  */
-import { readdirSync, statSync } from "node:fs";
+import { readdirSync, lstatSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -19,7 +19,8 @@ const files = [];
 function walk(dir) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    const stat = statSync(full);
+    const stat = lstatSync(full);
+    if (stat.isSymbolicLink()) continue; // never follow symlinks (loop safety)
     if (stat.isDirectory()) {
       walk(full);
     } else if (stat.isFile() && (extname(full) === ".js" || extname(full) === ".mjs")) {
@@ -30,7 +31,7 @@ function walk(dir) {
 
 for (const dir of DIRS) {
   const abs = join(ROOT, dir);
-  if (statSync(abs, { throwIfNoEntry: false })?.isDirectory()) walk(abs);
+  if (lstatSync(abs, { throwIfNoEntry: false })?.isDirectory()) walk(abs);
 }
 
 let failed = 0;

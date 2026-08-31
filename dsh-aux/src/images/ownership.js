@@ -5,6 +5,7 @@
  * @module @dolorescaritasangelus/dsh-aux/images/ownership
  */
 import { readFile as readFileText, rename as renameFile, unlink as unlinkFile, writeFile as writeFileText } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 
 /** Path to the session→attachment ownership map. */
 export function sessionImagesPath() {
@@ -52,7 +53,7 @@ async function readOwnershipMapFile(path) {
 /** Move a corrupt file aside instead of silently overwriting it. */
 async function quarantineFile(path) {
   try {
-    await renameFile(path, path + ".corrupt-" + Date.now());
+    await renameFile(path, path + ".corrupt-" + Date.now() + "-" + randomUUID());
   } catch {
     /* best-effort: quarantine is a diagnostic nicety, never fatal */
   }
@@ -173,7 +174,14 @@ export async function ensureSessionImagesLoaded(service) {
  */
 export async function recordAttachmentOwnership(service, sessionId, attachmentId) {
   if (sessionId === void 0 || attachmentId === void 0) return;
-  await ensureSessionImagesLoaded(service);
+  // Best-effort: a transient filesystem error must not become an unhandled
+  // rejection from the fire-and-forget vision path. `_sessionImagesLoaded`
+  // stays false on failure, so the next call retries the load.
+  try {
+    await ensureSessionImagesLoaded(service);
+  } catch {
+    return;
+  }
   let ids = service._sessionImages.get(sessionId);
   if (ids === void 0) {
     ids = new Set();
@@ -247,16 +255,21 @@ export function installShutdownHook(service) {
     service._shuttingDown = true;
   };
   process.once("beforeExit", markShuttingDown);
-  // On a graceful signal, flush any debounced ownership writes before exit so
-  // the latest references are not lost in the crash window.
-  process.once("SIGTERM", () => {
+  // On a graceful signal, flush any debounced ownership writes first, then
+  // re-raise the signal. The plugin must not call process.exit() itself:
+  // DSH/Cordis and other plugins may still need to run their own shutdown
+  // cleanup. Because the listener is `once`, the re-raised signal falls
+  // through to the host/default handler.
+  const flushAndReraise = (signal) => {
     markShuttingDown();
-    saveSessionImages(service).catch(() => {}).finally(() => process.exit(0));
-  });
-  process.once("SIGINT", () => {
-    markShuttingDown();
-    saveSessionImages(service).catch(() => {}).finally(() => process.exit(0));
-  });
+    saveSessionImages(service)
+      .catch(() => {})
+      .finally(() => {
+        process.kill(process.pid, signal);
+      });
+  };
+  process.once("SIGTERM", () => flushAndReraise("SIGTERM"));
+  process.once("SIGINT", () => flushAndReraise("SIGINT"));
 }
 
 /**
@@ -285,17 +298,35 @@ export async function cleanupSessionImages(service, sessionId) {
     if (home === void 0) return;
     const objectsRoot = home + "/attachments/v1/objects";
     const map = await loadSessionImages();
-    const mine = map.get(sessionId);
-    if (mine === void 0) return;
-    // Empty entry (or a session whose images were already fully reclaimed):
-    // still remove the key so `session-images.json` never accumulates empty
-    // sessions. Keep the in-memory cache consistent too.
+    const memory = service._sessionImages;
+    const diskMine = map.get(sessionId);
+    const memMine = memory.get(sessionId);
+    const mine = new Set();
+    if (diskMine !== void 0) for (const id of diskMine) mine.add(id);
+    if (memMine !== void 0) for (const id of memMine) mine.add(id);
+
+    // Persist a merged view: on-disk map + in-memory pending owners (excluding
+    // the deleted session). Otherwise a cleanup write could temporarily drop
+    // owners that are still inside the debounce window.
+    const merged = new Map(map);
+    for (const [sid, ids] of memory) {
+      if (sid === sessionId) continue;
+      const set = merged.get(sid) ?? new Set();
+      for (const id of ids) set.add(id);
+      merged.set(sid, set);
+    }
+    merged.delete(sessionId);
+
+    // A session may exist only in memory (debounce window before first save).
+    // Remove the in-memory entry even when disk has no key, otherwise the
+    // pending debounced save would resurrect the deleted session.
     if (mine.size === 0) {
-      map.delete(sessionId);
       service._sessionImages.delete(sessionId);
-      try {
-        await writeSessionImagesAtomically(mapToOwnershipObject(map));
-      } catch { /* best-effort */ }
+      if (diskMine !== void 0 || merged.size !== map.size) {
+        try {
+          await writeSessionImagesAtomically(mapToOwnershipObject(merged));
+        } catch { /* best-effort */ }
+      }
       return;
     }
     // Which other sessions reference each id? Check disk + live memory: the
@@ -303,7 +334,7 @@ export async function cleanupSessionImages(service, sessionId) {
     // still protect the file.
     let removed = 0;
     for (const attachmentId of mine) {
-      const referencedElsewhere = hasOtherReference(map, service._sessionImages, sessionId, attachmentId);
+      const referencedElsewhere = hasOtherReference(map, memory, sessionId, attachmentId);
       if (referencedElsewhere) continue;
       const match = /^sha256:([a-f0-9]{64})$/.exec(String(attachmentId));
       if (match === null) continue;
@@ -324,12 +355,9 @@ export async function cleanupSessionImages(service, sessionId) {
     // Always drop the deleted session from the map, even when every image was
     // shared (removed === 0). Otherwise the stale owner stays forever and the
     // last remaining owner can never reclaim the shared image.
-    map.delete(sessionId);
-    // Keep the in-memory cache consistent: a later debounced save must not
-    // resurrect the deleted session's entries from the stale cache.
     service._sessionImages.delete(sessionId);
     try {
-      await writeSessionImagesAtomically(mapToOwnershipObject(map));
+      await writeSessionImagesAtomically(mapToOwnershipObject(merged));
     } catch { /* best-effort */ }
   });
 }

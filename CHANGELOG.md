@@ -9,7 +9,7 @@
   - `ensureSessionImagesLoaded` 读取失败不再标记 loaded,瞬时错误可重试。
   - cleanup 判断“是否被其他会话引用”时同时看内存 + 磁盘 map,消除 debounce 窗口内共享图片被误删的竞态;`SIGTERM/SIGINT` 时 flush 未落盘的 ownership 写入。
   - `AsyncSemaphore.release()` 增加重复释放保护(`active <= 0` 直接返回),防止 active 被减成负数导致并发超放。
-- 新增 `tests/lifecycle-durability.test.js`(8 项)与 AsyncSemaphore 回归测试;测试基线 305 → 314。
+- 新增 `tests/lifecycle-durability.test.js`(11 项)与 AsyncSemaphore 回归测试;测试基线 305 → 314。
 - **CI 完善**:
   - 新增 DSH 包级兼容矩阵(`0.1.0-rc.6` / `0.1.0-rc.8` / `0.1.1-rc.1`),通过 `scripts/install-dsh-version.mjs` 临时切换 `@deepseek-ai/*` 版本并加 overrides,无需容器化完整 DSH。
   - 新增 `scripts/ci-fake-dsh.mjs`:构造 fake DSH 根,做 bridge 补丁 dry-run / 实际补丁 + self-heal + doctor 冒烟。
@@ -17,7 +17,15 @@
   - `patch-session-ignorable` 白名单步骤改为可选:干净 rc.7+ 包没有 thinking/language 锚点时跳过,由 self-heal P8 兜底,不再硬失败。
   - 新增全仓 JS/MJS 语法检查与 shell 语法检查。
   - 记录:`0.1.1-rc.2` 的 `dsh-host-apiproxy` selectModel 代码块已变化,补丁尚未适配,暂不进绿门矩阵。
-- 测试基线 314 → 315(新增 `deployedFile` DSH_ROOT 回归)。
+- 测试基线 314 → 319(新增 `deployedFile` DSH_ROOT 回归、AsyncSemaphore 旧句柄回归、image-memory `{}` 兼容、cleanup 内存 pending 等)。
+- **PR #7 review 修复**:
+  - `recordAttachmentOwnership` 捕获瞬时读取错误,避免 fire-and-forget 产生 unhandled rejection。
+  - `cleanupSessionImages` 合并内存 pending 视图,删除仅内存存在的已删 session,避免后续 debounce save 复活。
+  - 信号 flush 后改为 re-raise 信号,不再由插件直接 `process.exit(0)`。
+  - `AsyncSemaphore.acquire()` 改为 tokenized release,旧 release 句柄不能释放新持有者的许可。
+  - `image-memory` 对空对象 `{}` 宽容,不隔离为 corrupt。
+  - corrupt 隔离文件名增加 UUID 后缀,避免同毫秒冲突。
+  - 四个 README 测试基线同步到 319。
 
 ## 0.4.0(2026-08-22)— 平台化开关 + SKILL 模式 + 状态/UX 升级
 

@@ -8,6 +8,9 @@
  *  - D3: image-memory 损坏 → 隔离后继续追加,新记录落盘
  *  - D4: cleanup 移除空 session 条目(不再残留)
  *  - D5: ensureSessionImagesLoaded 读取失败不置 loaded,可重试
+ *  - D9: image-memory 空对象 {} 不隔离,直接追加
+ *  - D10: cleanup 删除仅内存 pending 的 session 后,后续 save 不复活
+ *  - D11: recordAttachmentOwnership 遇瞬时读取错误不产生未处理 rejection
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,7 +21,8 @@ import {
   loadSessionImages,
   saveSessionImages,
   cleanupSessionImages,
-  ensureSessionImagesLoaded
+  ensureSessionImagesLoaded,
+  recordAttachmentOwnership
 } from '../dsh-aux/src/images/ownership.js';
 import { recordImageMemory, imageMemoryPath } from '../dsh-aux/src/images/memory.js';
 
@@ -237,6 +241,59 @@ test('D8: debounce 窗口内,内存中的共享引用保护图片不被误删', 
     const map = JSON.parse(await fsPromises.readFile(sessionImagesPath(), 'utf8'));
     assert.equal(map['sess-A'], void 0, '已删会话的 owner 应移除');
     assert.ok(svc._sessionImages.has('sess-B'), '内存中的新 owner 应保留');
+  } finally {
+    process.env.DSH_HOME = prev;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('D9: image-memory 空对象 {} 不隔离,直接追加', async () => {
+  const tmp = await makeTmp('aux-d9');
+  const prev = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  try {
+    await fsPromises.writeFile(imageMemoryPath(), '{}');
+    const svc = { _memoryQueue: Promise.resolve() };
+    await recordImageMemory(svc, 'sess-9', sha('9'), '问题', '摘要');
+    const parsed = JSON.parse(await fsPromises.readFile(imageMemoryPath(), 'utf8'));
+    assert.equal(parsed.entries.length, 1, '空对象 {} 应作为空 journal 继续追加');
+    const files = await fsPromises.readdir(tmp + '/attachments/v1');
+    assert.ok(!files.some((f) => f.startsWith('image-memory.json.corrupt-')), '{} 不应被隔离');
+  } finally {
+    process.env.DSH_HOME = prev;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('D10: cleanup 删除仅内存 pending 的 session 后,后续 save 不复活', async () => {
+  const tmp = await makeTmp('aux-d10');
+  const prev = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  try {
+    const x = 'sha256:' + 'd'.repeat(64);
+    const svc = makeService();
+    svc._sessionImages.set('sess-M', new Set([x]));
+    await cleanupSessionImages(svc, 'sess-M');
+    assert.equal(svc._sessionImages.has('sess-M'), false, '内存中的已删 session 应被移除');
+    await saveSessionImages(svc);
+    const map = JSON.parse(await fsPromises.readFile(sessionImagesPath(), 'utf8'));
+    assert.equal(map['sess-M'], void 0, 'debounce save 不得复活已删 session');
+  } finally {
+    process.env.DSH_HOME = prev;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('D11: recordAttachmentOwnership 遇瞬时读取错误不产生未处理 rejection', async () => {
+  const tmp = await makeTmp('aux-d11');
+  const prev = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  try {
+    await fsPromises.mkdir(sessionImagesPath(), { recursive: true }); // EISDIR
+    const svc = makeService();
+    await recordAttachmentOwnership(svc, 'sess-E', sha('e')); // 应 resolve,不 reject
+    assert.equal(svc._sessionImagesLoaded, false, '读取失败不得标记 loaded');
+    assert.equal(svc._sessionImages.has('sess-E'), false);
   } finally {
     process.env.DSH_HOME = prev;
     await fsPromises.rm(tmp, { recursive: true, force: true });

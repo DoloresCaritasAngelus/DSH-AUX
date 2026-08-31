@@ -5,6 +5,7 @@
  * @module @dolorescaritasangelus/dsh-aux/images/memory
  */
 import { readFile as readFileText, rename as renameFile, writeFile as writeFileText } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 
 /** Path to the image-memory journal (path/question -> summary). */
 export function imageMemoryPath() {
@@ -23,7 +24,7 @@ export function recordImageMemory(service, sessionId, attachmentId, question, su
 /** Move a corrupt journal aside so a fresh file can take its place (evidence preserved). */
 async function quarantineJournalFile(path) {
   try {
-    await renameFile(path, path + ".corrupt-" + Date.now());
+    await renameFile(path, path + ".corrupt-" + Date.now() + "-" + randomUUID());
   } catch {
     /* best-effort: quarantine is a diagnostic nicety, never fatal */
   }
@@ -44,7 +45,7 @@ async function recordImageMemoryCore(sessionId, attachmentId, question, summary)
       await quarantineJournalFile(path);
       parsed = {};
     }
-    if (parsed === null || typeof parsed !== "object" || !Array.isArray(parsed.entries)) {
+    if (parsed === null || typeof parsed !== "object") {
       await quarantineJournalFile(path);
       parsed = {};
     }

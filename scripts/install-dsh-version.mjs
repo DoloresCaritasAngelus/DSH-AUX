@@ -117,6 +117,15 @@ const DSH_OVERRIDE_PACKAGES = [
   "dsh-workspace"
 ];
 
+// Representative packages spanning entrypoint, bridge targets and transitive
+// surface; install success plus overrides are verified across all of them.
+const VERIFY_PACKAGES = [
+  "dsh-agent",
+  "dsh-session",
+  "dsh-host-apiproxy",
+  "dsh-tool-skill"
+];
+
 const pkg = JSON.parse(ORIGINAL);
 const devDeps = pkg.devDependencies ?? {};
 let changed = 0;
@@ -158,15 +167,19 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1);
 }
 
-// Verify the exact line was installed for at least one representative package.
+// Verify the exact line was installed across several representative packages,
+// not just one, so a partial override failure is caught.
 try {
-  const installed = JSON.parse(
-    readFileSync(join(ROOT, "node_modules/@deepseek-ai/dsh-agent/package.json"), "utf8")
-  ).version;
-  console.log(`[install-dsh-version] 已安装 @deepseek-ai/dsh-agent@${installed}`);
-  if (installed !== version) {
-    console.error(`[install-dsh-version] 版本不匹配: 期望 ${version},实际 ${installed}`);
-    process.exit(1);
+  for (const name of VERIFY_PACKAGES) {
+    const pkgJson = JSON.parse(
+      readFileSync(join(ROOT, "node_modules/@deepseek-ai", name, "package.json"), "utf8")
+    );
+    const installed = pkgJson.version;
+    console.log(`[install-dsh-version] 已安装 @deepseek-ai/${name}@${installed}`);
+    if (installed !== version) {
+      console.error(`[install-dsh-version] 版本不匹配: @deepseek-ai/${name} 期望 ${version},实际 ${installed}`);
+      process.exit(1);
+    }
   }
 } catch (error) {
   console.error(`[install-dsh-version] 无法读取已安装版本: ${error.message}`);
