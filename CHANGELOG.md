@@ -33,6 +33,10 @@
   - `dsh-tool-subagent` request 在 alpha.2 改为 `requestedChildAgentOptions`,补丁增加 `original-alpha2` 状态,合并 AUX 路由与官方子代理模型选择。
   - `scripts/install-dsh-version.mjs` 支持版本例外(npm 未按同版本发布的包,如 `dsh-host-apiproxy` 在 alpha.2 仍为 rc.2)与新增 controller devDependencies。
   - peerDependencies 增加 `|| ^0.1.2-alpha.2`,`dsh-client-runtime` 标记 optional。
+- **SKILL/流程沉淀**:
+  - 新增 `aux-review-verify`:外部 review 报告验证纪律(不盲信、分类、子代理交叉验证、自己跑关键命令)。
+  - `aux-github-workflow` 补 token/凭据纪律与 PR review 后续修复流程。
+  - `aux-dsh-follow` / `aux-patch-discipline` 补 DSH 版本兼容矩阵接入流程与当前未适配版本记录。
 
 ## 0.4.0(2026-08-22)— 平台化开关 + SKILL 模式 + 状态/UX 升级
 

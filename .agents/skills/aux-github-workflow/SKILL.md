@@ -1,6 +1,6 @@
 ---
 name: aux-github-workflow
-description: DSH-AUX 仓库 GitHub 管理流程纪律——分支/Conventional Commits/PR/CI/合并/发布;禁止直推 main 与 force-push。
+description: DSH-AUX 仓库 GitHub 管理流程纪律——分支/Conventional Commits/PR/CI/合并/发布;禁止直推 main 与 force-push;token/凭据脱密。
 user-invocable: false
 ---
 
@@ -19,6 +19,26 @@ user-invocable: false
 5. **CI 全绿前不得合入**;合入使用 **Squash and merge**,合入后删除分支。
 6. 发布必须走:**版本号 + CHANGELOG + tag + GitHub Release**。
 7. 改动涉及文档/README/CHANGELOG 时必须同步,禁止只改代码。
+
+## Token / 凭据纪律
+1. **token 不写进命令参数、输出、commit、日志、被跟踪文件**。
+   - 优先用 `gh auth login`、环境变量、GitHub secret/credential helper;
+   - 必须用 REST API/curl 时,把 token 放环境变量或 secret,不在命令行明文出现。
+2. 在聊天/日志/终端历史中出现过的 token,视为可能泄露:**用后立即 revoke/轮换**。
+3. 推送到 GitHub 前先确认 token 权限足够(`Contents: write` / PR 权限);
+   `401 Bad credentials` 表示 token 无效,不要反复重试。
+4. 没有 `gh` 时可用 GitHub REST API 开 PR,但响应/输出里不得包含 token;
+   推送可用 `https://x-access-token:${TOKEN}@github.com/...`,也必须脱敏输出。
+
+## PR review 后续修复流程
+1. review 发现需要修复时,**继续往同一个 PR 分支推新提交**,不要 force-push。
+2. 修复提交用 Conventional Commits,例如 `fix(review): ...`。
+3. 推送到 PR 分支后 PR 自动更新;无需重新开 PR。
+4. 若外部 review 报告结论需要验证,先走 `aux-review-verify` 纪律,不要照单全改。
+5. 合入前确认:
+   - 本地全量测试通过;
+   - 新增/修改测试后 README / TESTING / CHANGELOG / SKILL 基线同步;
+   - `git status` 干净。
 
 ## 分支前缀
 🔻易腐烂·前缀清单(以仓库实际使用为准):
@@ -87,3 +107,4 @@ user-invocable: false
 - 测试没跑就合入 → CI 会拦;本地也要先跑。
 - 发版不改版本号/CHANGELOG → 用户安装更新时无法识别新版本。
 - 把 `/home/...` 绝对路径写进被跟踪文档 → 推送前必须脱敏。
+- 在命令/输出/日志里暴露 token → 违反凭据纪律;出现后立即 revoke。
