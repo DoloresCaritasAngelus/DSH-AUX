@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased
+## 0.4.1-FIX1 (2026-09-01) — alpha.3 设置页/状态芯片修复
+
+- **Web 设置页修复**:
+  - 适配 DSH 0.1.2-alpha.x 移除 `connection.api` 的变更,设置页不再白屏。
+  - 供应商/模型/思考档位改为读取 `remote.session.modelCatalog()`。
+  - 移除重复的 `settings.plugin.item` 注册,避免 Plugins 页重复出现 AUX。
+- **状态芯片/桥接状态修复**:
+  - `bridge-locate` 优先从 DSH 部署根解析补丁目标,修复读取到工作区未打补丁副本导致的事件不记录、状态误报。
 
 - **DSH 0.1.2-alpha.3 兼容**:
   - CI 兼容矩阵新增 `0.1.2-alpha.3`。

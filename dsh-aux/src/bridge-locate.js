@@ -62,6 +62,19 @@ function envCandidates(pkg) {
 }
 
 /**
+ * DSH 部署根候选:DSH 启动脚本(start-dsh.sh)总是 cd 到部署根,故进程
+ * cwd 即部署根;从它解析命中已打补丁的部署副本。
+ */
+function deployRootCandidates(pkg) {
+  try {
+    const req = createRequire(join(process.cwd(), "noop.js"));
+    return [req.resolve("@deepseek-ai/" + pkg)];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Search every ancestor of the real module path for a node_modules tree.
  * This covers source-tree/symlink layouts where the repo lives somewhere
  * under the DSH root but Node's import.meta.url has been realpathed out of
@@ -86,6 +99,10 @@ export function packageFileCandidates(pkg) {
     throw new Error(`bridge-locate: invalid package name "${pkg}"`);
   }
   const paths = [];
+  // 部署根优先(DSH 运行时 cwd=部署根,命中已打补丁的部署副本)
+  for (const candidate of deployRootCandidates(pkg)) {
+    if (!paths.includes(candidate)) paths.push(candidate);
+  }
   try {
     // The real packages are scoped (@deepseek-ai/dsh-*). Resolving the bare
     // package main returns its lib/index.js through package.json `main`.

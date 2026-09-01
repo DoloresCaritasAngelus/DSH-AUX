@@ -8,7 +8,7 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/client
  */
-import type { SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-client-connection/client';
+import type { SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client';
 
 /** Privacy-minimized wire entry of the `aux-status` projection. */
 export interface AuxStatusCallWire {
@@ -76,7 +76,7 @@ export interface AuxModelReasoning {
     defaultEffort?: string;
 }
 
-/** Provider group in the `llm.models` catalog. */
+/** Provider group in the `remote.session.modelCatalog()` result. */
 export interface AuxModelGroup {
     id: string;
     name?: string;
@@ -91,62 +91,75 @@ export interface AuxModelGroup {
     }>;
 }
 
-/** Value returned by a successful `sessions.history` call. */
-export interface AuxSessionHistoryValue {
-    events: Array<{
-        event: {
-            type: string;
-            seq: number;
-            time: number;
-            data: unknown;
-        };
-        view?: unknown;
-    }>;
-    hasMore: boolean;
-    projections?: {
-        asOfSeq?: number;
-        values?: {
-            'aux-status'?: AuxStatusProjectionWire;
-            'aux-platform'?: AuxPlatformProjection;
-            [key: string]: unknown;
-        };
-    };
-}
-
-/** Minimal sessions API surface used by the settings page and status chip. */
+/** Minimal session list API surface used by the settings page and command runner. */
 export interface AuxSessionsApi {
     list(request: {}): Promise<{
-        result: { ok: true; value: { items: { sessionId: string }[] } } | { ok: false; error: { message: string } };
-    }>;
-    history(request: { sessionId: string; beforeSeq?: number; maxMessages?: number }): Promise<{
-        result: { ok: true; value: AuxSessionHistoryValue } | { ok: false; error: { message: string } };
+        ok: true;
+        value: { items: { sessionId: string }[] };
+    } | {
+        ok: false;
+        error: { message: string };
     }>;
 }
 
 /** Standard slot props supplied by the settings.section shell. */
 export interface AuxSettingsPageProps {
-    /** Settings wire face (settings.describe / settings.mutate / sessions read). */
+    /** Alpha.3-compatible settings/llm/session wire face. */
     api: {
         sessions: AuxSessionsApi;
         settings: {
-            describe(request: {}): Promise<{
-                result: { ok: true; value: { writable: boolean; namespaces: SettingsNamespaceView[] } } | { ok: false; error: { message: string } };
+            describe(): Promise<{
+                ok: true;
+                value: { writable: boolean; namespaces: SettingsNamespaceView[] };
+            } | {
+                ok: false;
+                error: { message: string };
             }>;
             mutate(request: {
                 ns: string;
                 ops: SettingsPathOpView[];
                 expectedRevision: number;
             }): Promise<{
-                result: { ok: true; value: { revision: number; value: unknown } } | { ok: false; error: { message: string } };
+                ok: true;
+                value: { revision: number; value: unknown };
+            } | {
+                ok: false;
+                error: { message: string };
             }>;
         };
         llm: {
-            providers(request: {}): Promise<{
-                result: { ok: true; value: { providers: { provider: string; displayName: string; active: boolean }[] } } | { ok: false; error: { message: string } };
+            providers(): Promise<{
+                ok: true;
+                value: { providers: { provider: string; displayName: string; active: boolean }[] };
+            } | {
+                ok: false;
+                error: { message: string };
             }>;
-            models(request: {}): Promise<{
-                result: { ok: true; value: { groups: AuxModelGroup[] } } | { ok: false; error: { message: string } };
+            models(): Promise<{
+                ok: true;
+                value: { groups: AuxModelGroup[] };
+            } | {
+                ok: false;
+                error: { message: string };
             }>;
+        };
+    };
+    /** Alpha.3 client sessions service, used to read `aux-platform` projections. */
+    sessions?: {
+        binding(sessionId: string): {
+            session?: {
+                projections?: {
+                    faceOf(key: string): {
+                        getSnapshot(): unknown;
+                    };
+                };
+            };
+        } | undefined;
+        list: {
+            getSnapshot(): {
+                ids: string[];
+                byId: Record<string, { id?: string; sessionId?: string }>;
+            };
         };
     };
     /** Run one `/aux` command on the first available session and return its command result. */
@@ -169,12 +182,29 @@ export interface AuxStatusChipProps {
      * show the true latest call by event order/time rather than relying on the
      * per-task `aux-status` record's insertion order.
      */
-    api?: {
-        sessions: AuxSessionsApi;
+    sessions?: {
+        binding(sessionId: string): {
+            session?: {
+                eventSource?: {
+                    getSnapshot(): {
+                        entries: AuxCallHistoryEvent[];
+                    };
+                };
+            };
+        } | undefined;
     };
 }
 
 /** The client plugin entry: registered slot contributions. */
 export declare function apply(ctx: unknown): void;
 /** Required client services. */
-export declare const inject: readonly ['slots', 'connection', 'remote', 'remote.commands'];
+export declare const inject: readonly [
+    'slots',
+    'connection',
+    'remote',
+    'remote.commands',
+    'remote.settings',
+    'remote.llm',
+    'remote.session',
+    'sessions'
+];
