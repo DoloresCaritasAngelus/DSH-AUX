@@ -60,6 +60,7 @@ function readVersion(pkgPath) {
 
 function main() {
   const root = detectRoot();
+  if (root) process.env.DSH_ROOT = root; // 子脚本 apply-patch 需要 DSH_ROOT 解析目标
   if (!root) {
     record("ERROR", "dsh-root", "未找到 DSH 部署根(可用 --dsh-root 指定)");
   } else {

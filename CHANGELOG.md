@@ -7,6 +7,10 @@
   - alpha.3 为小幅修复版:`dsh-agent-loop` / `dsh-tool-subagent` / `dsh-session` / `dsh-settings` / `dsh-tool-skill` / `dsh-workflow-worker-thread` 等 lib 无变化。
   - `dsh-api-session-controller` 有内部重构,但 prompt 图片门控补丁锚点不变。
   - README / TESTING 平台支持范围更新到 `0.1.2-alpha.3`。
+- **alpha.3 部署修复**:
+  - `self-heal` / `doctor` 现在会把探测到的 `DSH_ROOT` 写入环境变量,子脚本不再因目标包缺失而解析到 `node_modules` 外的 unsafe 路径。
+  - `dsh-api-session-controller` 在 alpha.3 中缺失时,`apply-patch` 与 `patch-settings-allowlist` 能安全跳过旧 `dsh-host-apiproxy` 目标。
+  - 设置注册迁移为 `ctx.inject(["settings"], ...)`,与官方 agent-loop 一致,修复 alpha.3 下设置页可能不显示 AUX 配置的问题。
 
 ## 0.4.1(2026-08-31)— DSH 0.1.2-alpha.2 兼容 + 稳定加固
 
