@@ -40,6 +40,14 @@ user-invocable: false
    - 新增/修改测试后 README / TESTING / CHANGELOG / SKILL 基线同步;
    - `git status` 干净。
 
+## 分支推送前状态检查
+1. 向远程分支 push **之前**,先确认该分支**未被合入/关闭**;已合入或已关闭的分支禁止再 push。
+2. 如果发现需要补充改动,应基于最新 `main` 新建分支,而不是往旧分支追加。
+3. 查询状态示例:
+   - `git ls-remote origin <branch>` 确认分支仍存在;
+   - 或用 GitHub API 检查该分支的关联合入状态。
+4. 忘记检查导致旧分支被追加时,不要 force-push 清理;将遗漏的改动 cherry-pick 到新分支,并删除旧远程分支。
+
 ## 分支前缀
 🔻易腐烂·前缀清单(以仓库实际使用为准):
 `feat/` `fix/` `docs/` `refactor/` `test/` `ci/` `chore/` `build/` `perf/` `revert/` `release/`
@@ -108,3 +116,4 @@ user-invocable: false
 - 发版不改版本号/CHANGELOG → 用户安装更新时无法识别新版本。
 - 把 `/home/...` 绝对路径写进被跟踪文档 → 推送前必须脱敏。
 - 在命令/输出/日志里暴露 token → 违反凭据纪律;出现后立即 revoke。
+- 向已合入/已关闭的旧分支追加提交 → 违反“分支推送前状态检查”;补充内容应基于最新 `main` 新建分支。
