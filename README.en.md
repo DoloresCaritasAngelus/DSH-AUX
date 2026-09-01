@@ -1,6 +1,6 @@
 **English** | [简体中文](README.md)
 
-<div align="center"><img src="assets/deepseek-girl.png" alt="AUX" width="120" /></div>
+<div align="center"><img src="https://raw.githubusercontent.com/DoloresCaritasAngelus/DSH-AUX/main/assets/deepseek-girl.png" alt="AUX" width="120" /></div>
 
 <div align="center">
 
