@@ -11,7 +11,7 @@
 ![Version](https://img.shields.io/badge/version-0.4.1-FIX1-blue)
 ![Tests](https://img.shields.io/badge/tests-319-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Platform](https://img.shields.io/badge/DSH-0.1.0--rc.6%20~%200.1.1--rc.1-0078D4)
+![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--alpha.3-0078D4)
 
 </div>
 
@@ -341,7 +341,8 @@ const result = await ctx.auxLlm.call("compress", {
 
 ## 兼容性与依赖
 
-- **平台**：DSH 0.1.0-rc.6 ~ 0.1.2-alpha.3（已验证 rc.6 / rc.7 / rc.8 / 0.1.1-rc.1 / rc.2 / 0.1.2-alpha.2 / 0.1.2-alpha.3）；Node ≥ 20。
+- **平台**：DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3（已验证 0.1.2-alpha.2 / 0.1.2-alpha.3）；Node ≥ 20。
+- **旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）用户**：请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。主支不再支持这些版本。
 - **运行时零第三方依赖**：peerDependencies 全部是 DSH 官方包（环境自带），无 `dependencies`。
 - **测试零依赖**：`node --test tests/*.test.js`（319 项；文件清单与基线见 `TESTING.md`）。
 

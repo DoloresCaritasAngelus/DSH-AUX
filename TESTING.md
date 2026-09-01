@@ -23,8 +23,8 @@ node scripts/ci-fake-dsh.mjs                                  # fake DSH 根 + b
 node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + 实际补丁 + doctor(CI 专用)
 ```
 
-- 当前 DSH 兼容矩阵:`0.1.0-rc.6` / `0.1.0-rc.7` / `0.1.0-rc.8` /
-  `0.1.1-rc.1` / `0.1.1-rc.2` / `0.1.2-alpha.2` / `0.1.2-alpha.3`。
+- 当前 DSH 兼容矩阵:`0.1.2-alpha.2` / `0.1.2-alpha.3`。
+- 旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）请使用 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 分支 / `v0.4.1-legacy` Release。
 - `0.1.2-alpha.1` 只有 GitHub release,没有对应 npm 包发布,因此无法进入 npm 矩阵;
   源码差异仍纳入研究,但 CI 绿门以 npm 可安装版本为准。
 

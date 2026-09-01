@@ -3,6 +3,10 @@
 ## Unreleased
 ## 0.4.1-FIX1 (2026-09-01) — alpha.3 设置页/状态芯片修复
 
+> **兼容性变更**：本版本起不再支持 DSH 0.1.0-rc.6 ~ 0.1.1-rc.2。
+> 旧版 DSH 用户请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。
+
+
 - **Web 设置页修复**:
   - 适配 DSH 0.1.2-alpha.x 移除 `connection.api` 的变更,设置页不再白屏。
   - 供应商/模型/思考档位改为读取 `remote.session.modelCatalog()`。
