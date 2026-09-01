@@ -164,6 +164,9 @@ function ensureWhitelist(root) {
 function main() {
   const root = detectDshRoot();
   if (!root) { log("未找到 DSH 部署根(跳过自愈)"); return; }
+  // 子脚本(apply-patch / settings 补丁)需要 DSH_ROOT 解析目标;不设置时,
+  // 包缺失会回退到仓库相对路径并触发 unsafe patch target。
+  process.env.DSH_ROOT = root;
   log(`DSH 根: ${root} (${DRY ? "dry-run" : "实际修复"})`);
   // 每步独立容错:某一步失败(如某个补丁目标版本不匹配)不中断后续步骤。
   const step = (name, fn) => {

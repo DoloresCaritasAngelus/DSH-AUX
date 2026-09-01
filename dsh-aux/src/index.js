@@ -69,9 +69,27 @@ export { AuxCallError, sessionPatchCandidates } from "./events.js";
 
 /** Recursively freeze an options object (replaces `deepFreeze` removed from dsh-llm). */
 function deepFreeze(value) {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    Object.freeze(value);
-    for (const key of Object.keys(value)) deepFreeze(value[key]);
+  const seen = new WeakSet();
+  const pending = [{ kind: "visit", node: value }];
+  while (pending.length > 0) {
+    const task = pending.pop();
+    if (task === void 0) continue;
+    if (task.kind === "property") {
+      pending.push({ kind: "visit", node: task.source[task.key] });
+      continue;
+    }
+    const node = task.node;
+    if (node === null || typeof node !== "object") continue;
+    // Never freeze host/reactive objects such as AbortSignal; official dsh-llm
+    // deepFreeze also skips them.
+    if (typeof AbortSignal !== "undefined" && node instanceof AbortSignal) continue;
+    if (seen.has(node)) continue;
+    seen.add(node);
+    Object.freeze(node);
+    const keys = Object.keys(node);
+    for (let index = keys.length - 1; index >= 0; index--) {
+      pending.push({ kind: "property", source: node, key: keys[index] });
+    }
   }
   return value;
 }
@@ -235,19 +253,24 @@ export class AuxLlmService extends Service {
         // see bridge/patch-settings-dynamic-expose.mjs).
         exposedToWeb: true
       });
-    } else {
-      // 0.1.2-alpha.x removed installSettingsSection; the settings provider
-      // exposes installSection() directly and accepts plain string namespaces.
-      const settingsService = ctx.settings;
-      const installSection = settingsService?.installSection?.bind(settingsService);
-      if (typeof installSection === "function") {
-        installSection(ctx, AUX_SETTINGS_NAMESPACE, AUX_SETTINGS_SCHEMA, projectSettings({}), settingsHooks);
-      } else if (typeof dshSettings.SettingsProvider === "function" && settingsService instanceof dshSettings.SettingsProvider) {
-        throw new Error("dsh-aux: unsupported DSH settings API (no installSection on SettingsProvider)");
-      }
-      // Otherwise the host/test context does not provide a settings service;
-      // skip registration rather than crashing (matches old test stubs).
+    } else if (typeof ctx.inject === "function") {
+      // 0.1.2-alpha.x: settings service may only be available through
+      // ctx.inject(["settings"], ...). Follow the official agent-loop pattern.
+      ctx.inject(["settings"], (settingsCtx) => {
+        const settingsService = settingsCtx.settings;
+        const installSection = settingsService?.installSection?.bind(settingsService);
+        if (typeof installSection === "function") {
+          installSection(ctx, AUX_SETTINGS_NAMESPACE, AUX_SETTINGS_SCHEMA, projectSettings({}), settingsHooks);
+        } else if (typeof dshSettings.SettingsProvider === "function" && settingsService instanceof dshSettings.SettingsProvider) {
+          throw new Error("dsh-aux: unsupported DSH settings API (no installSection on SettingsProvider)");
+        }
+        // Otherwise the host/test context does not provide a settings service;
+        // skip registration rather than crashing (matches old test stubs).
+      });
+    } else if (typeof dshSettings.SettingsProvider === "function" && ctx.settings instanceof dshSettings.SettingsProvider) {
+      throw new Error("dsh-aux: unsupported DSH settings API (no installSection on SettingsProvider)");
     }
+    // If no settings service is available at all, skip registration.
     registerAuxTools(this);
     this._toolsInitialized = true;
     attachSkillBridge(this);

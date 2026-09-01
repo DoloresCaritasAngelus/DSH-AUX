@@ -24,6 +24,8 @@ window.__ModuleLoader__.load({
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let react = require("react");
+		/** Normalize old `{ ok, result: { ok, value } }` and new `{ ok, value }` remote responses. */
+		const unwrapResponse = (resp) => (resp && typeof resp === "object" && resp.result !== void 0 ? resp.result : resp);
 		// Package-owned stylesheet, deduplicated by tag id and cleaned up with the run.
 		const css = [
 			".ax-wrap{display:inline-flex;align-items:center;gap:6px;min-width:0}",
@@ -395,7 +397,7 @@ window.__ModuleLoader__.load({
 		 * settings.mutate with the revision read at load.
 		 */
 		function AuxSettingsPage(props) {
-			const { api, runAuxCommand } = props;
+			const { api, runAuxCommand, sessions } = props;
 			const t = (props && props.t) || __t;
 			useLocaleRevision();
 			const [state, setState] = react.useState({ status: "loading", error: null, value: null, revision: 0, writable: true });
@@ -405,21 +407,24 @@ window.__ModuleLoader__.load({
 				let alive = true;
 				Promise.all([
 					api.settings.describe({}),
-					api.llm.providers({}).catch(() => ({ result: { ok: false, error: { message: "providers unavailable" } } })),
-					api.llm.models({}).catch(() => ({ result: { ok: false, error: { message: "models unavailable" } } }))
-				]).then(([settingsResponse, providersResponse, modelsResponse]) => {
+					api.llm.providers({}).catch(() => ({ ok: false, error: { message: "providers unavailable" } })),
+					api.llm.models({}).catch(() => ({ ok: false, error: { message: "models unavailable" } }))
+				]).then(([settingsRaw, providersRaw, modelsRaw]) => {
 					if (!alive) return;
-					if (!settingsResponse.result.ok) {
-						setState({ status: "error", error: settingsResponse.result.error.message, value: null, revision: 0, writable: true });
+					const settingsResponse = unwrapResponse(settingsRaw);
+					const providersResponse = unwrapResponse(providersRaw);
+					const modelsResponse = unwrapResponse(modelsRaw);
+					if (!settingsResponse.ok) {
+						setState({ status: "error", error: settingsResponse.error?.message ?? "settings unavailable", value: null, revision: 0, writable: true });
 						return;
 					}
-					const view = settingsResponse.result.value.namespaces.find((n) => n.ns === "aux");
+					const view = settingsResponse.value.namespaces.find((n) => n.ns === "aux");
 					const value = view?.value ?? {};
-					setState({ status: "ready", error: null, value, revision: view?.revision ?? 0, writable: settingsResponse.result.value.writable });
-					const providers = providersResponse.result.ok
-						? (providersResponse.result.value.providers ?? []).filter((p) => p.active === true)
+					setState({ status: "ready", error: null, value, revision: view?.revision ?? 0, writable: settingsResponse.value.writable });
+					const providers = providersResponse.ok
+						? (providersResponse.value.providers ?? []).filter((p) => p.active === true)
 						: [];
-					const groups = modelsResponse.result.ok ? (modelsResponse.result.value.groups ?? []) : [];
+					const groups = modelsResponse.ok ? (modelsResponse.value.groups ?? []) : [];
 					const models = [];
 					const reasoning = {};
 					for (const group of groups) {
@@ -474,15 +479,13 @@ window.__ModuleLoader__.load({
 				setStatusError(null);
 				Promise.resolve()
 					.then(async () => {
-						// 非命令通道:通过 sessions.history 读取 aux-platform 投影,
+						// 非命令通道:从 alpha.3 的 sessions 投影面读取 aux-platform,
 						// 不执行 /aux status --json,避免在会话里产生命令卡片。
-						const listResponse = await api.sessions.list({});
-						const items = listResponse?.result?.value?.items ?? [];
+						const listResponse = unwrapResponse(await api.sessions.list({}));
+						const items = listResponse?.value?.items ?? [];
 						if (items.length === 0) throw new Error(t("status.noSession"));
 						for (const item of items) {
-							const historyResponse = await api.sessions.history({ sessionId: item.sessionId, maxMessages: 1 });
-							const projections = historyResponse?.result?.value?.projections;
-							const data = projections?.values?.["aux-platform"];
+							const data = sessions?.binding?.(item.sessionId)?.session?.projections?.faceOf?.("aux-platform")?.getSnapshot?.();
 							if (data && typeof data === "object" && Array.isArray(data.items)) return data;
 						}
 						throw new Error(t("status.notReady"));
@@ -633,13 +636,14 @@ window.__ModuleLoader__.load({
 				}
 				api.settings.mutate({ ns: "aux", ops, expectedRevision: state.revision }).then((response) => {
 					setSaving(false);
-					if (!response.result.ok) {
-						setSaveError(response.result.error.message);
+					const resp = unwrapResponse(response);
+					if (!resp.ok) {
+						setSaveError(resp.error?.message ?? "save failed");
 						return;
 					}
 					setSaved(true);
-					setState((s) => ({ ...s, revision: response.result.value.revision, value: response.result.value.value }));
-					setDraft(structuredClone(response.result.value.value ?? {}));
+					setState((s) => ({ ...s, revision: resp.value.revision, value: resp.value.value }));
+					setDraft(structuredClone(resp.value.value ?? {}));
 					loadStatus();
 				}).catch((error) => {
 					setSaving(false);
@@ -1129,52 +1133,37 @@ window.__ModuleLoader__.load({
 			const [historyCall, setHistoryCall] = react.useState(null);
 			const historyRequestId = react.useRef(0);
 			const loadLatestCall = react.useCallback(() => {
-				if (!props.api || !props.sessionId) return;
+				if (!props.sessions || !props.sessionId) return;
 				const requestId = ++historyRequestId.current;
 				setHistoryCall(null);
-				let beforeSeq;
-				const pageSize = 50;
 				Promise.resolve()
-					.then(async () => {
-						while (true) {
-							const response = await props.api.sessions.history({
-								sessionId: props.sessionId,
-								maxMessages: pageSize,
-								...(beforeSeq === void 0 ? {} : { beforeSeq })
-							});
-							if (requestId !== historyRequestId.current) return;
-							if (!response.result.ok) throw new Error(response.result.error.message);
-							const value = response.result.value;
-							const events = Array.isArray(value.events) ? value.events : [];
-							for (let i = events.length - 1; i >= 0; i--) {
-								const entry = events[i];
-								const event = entry && entry.event;
-								if (event && event.type === "aux/llm-call" && event.data && typeof event.data === "object") {
-									if (requestId === historyRequestId.current) {
-										const data = event.data;
-										setHistoryCall({
-											task: String(data.task ?? ""),
-											ok: data.ok === true,
-											fallbackUsed: data.fallbackUsed === true,
-											durationMs: typeof data.durationMs === "number" ? data.durationMs : 0,
-											seq: event.seq,
-											time: event.time
-										});
-									}
-									return;
+					.then(() => {
+						const binding = props.sessions.binding?.(props.sessionId);
+						const events = binding?.session?.eventSource?.getSnapshot?.().entries ?? [];
+						for (let i = events.length - 1; i >= 0; i--) {
+							const entry = events[i];
+							const event = entry && entry.event;
+							if (event && event.type === "aux/llm-call" && event.data && typeof event.data === "object") {
+								if (requestId === historyRequestId.current) {
+									const data = event.data;
+									setHistoryCall({
+										task: String(data.task ?? ""),
+										ok: data.ok === true,
+										fallbackUsed: data.fallbackUsed === true,
+										durationMs: typeof data.durationMs === "number" ? data.durationMs : 0,
+										seq: event.seq,
+										time: event.time
+									});
 								}
+								return;
 							}
-							if (value.hasMore !== true || events.length === 0) break;
-							const nextBeforeSeq = events[0].event.seq;
-							if (beforeSeq !== void 0 && nextBeforeSeq >= beforeSeq) break;
-							beforeSeq = nextBeforeSeq;
 						}
 						if (requestId === historyRequestId.current) setHistoryCall(null);
 					})
 					.catch(() => {
 						// History is only an enhancement; fall back to the projection below.
 					});
-			}, [props.api, props.sessionId]);
+			}, [props.sessions, props.sessionId]);
 			react.useEffect(() => {
 				historyRequestId.current++;
 				setHistoryCall(null);
@@ -1200,8 +1189,62 @@ window.__ModuleLoader__.load({
 			}, label));
 		}
 
+		/**
+		 * Build an alpha.3-compatible `api` facade over the Remote/Sessions
+		 * services. The old `connection.api` shape is gone in 0.1.2-alpha.x;
+		 * this keeps the settings page/status chip code mostly unchanged while
+		 * routing through the current client services.
+		 *
+		 * Older DSH releases (<= 0.1.1-rc.2) still expose the legacy
+		 * `connection.api` surface; prefer it when present so the same client
+		 * bundle keeps working across the supported version range.
+		 */
+		function createAlpha3Api(ctx) {
+			const legacy = ctx.get("connection");
+			if (legacy && legacy.api && typeof legacy.api === "object") return legacy.api;
+			const remote = ctx.get("remote");
+			const sessions = ctx.get("sessions");
+			return {
+				settings: {
+					describe: async () => {
+						const response = await remote.settings.describe();
+						return response.ok ? { ok: true, value: response.value } : { ok: false, error: response.error };
+					},
+					mutate: async ({ ns, ops, expectedRevision }) => {
+						const response = await remote.settings.mutate(ns, ops, expectedRevision);
+						return response.ok ? { ok: true, value: response.value } : { ok: false, error: response.error };
+					}
+				},
+				llm: {
+					providers: async () => {
+						const response = await remote.llm.listProviders();
+						if (!response.ok) return { ok: false, error: response.error };
+						const providers = (response.value ?? []).map((p) => ({
+							provider: p.id,
+							name: p.name,
+							displayName: p.name,
+							active: true
+						}));
+						return { ok: true, value: { providers } };
+					},
+					models: async () => {
+						const response = await remote.session.modelCatalog();
+						if (!response.ok) return { ok: false, error: response.error };
+						return { ok: true, value: { groups: response.value.groups ?? [] } };
+					}
+				},
+				sessions: {
+					list: async () => {
+						const snapshot = sessions.list.getSnapshot();
+						const items = snapshot.ids.map((id) => ({ sessionId: id, ...snapshot.byId[id] }));
+						return { ok: true, value: { items } };
+					}
+				}
+			};
+		}
+
 		/** Required client services. */
-		const inject = ["slots", "connection", "remote", "remote.commands"];
+		const inject = ["slots", "connection", "remote", "remote.commands", "remote.settings", "remote.llm", "remote.session", "sessions"];
 		/**
 		 * Client plugin body: register the settings page and the status chip.
 		 * @param ctx - client root context.
@@ -1213,10 +1256,11 @@ window.__ModuleLoader__.load({
 					adoptLocale(sub.locale, ctx);
 				});
 			}
-			const connection = ctx.get("connection");
+			const api = createAlpha3Api(ctx);
+			const sessions = ctx.get("sessions");
 			const runAuxCommand = async (line) => {
-				const listResponse = await connection.api.sessions.list({});
-				const items = listResponse?.result?.value?.items ?? [];
+				const listResponse = unwrapResponse(await api.sessions.list({}));
+				const items = listResponse?.value?.items ?? [];
 				if (items.length === 0) throw new Error(__t("command.noSession"));
 				const sessionId = items[0].sessionId;
 				const result = await ctx.remote.commands.execute(sessionId, line, []);
@@ -1230,13 +1274,13 @@ window.__ModuleLoader__.load({
 				order: 30,
 				label: () => __t("settings.title"),
 				locale: NS,
-				inject: () => ({ api: connection.api, runAuxCommand })
+				inject: () => ({ api, runAuxCommand, sessions })
 			}, AuxSettingsPage));
 			ctx.slots.inject("conversation.input.left", () => ctx.slots.register({
 				name: "conversation.input.left",
 				id: "aux-status",
 				locale: NS,
-				inject: () => ({ api: connection.api })
+				inject: () => ({ sessions })
 			}, AuxStatusChip));
 		}
 		exports.apply = apply;

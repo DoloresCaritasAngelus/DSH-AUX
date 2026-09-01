@@ -1,12 +1,28 @@
 # Changelog
 
 ## Unreleased
+## 0.4.1-FIX1 (2026-09-01) — alpha.3 设置页/状态芯片修复
+
+> **兼容性变更**：本版本起不再支持 DSH 0.1.0-rc.6 ~ 0.1.1-rc.2。
+> 旧版 DSH 用户请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。
+
+
+- **Web 设置页修复**:
+  - 适配 DSH 0.1.2-alpha.x 移除 `connection.api` 的变更,设置页不再白屏。
+  - 供应商/模型/思考档位改为读取 `remote.session.modelCatalog()`。
+  - 移除重复的 `settings.plugin.item` 注册,避免 Plugins 页重复出现 AUX。
+- **状态芯片/桥接状态修复**:
+  - `bridge-locate` 优先从 DSH 部署根解析补丁目标,修复读取到工作区未打补丁副本导致的事件不记录、状态误报。
 
 - **DSH 0.1.2-alpha.3 兼容**:
   - CI 兼容矩阵新增 `0.1.2-alpha.3`。
   - alpha.3 为小幅修复版:`dsh-agent-loop` / `dsh-tool-subagent` / `dsh-session` / `dsh-settings` / `dsh-tool-skill` / `dsh-workflow-worker-thread` 等 lib 无变化。
   - `dsh-api-session-controller` 有内部重构,但 prompt 图片门控补丁锚点不变。
   - README / TESTING 平台支持范围更新到 `0.1.2-alpha.3`。
+- **alpha.3 部署修复**:
+  - `self-heal` / `doctor` 现在会把探测到的 `DSH_ROOT` 写入环境变量,子脚本不再因目标包缺失而解析到 `node_modules` 外的 unsafe 路径。
+  - `dsh-api-session-controller` 在 alpha.3 中缺失时,`apply-patch` 与 `patch-settings-allowlist` 能安全跳过旧 `dsh-host-apiproxy` 目标。
+  - 设置注册迁移为 `ctx.inject(["settings"], ...)`,与官方 agent-loop 一致,修复 alpha.3 下设置页可能不显示 AUX 配置的问题。
 
 ## 0.4.1(2026-08-31)— DSH 0.1.2-alpha.2 兼容 + 稳定加固
 
