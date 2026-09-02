@@ -383,6 +383,55 @@ AUX 设置页已经承载工具任务/桥接/子代理/全局/平台开关/诊�
 └──────────────────────────────────────────────────────────────┘
 ```
 
+### 6.2.1 复选 / 反选 / 批量操作
+
+图库面板支持**多选管理**，与“点卡片看详情”互不冲突：
+
+- 每张卡片：
+  - 单击卡片 → 打开详情；
+  - 卡片右上角复选框 / 长按（触屏）/ 键盘 Space → 加入选区；
+- 顶部出现批量操作栏（选中 ≥1 时）：
+  - `已选 N 张`
+  - `全选当前结果` / `反选当前结果` / `清空`
+  - 批量操作：`删除`、`固化`、`取消固化`、`回收孤儿`（仅当选区含孤儿）
+- 选择语义：
+  - **全选 / 反选** 默认作用于“当前过滤 + 当前页/当前结果集”（视分页模式而定）；
+  - 切换搜索/过滤时保留已有选区，但批量栏提示“选区包含过滤外 N 项”，避免误删看不见的图片；
+  - 批量删除前二次确认，并展示“其中 X 张仍被会话引用，将跳过（除非勾选强制）”；
+  - 批量回收孤儿前提示将删除的文件数量与释放空间。
+
+### 6.2.2 搜索设计
+
+搜索框位于面板标题区，提供实时过滤：
+
+- 默认：一个关键词跨字段匹配
+  - 文件名 / attachmentId（`hash`、`sha256:...`、`xxx.png`）
+  - 记忆 `question` / `summary`
+  - 归属会话 ID / 会话标题（若可得）
+- 可选高级限定（后续再开放，避免首版复杂）：
+  - `id:xxxx` / `session:xxxx` / `q:关键词`
+- 与状态过滤器关系：
+  - 过滤器 chips（共享/孤儿/固化/有记忆/本会话）与搜索词为 **AND**；
+  - 搜索只缩小当前 chip 范围。
+- 交互：
+  - 输入即过滤（防抖 ~200ms）；
+  - 空结果显示空态 + “清除搜索/清除过滤”按钮；
+  - 命中记忆关键词时，卡片仍显示图片，详情里高亮匹配的记忆片段。
+
+### 6.2.3 视图偏好：单页数量 / 缩略图显示大小
+
+“每页多少张”和“缩略图多大”都是**显示偏好**，不改变原图，不改数据：
+
+- 单页数量：
+  - 默认 `虚拟滚动/无限加载`（每屏按视口加载）；
+  - 可选 `分页模式`：每页 24 / 48 / 96，带上一页/下一页/页码；
+- 缩略图显示大小：
+  - 提供三档或滑杆：`小（96px）/ 中（160px）/ 大（240px）`；
+  - 只改变 CSS grid 密度；实际原图/大图预览仍由 `readAttachment` 提供；
+- 持久化：
+  - 视图偏好存 **localStorage**（浏览器本地记忆）；
+  - 不进入 AUX settings schema，避免设置页膨胀；若未来要跨设备同步再提升为 settings 字段。
+
 ### 6.3 信息架构原则
 
 1. **网格优先**：图片是视觉对象，默认大缩略图网格；
@@ -416,9 +465,13 @@ dsh-aux/src/client.js (或拆成 client/image-library.js)
 ├─ ImageLibraryPanel        // 浮层容器（由 sidebar.footer.action 打开）
 │  ├─ ImageLibraryHeader    // 标题/搜索/刷新/设置入口
 │  ├─ ImageLibraryFilters   // 状态过滤 chips
-│  ├─ ImageGrid             // 虚拟滚动网格
-│  │  └─ ImageCard          // 缩略图 + 状态角标
+│  ├─ ImageSelectionBar    // 已选 N / 全选 / 反选 / 批量操作
+│  ├─ ImageGrid             // 虚拟滚动或分页网格
+│  │  └─ ImageCard          // 缩略图 + 状态角标 + 复选框
+│  ├─ ImagePager           // 分页控件/加载更多（可选）
 │  └─ ImageDetailDrawer     // 详情/操作
+├─ useViewPreferences      // localStorage: 每页数量/缩略图档位
+├─ useImageSelection       // 当前选区/全选/反选/清空
 ├─ useImageLibrarySnapshot  // 读 aux-image-library 投影
 └─ useAttachmentThumbnail   // 通过 readAttachment 加载缩略图 + 缓存
 ```
@@ -428,6 +481,8 @@ dsh-aux/src/client.js (或拆成 client/image-library.js)
 更新 `dsh-aux/src/client.d.ts`：
 - `ImageLibraryEntry`
 - `ImageLibrarySnapshot`
+- `ImageLibrarySelectionState`（selectedIds / lastActionedFilter）
+- `ImageLibraryViewPreferences`（pageSize / thumbnailSize / paginationMode）
 - 图库面板 props 需要 `sessions` / `runAuxCommand`（设置页组件已有类似注入，可抽公共 hook）。
 
 ---
@@ -514,7 +569,7 @@ dsh-aux/src/projection.js                   # 新增 aux-image-library 投影定
 dsh-aux/src/index.js                        # 注册投影、发布时机、settings hooks
 dsh-aux/src/status.js                       # 可并入 image 状态或保持独立
 dsh-aux/src/client.d.ts                     # 类型
-dsh-aux/src/client.js                       # UI 组件
+dsh-aux/src/client.js                       # UI 组件（可拆 client/image-library.js）
 dsh-aux/src/events.js                       # 可选新事件类型（aux/image-library）
 tests/*.test.js                             # 新增测试
 README.md / README.en.md / CHANGELOG.md / TESTING.md / PROJECT*.md
