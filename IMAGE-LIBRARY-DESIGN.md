@@ -74,7 +74,7 @@ AUX 的图片生命周期管理（归属 `session-images.json` / GC / 记忆 `im
 
 ### 2.1 核心目标
 
-1. 在 AUX 设置页新增“图片管理”可视区域（建议作为独立 tab 或分组）。
+1. 新增独立的“图片库”可视面板（默认从 DSH 侧边栏底部入口打开），不把完整图库塞进现有 AUX 设置页。
 2. 展示每张图片：
    - 缩略图（能读时）
    - attachmentId / 文件名
@@ -310,56 +310,127 @@ export async function reconcileReferences(service, attachmentId)
 
 ## 6. 客户端设计（Web UI）
 
-### 6.1 入口
+### 6.0 UI 布局决策：不做“设置页内大杂烩”
 
-在 AUX settings page 增加新 tab/分组 `imageLibrary`，与现有 `tools/bridges/subagent/global/platform` 并列。
-建议使用设置页现有 `group()` 可折叠卡片，或实现 tab 切换（如果 DSH settings section 支持 tab）。
+AUX 设置页已经承载工具任务/桥接/子代理/全局/平台开关/诊断，再把完整图片库塞进去会显著臃肿。
+图片库是**高频浏览型资产视图**，不是低频配置页。因此采用：
 
-### 6.2 UI 布局
+> **独立图库浮层面板（Library Panel）+ 侧边栏入口 + 设置页内仅保留一个轻量配置入口/统计卡。**
 
+### 6.1 入口设计
+
+推荐主入口：**`sidebar.footer.action`（侧边栏底部操作区）**
+- 在设置按钮旁新增“图库”图标按钮（wide/rail 两种形态参考 CordisPanel）。
+- 点击后从侧边栏展开一个**浮层面板**（CSS fixed/popover，类似 CordisPanel 的 `position:fixed` 面板），
+  不离开当前会话/不跳页。
+- 这是 DSH 官方支持的扩展点，AUX 的 client 包可以注册多个 slot，因此不需要任何补丁。
+
+辅助入口（可选）：
+- 设置页内加一张“图片管理”**概览卡**（显示数量统计 + “打开图库”按钮），
+  让用户在设置语境里也能发现该功能，但不把整个列表搬进设置页。
+- 会话头部 `conversation.session.header.actions` 可放一个“本会话图片”按钮（Phase 2+），
+  针对当前会话过滤图库。
+
+### 6.1.1 已验证的 DSH UI 扩展点
+
+- `sidebar.footer.action`：侧边栏底部操作区（设置旁），官方示例 `client-ui-cordis CordisPanel` 注册于此并自绘浮层面板。
+- `conversation.session.header.actions`：会话标题旁操作区，可放“本会话图片”（Phase 2+）。
+- `conversation.chat.turnTail`：官方 `client-ui-deliverables` 在此展示每轮“产物文件”，可作为单轮图片/文件入口的参考，但不是我们的主入口。
+- AUX 当前 client 已注册 `settings.section` 与 `conversation.input.left`；新增 `sidebar.footer.action` 是同类机制，无需 DSH 补丁。
+
+> 实现时需在 client bundle 中新增一个 `sidebar.footer.action` 注入，并复用现有 `sessions` / `runAuxCommand` 注入面。
+
+### 6.2 图库面板布局（精心的信息架构）
+
+```text
+┌───────────────────────────────────────────────────────────────┐
+│ 侧边栏 footer: [设置] [图库🖼] (wide)  /  [⚙] [🖼] (rail)      │
+└───────────────────────────────────────────────────────────────┘
+
+点击图库按钮后弹出面板（宽 640~720px，高度 70~80vh，可滚动）：
+
+┌──────────────────────────────────────────────────────────────┐
+│ 图库                    🔍 搜索记忆/文件名      [刷新] [⋮]      │
+│ 共 128 张 · 共享 12 · 孤儿 8 · 已固化 5 · 有记忆 43            │
+│                                                              │
+│ 过滤器: [全部] [仅共享] [仅孤儿] [仅已固化] [仅有记忆] [仅本会话] │
+│                                                              │
+│ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐             │
+│ │ 缩略图   │ │ 缩略图   │ │ 缩略图   │ │ 缩略图   │             │
+│ │ 3会话 共享│ │ 孤儿     │ │ 1会话   │ │ 固化⭐   │             │
+│ │ 📝有记忆  │ │         │ │ 📝有记忆 │ │ 2会话 共享│             │
+│ └─────────┘ └─────────┘ └─────────┘ └─────────┘             │
+│                                                              │
+│ 网格视图（默认） / 列表视图（可切换）                           │
+│ 虚拟滚动/分页：每屏约 20-40 张，滚动加载                          │
+└──────────────────────────────────────────────────────────────┘
+
+点击卡片 → 右侧/下方详情抽屉（Detail Drawer）：
+
+┌──────────────────────────────────────────────────────────────┐
+│ ← 返回图库                                    [🗑 删除] [固化]  │
+│ ┌────────────────────┐                                      │
+│ │    大图预览         │   归属会话:                            │
+│ │  (readAttachment)  │   session-xxx… [跳转]                 │
+│ └────────────────────┘   session-yyy… [跳转]                 │
+│ 文件名: sha256….png                                         │
+│ 大小: 1.2MB · 上传: 2026-09-02 10:11                        │
+│ 状态: 共享 · 引用 2 · 已固化 ⭐                              │
+│ 记忆:                                                       │
+│   Q: 这张图里是什么?                                        │
+│   A: 图表显示……                                            │
+│   Q: 再分析一次 …                                          │
+└──────────────────────────────────────────────────────────────┘
 ```
-[图片管理]  [工具任务] [桥接任务] [子代理] [全局] [平台开关] ...
-┌──────────────────────────────────────────────┐
-│ 图片库  (刷新按钮 / 搜索框 / 过滤器)           │
-│ 统计: 共 N · 共享 X · 孤儿 Y · 已固化 Z        │
-│ ┌──────┐ ┌──────┐ ┌──────┐                  │
-│ │缩略图 │ │缩略图 │ │缩略图 │ ...              │
-│ │会话数 │ │孤儿  │ │共享  │                  │
-│ └──────┘ └──────┘ └──────┘                  │
-│ 点击卡片 → 详情：                             │
-│   - 大图预览（readAttachment）                │
-│   - 归属会话列表 + [跳转]                     │
-│   - 引用数/共享/孤儿/固化 badge               │
-│   - 记忆列表（question/summary/at）可搜索      │
-│   - 操作：删除 / 固化/取消固化                │
-└──────────────────────────────────────────────┘
-```
 
-### 6.3 数据读取
+### 6.3 信息架构原则
 
-- 组件 mount 后：
-  - 读 `aux-image-library` 投影（已缓存概览）
-  - 如需完整列表，调用 `/aux images --json`（低频）
+1. **网格优先**：图片是视觉对象，默认大缩略图网格；
+2. **状态可视化**：每张卡片用角标/底色表达 `共享/孤儿/固化/有记忆`，不依赖用户点开详情；
+3. **渐进披露**：概览 → 网格 → 点开详情 → 操作；不在一个屏幕塞所有控件；
+4. **当前会话语境**：若从会话头部进入，面板自动过滤“本会话图片”，并提供“查看全部图库”切换；
+5. **轻量配置仍在设置页**：`imageRetentionDays`、自动清理开关等配置项留在 AUX 设置页（属于低频配置），
+   图库面板只做浏览/搜索/管理。
+
+### 6.4 数据读取
+
+- 面板打开时：
+  - 读 `aux-image-library` 投影（已缓存概览 + 最近条目）即时显示；
+  - 如需完整列表/过滤，调用 `/aux images --json`（带 limit/offset/filter）补充。
 - 缩略图：
-  - 对 `entry.readableBySessionId` 的条目，用 `sessions.binding(sid).session.readAttachment(attachmentId)` 获取 bytes → `URL.createObjectURL` / data URL
-  - 需要批量时做 LRU/缓存，限制并发
-  - 孤儿/不可读条目显示占位图标
+  - 对 `entry.readableBySessionId` 的条目，用 `sessions.binding(sid).session.readAttachment(attachmentId)` 获取 bytes → `URL.createObjectURL` / data URL；
+  - 做 LRU 缓存与并发限制，只加载可视区缩略图（IntersectionObserver）；
+  - 孤儿/不可读条目显示占位图标。
+- 搜索记忆/文件名：客户端过滤投影/JSON 中的 `memories` 与 `fileName`。
 
-### 6.4 交互调用
+### 6.5 交互调用
 
-- 删除/固化/回收 → 调用 `runAuxCommand('/aux image ...')`，执行后刷新投影
-- 跳转 → `sessions.open(sessionId)`
-- 搜索记忆 → 客户端过滤投影/JSON 中的 memories
+- 删除/固化/回收 → 调用 `runAuxCommand('/aux image ...')`，执行后刷新投影；
+- 跳转 → `sessions.open(sessionId)`，并关闭/收起图库面板（让用户落到会话）；
+- 删除/固化后乐观更新本地列表，失败回滚提示。
 
-### 6.5 类型声明
+### 6.6 组件结构（建议）
+
+```text
+dsh-aux/src/client.js (或拆成 client/image-library.js)
+├─ ImageLibraryPanel        // 浮层容器（由 sidebar.footer.action 打开）
+│  ├─ ImageLibraryHeader    // 标题/搜索/刷新/设置入口
+│  ├─ ImageLibraryFilters   // 状态过滤 chips
+│  ├─ ImageGrid             // 虚拟滚动网格
+│  │  └─ ImageCard          // 缩略图 + 状态角标
+│  └─ ImageDetailDrawer     // 详情/操作
+├─ useImageLibrarySnapshot  // 读 aux-image-library 投影
+└─ useAttachmentThumbnail   // 通过 readAttachment 加载缩略图 + 缓存
+```
+
+### 6.7 类型声明
 
 更新 `dsh-aux/src/client.d.ts`：
 - `ImageLibraryEntry`
 - `ImageLibrarySnapshot`
-- `AuxSettingsPageProps` 中增加 imageLibrary 相关可选注入（如 sessions 已有）
+- 图库面板 props 需要 `sessions` / `runAuxCommand`（设置页组件已有类似注入，可抽公共 hook）。
 
 ---
-
 ## 7. 与 DSH 溯源/轨迹/投影的耦合
 
 ### 7.1 事件溯源（Trace）
@@ -373,7 +444,7 @@ export async function reconcileReferences(service, attachmentId)
 ### 7.2 投影（Projection）
 
 - 新增 `aux-image-library` 投影，与 `aux-platform` 并列。
-- 客户端设置页通过投影读取概览，避免命令卡片。
+- 图库面板与设置页概览卡都通过投影读取概览，避免命令卡片。
 - 投影内容包含：生成时间、统计、条目（限制数量/可裁剪字段）。
 - 完整列表用 `/aux images --json` 分页补充。
 
@@ -391,7 +462,7 @@ export async function reconcileReferences(service, attachmentId)
 
 ### 7.4 会话跳转
 
-- 使用官方 `sessions.open(sessionId)`；设置页已具备 `sessions` 服务注入。
+- 使用官方 `sessions.open(sessionId)`；图库面板通过 client 注入的 `sessions` 服务调用。
 
 ---
 
@@ -404,7 +475,7 @@ export async function reconcileReferences(service, attachmentId)
 2. 新增 `image-library.js`：扫描对象、聚合 `session-images.json` + `image-memory.json` + retention，生成快照。
 3. 新增 `/aux images --json` 与 `/aux image delete/gc-orphans/retain/unretain`（先做 delete/gc-orphans 服务端函数）。
 4. 新增 `aux-image-library` 投影与发布。
-5. 设置页新增“图片管理”只读列表：显示缩略图（readAttachment）、归属、共享/孤儿、记忆摘要、固化标记。
+5. 新增图库浮层面板（只读）：显示缩略图（readAttachment）、归属、共享/孤儿、记忆摘要、固化标记；设置页仅加入口概览卡。
 6. 测试：image-library 聚合、retention、命令 JSON、投影。
 
 ### Phase 2 — 交互
@@ -478,7 +549,7 @@ README.md / README.en.md / CHANGELOG.md / TESTING.md / PROJECT*.md
 
 ## 12. 验收标准（Definition of Done）
 
-- [ ] 设置页出现“图片管理”，可看到真实图片缩略图/元数据/归属/共享/孤儿/记忆。
+- [ ] 侧边栏“图库”入口可打开独立面板，可看到真实图片缩略图/元数据/归属/共享/孤儿/记忆；设置页提供轻量入口卡而非完整列表。
 - [ ] 从图片可跳转到引用会话（若 API 允许）。
 - [ ] 可对单张执行安全删除；被引用图会被拒绝或要求 force 确认。
 - [ ] 可一键回收孤儿；retained 图默认被跳过。
