@@ -11,7 +11,7 @@
  */
 import { stat } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
-import { resolvePackageFile } from "./bridge-locate.js";
+import { resolvePackageFile, readPackageFile } from "./bridge-locate.js";
 import { imageBridgeStatus } from "./image-bridge.js";
 import {
   subagentBridgeStatus,
@@ -36,6 +36,173 @@ const PATCH_PACKAGES = [
   "dsh-tool-skill",
   "dsh-session"
 ];
+
+/**
+ * Patch ledger: one row per local bridge patch that dsh-aux maintains.
+ * This is the single source used by `/aux status` and the settings UI to
+ * show "which patches exist / installed / missing / not applicable".
+ *
+ * Each entry:
+ * - `id`: stable key used by the UI and status payloads.
+ * - `group`: P-number ledger family (P1-P6/P11 bridge apply-patch, P7 session,
+ *   P8 whitelist, P9/P10 settings allowlist — rc.6 only).
+ * - `pkg`: target DSH package that the patch would modify.
+ * - `mark`: source marker string that indicates the patch is applied.
+ * - `optionalPackage`: when true, a missing package means the patch is
+ *   not applicable rather than missing (e.g. dsh-host-apiproxy on alpha.3).
+ * - `description`: short human-readable purpose.
+ */
+const PATCH_LEDGER = [
+  {
+    id: "bridge-image-admit",
+    group: "P1-P6",
+    pkg: "dsh-host-apiproxy",
+    mark: "dsh-image bridge v2 (local patch)",
+    optionalPackage: true,
+    description: "image block 原样进入会话消息(UI 缩略图 + 附件硬链接)"
+  },
+  {
+    id: "bridge-agent-loop",
+    group: "P1-P6",
+    pkg: "dsh-agent-loop",
+    mark: "image-bridge v2 (local patch)",
+    optionalPackage: false,
+    description: "模型输入边界将图片改写为 vision_analyze 路径文本"
+  },
+  {
+    id: "bridge-select-model",
+    group: "P1-P6",
+    pkg: "dsh-host-apiproxy",
+    mark: "dsh-image bridge v3 (local patch)",
+    optionalPackage: true,
+    description: "含图会话允许切换到纯文本模型(rc.2+ 原生,自动不适用)"
+  },
+  {
+    id: "bridge-session-controller",
+    group: "P1-P6",
+    pkg: "dsh-api-session-controller",
+    mark: "dsh-aux image bridge v3 (local patch)",
+    optionalPackage: false,
+    description: "alpha.x session-controller 图片门控移除"
+  },
+  {
+    id: "bridge-subagent-schema",
+    group: "P1-P6",
+    pkg: "dsh-tool-subagent",
+    mark: "requires_vision:",
+    optionalPackage: false,
+    description: "subagent 工具增加 requires_vision 可选参数"
+  },
+  {
+    id: "bridge-subagent-request",
+    group: "P1-P6",
+    pkg: "dsh-tool-subagent",
+    mark: 'ctx.get("auxLlm")',
+    optionalPackage: false,
+    description: "subagent execute 读取 auxLlm.subagentRoute 注入路由"
+  },
+  {
+    id: "bridge-workflow",
+    group: "P1-P6",
+    pkg: "dsh-workflow-worker-thread",
+    mark: "subagentIncludeWorkflow",
+    optionalPackage: false,
+    description: "workflow agent() 子代理也走 AUX 路由"
+  },
+  {
+    id: "bridge-skill",
+    group: "P1-P6",
+    pkg: "dsh-tool-skill",
+    mark: "skill auditor",
+    optionalPackage: false,
+    description: "skill 工具增加可选 task 参数供预审桥接"
+  },
+  {
+    id: "session-ignorable",
+    group: "P7",
+    pkg: "dsh-session",
+    mark: "dsh-aux ignorable (local patch)",
+    optionalPackage: false,
+    description: "session.append 支持 ignorable 自定义事件"
+  },
+  {
+    id: "session-whitelist",
+    group: "P8",
+    pkg: "dsh-session",
+    mark: "aux/llm-call",
+    optionalPackage: false,
+    description: "aux/llm-call 事件白名单"
+  },
+  {
+    id: "settings-dynamic-expose",
+    group: "P9",
+    pkg: "dsh-settings",
+    mark: "dsh-aux dynamic expose (local patch)",
+    optionalPackage: true,
+    nativeOnCurrentLine: true,
+    description: "rc.6 settings 动态暴露补丁(rc.7+ 原生,自动不适用)"
+  },
+  {
+    id: "settings-allowlist",
+    group: "P10",
+    pkg: "dsh-host-apiproxy",
+    mark: "dsh-aux settings dynamic expose (local patch)",
+    optionalPackage: true,
+    nativeOnCurrentLine: true,
+    description: "rc.6 api-proxy settings 白名单补丁(rc.7+ 原生,自动不适用)"
+  }
+];
+
+/** Read one patched package's lib source once, returning undefined if absent. */
+async function readPatchSource(pkg) {
+  try {
+    return await readPackageFile(pkg);
+  } catch {
+    return void 0;
+  }
+}
+
+/**
+ * Collect the detailed patch ledger. It only reads installed files and never
+ * writes to native packages. For each patch it reports:
+ * - `state`: installed | missing | not-applicable | unknown
+ * - `present`: whether the target package file exists
+ * - `required`: whether this patch is needed on the current DSH line
+ *   (optional packages that do not exist are reported not-applicable)
+ */
+export async function collectPatchLedger() {
+  const sources = new Map();
+  const rows = [];
+  for (const patch of PATCH_LEDGER) {
+    let src = sources.get(patch.pkg);
+    if (src === void 0) {
+      src = await readPatchSource(patch.pkg);
+      sources.set(patch.pkg, src);
+    }
+    const present = src !== void 0;
+    const installed = present && src.includes(patch.mark);
+    // 当前支持线(alpha.2/alpha.3)原生已具备 P9/P10 的能力,不再需要这些
+    // rc.6 专用补丁。legacy 分支维护旧版时使用独立代码,不受此标记影响。
+    const nativeOnCurrentLine = patch.nativeOnCurrentLine === true;
+    const applicable = !nativeOnCurrentLine && (present || !patch.optionalPackage);
+    const state = nativeOnCurrentLine || (!present && patch.optionalPackage)
+      ? "not-applicable"
+      : installed
+        ? "installed"
+        : "missing";
+    rows.push({
+      id: patch.id,
+      group: patch.group,
+      pkg: patch.pkg,
+      description: patch.description,
+      state,
+      installed,
+      required: applicable,
+      present
+    });
+  }
+  return rows;
+}
 
 /**
  * Precise wall-clock process start from Node's performance origin. This is
@@ -245,13 +412,14 @@ function skillBridgeStatusItem(service, status) {
  * @returns {Promise<object>} JSON-safe status object.
  */
 export async function collectPlatformStatus(service) {
-  const [image, sub, workflow, skill, events, fileRestartRequired] = await Promise.all([
+  const [image, sub, workflow, skill, events, fileRestartRequired, patchLedger] = await Promise.all([
     imageBridgeStatus(),
     subagentBridgeStatus(),
     workflowBridgeStatus(),
     skillBridgeStatus(),
     sessionEventsSupported(service),
-    anyPatchFileNewerThanProcessStart()
+    anyPatchFileNewerThanProcessStart(),
+    collectPatchLedger()
   ]);
   // A same-process patch is a hint, not a permanent override. If the mtime
   // check later says no patched file changed after boot (e.g. a rollback that
@@ -317,6 +485,7 @@ export async function collectPlatformStatus(service) {
       ]
     },
     eventsSupported: events,
+    patchLedger,
     items,
     warnings,
     issues

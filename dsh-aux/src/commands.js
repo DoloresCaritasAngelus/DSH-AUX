@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { AUX_TASKS, resolvePrimaryRoute } from "./route.js";
+import { detectDshRoot } from "./bridge-locate.js";
 import { gcImages } from "./images/gc.js";
 import { handleMemoryCommand } from "./images/memory.js";
 import { collectPlatformStatus, publishPlatformStatus } from "./status.js";
@@ -337,6 +338,11 @@ export async function handlePatchCommand(service, json = false) {
   const repo = fileURLToPath(new URL("../..", import.meta.url));
   // 每次调用时再 promisify,便于测试在动态 import 前/后替换 child_process.execFile。
   const execFileAsync = promisify(childProcess.execFile);
+  // 一键补丁必须作用于真实 DSH 部署,而不是仓库内可能存在的旧测试 node_modules。
+  // detectDshRoot() 优先取 DSH_ROOT / 用户 ~/dsh 等部署根;找不到时退回仓库目录,
+  // 让脚本在源码树测试/无部署环境下仍可运行。
+  const dshRoot = detectDshRoot() ?? repo;
+  const patchCwd = dshRoot;
   const stepDefs = [
     ["apply-patch", ["bridge/apply-patch.mjs"]],
     ["self-heal", ["bridge/self-heal.mjs"]]
@@ -346,7 +352,10 @@ export async function handlePatchCommand(service, json = false) {
   for (const [name, args] of stepDefs) {
     const record = { name, ok: false, output: "" };
     try {
-      const { stdout, stderr } = await execFileAsync(process.execPath, args, { cwd: repo });
+      const { stdout, stderr } = await execFileAsync(process.execPath, args, {
+        cwd: patchCwd,
+        env: { ...process.env, DSH_ROOT: dshRoot }
+      });
       record.output = `${stdout}${stderr}`;
       record.ok = true;
       output.push(`[${name}]\n${record.output}`);

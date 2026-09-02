@@ -9,7 +9,7 @@
 > 需要我的时候，直接叫我就好～
 
 ![Version](https://img.shields.io/badge/version-0.4.1-FIX1-blue)
-![Tests](https://img.shields.io/badge/tests-319-brightgreen)
+![Tests](https://img.shields.io/badge/tests-320-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--alpha.3-0078D4)
 
@@ -344,7 +344,7 @@ const result = await ctx.auxLlm.call("compress", {
 - **平台**：DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3（已验证 0.1.2-alpha.2 / 0.1.2-alpha.3）；Node ≥ 20。
 - **旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）用户**：请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。主支不再支持这些版本。
 - **运行时零第三方依赖**：peerDependencies 全部是 DSH 官方包（环境自带），无 `dependencies`。
-- **测试零依赖**：`node --test tests/*.test.js`（319 项；文件清单与基线见 `TESTING.md`）。
+- **测试零依赖**：`node --test tests/*.test.js`（320 项；文件清单与基线见 `TESTING.md`）。
 
 ### 集成组件
 
@@ -362,6 +362,8 @@ const result = await ctx.auxLlm.call("compress", {
 
 | 文档 | 内容 |
 |---|---|
+| [PROJECT.md](./PROJECT.md) | 长期项目总览（人类友好） |
+| [PROJECT.AI.md](./PROJECT.AI.md) | 长期项目总览（AI/代理友好） |
 | [CHANGELOG.md](./CHANGELOG.md) | 版本历史 |
 | [TESTING.md](./TESTING.md) | 测试文件清单与基线 |
 | [PRD.md](./PRD.md) | 需求规格与设计决策 |

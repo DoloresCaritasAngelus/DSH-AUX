@@ -23,8 +23,50 @@ import { readFile as readFileText } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
 
 const require = createRequire(import.meta.url);
+
+/** Repository root containing `dsh-aux/package.json` (two levels up from src). */
+const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+
+/**
+ * Detect the DSH deployment root. Precedence:
+ *  1. `DSH_ROOT` environment variable when it points at a deployment;
+ *  2. `process.cwd()` when it directly contains `node_modules/@deepseek-ai`;
+ *  3. common install locations under the current user's home.
+ * Returns `undefined` when no deployment can be found.
+ */
+export function detectDshRoot() {
+  // DSH_ROOT 显式指定时永远优先(CI/fake 部署也走这里)。
+  if (process.env.DSH_ROOT) return process.env.DSH_ROOT;
+
+  const home = homedir();
+  // 仓库目录内运行时:仓库自身含测试用 node_modules,但它不是真实部署根。
+  // 此时先看用户常用的部署根;如果存在才返回,否则返回 undefined 让调用方
+  // 回退到仓库相对解析(源码树测试/无真实部署场景)。
+  const cwdIsRepo = existsSync(join(process.cwd(), "dsh-aux", "package.json"));
+  if (cwdIsRepo) {
+    for (const candidate of [join(home, "dsh"), join(home, ".local/share/dsh"), "/opt/dsh"]) {
+      try {
+        if (existsSync(join(candidate, "node_modules/@deepseek-ai"))) return candidate;
+      } catch {
+        /* try next candidate */
+      }
+    }
+    return void 0;
+  }
+
+  // DSH 服务启动时 cwd 即部署根(通常 ~/dsh);也兼容常见的安装位置。
+  for (const candidate of [process.cwd(), join(home, "dsh"), join(home, ".local/share/dsh"), "/opt/dsh"]) {
+    try {
+      if (existsSync(join(candidate, "node_modules/@deepseek-ai"))) return candidate;
+    } catch {
+      /* try next candidate */
+    }
+  }
+  return void 0;
+}
 
 /** Relative candidates, from shallowest to deepest source-tree layouts. */
 function relativeCandidates(pkg) {
@@ -98,6 +140,21 @@ export function packageFileCandidates(pkg) {
   if (!/^[a-z0-9-]+$/.test(pkg)) {
     throw new Error(`bridge-locate: invalid package name "${pkg}"`);
   }
+  const detectedRoot = detectDshRoot();
+  const cwdIsRepo = existsSync(join(process.cwd(), "dsh-aux", "package.json"));
+  // 真实部署权威模式:
+  // - DSH 服务/脚本在部署根 cwd 运行时(detectDshRoot 返回该部署根);
+  // - 或 CI/fake/显式设置 DSH_ROOT 时。
+  // 仓库测试模式(仓库 cwd、无显式 DSH_ROOT)保留原有相对/require.resolve
+  // 回退,以便测试使用仓库 node_modules 里的 DSH 官方依赖。
+  const rootedAtRealDeployment =
+    detectedRoot !== void 0 &&
+    detectedRoot !== REPO_ROOT &&
+    (process.env.DSH_ROOT !== void 0 || !cwdIsRepo);
+  if (rootedAtRealDeployment) {
+    return [join(detectedRoot, "node_modules/@deepseek-ai", pkg, "lib/index.js")];
+  }
+
   const paths = [];
   // 部署根优先(DSH 运行时 cwd=部署根,命中已打补丁的部署副本)
   for (const candidate of deployRootCandidates(pkg)) {

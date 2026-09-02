@@ -70,6 +70,7 @@ import {
 } from '../dsh-aux/src/images/ownership.js';
 import { runWebExtract } from '../dsh-aux/src/tools/web-extract.js';
 import { resolvePackageFile } from '../dsh-aux/src/bridge-locate.js';
+import { collectPatchLedger } from '../dsh-aux/src/status.js';
 import { fetchWithSsrf } from '../dsh-aux/src/fetch.js';
 import { resolveImageRef } from '../dsh-aux/src/images/resolve.js';
 import { imageBridgeStatus } from '../dsh-aux/src/image-bridge.js';
@@ -2236,6 +2237,20 @@ test('bridge-locate: require.resolve 能解析 @deepseek-ai 包主入口', () =>
   assert.ok(target.endsWith('/lib/index.js'), `应指向 lib/index.js,实际: ${target}`);
 });
 
+test('collectPatchLedger: 返回结构完整且状态枚举合法', async () => {
+  const ledger = await collectPatchLedger();
+  assert.ok(Array.isArray(ledger), '应返回数组');
+  assert.ok(ledger.length >= 10, '应覆盖 P1-P11 主要补丁');
+  for (const entry of ledger) {
+    assert.equal(typeof entry.id, 'string');
+    assert.equal(typeof entry.pkg, 'string');
+    assert.equal(typeof entry.description, 'string');
+    assert.ok(['installed', 'missing', 'not-applicable', 'unknown'].includes(entry.state), `state 非法: ${entry.state}`);
+    assert.equal(typeof entry.installed, 'boolean');
+    assert.equal(typeof entry.required, 'boolean');
+    assert.equal(typeof entry.present, 'boolean');
+  }
+});
 
 test('vision_analyze 工具: images 数组并行分析多图,输出 analyses', async () => {
   const { ctx, tools, streams } = await makeHarness({

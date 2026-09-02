@@ -188,6 +188,9 @@ test('/aux patch --json: handlePatchCommand 返回结构化步骤(stub execFileA
     assert.deepEqual(data.remaining, [])
     assert.equal(calls.length, 2)
     assert.ok(calls.every((c) => c.args[0].endsWith('.mjs')))
+    // handlePatchCommand 应把真实 DSH 根传给子进程,避免误打仓库内旧测试依赖。
+    assert.ok(calls.every((c) => c.options && c.options.cwd && typeof c.options.cwd === 'string'))
+    assert.ok(calls.every((c) => c.options && c.options.env && typeof c.options.env.DSH_ROOT === 'string'))
   } finally {
     cp.execFile = originalExecFile
   }
