@@ -17,6 +17,12 @@
   - `doctor` / `target.js` / `install-dsh-version` 收窄到 `0.1.2-alpha.2` / `0.1.2-alpha.3`。
 - **项目文档**:
   - 新增 `PROJECT.md`(人类友好)与 `PROJECT.AI.md`(AI/代理友好)长期项目总览,并在 README 文档地图同步。
+- **图片库(IMAGE-LIBRARY)**:
+  - 服务端: `retention.js` / `image-library.js` / `image-actions.js`,管理 image-retention.json、聚合对象库/归属/记忆、安全删除与孤儿回收。
+  - 命令: `/aux images` 与 `/aux image delete|gc-orphans|retain|unretain`。
+  - 投影/事件: `aux-image-library` 投影 + `aux/image-library` ignorable 事件。
+  - 客户端: 侧边栏“图库”入口 + 浮层面板(网格/缩略图/搜索/过滤/复选/批量/详情/会话跳转)。
+  - 测试基线 319 -> 348。
 
 ## 0.4.1-FIX1 (2026-09-01) — alpha.3 设置页/状态芯片修复
 
