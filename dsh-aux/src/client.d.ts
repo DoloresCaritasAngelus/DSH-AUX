@@ -76,6 +76,64 @@ export interface AuxPlatformProjection {
     }>;
 }
 
+/** One image-library memory record shown in the UI. */
+export interface ImageLibraryMemory {
+    sessionId: string;
+    question: string;
+    summary: string;
+    at: number;
+}
+
+/** One image-library entry shown by the gallery panel. */
+export interface ImageLibraryEntry {
+    kind: string;
+    attachmentId: string;
+    hash: string;
+    mediaType?: string;
+    bytes?: number;
+    mtimeMs?: number;
+    ownerSessions: string[];
+    ownerLiveSessions: string[];
+    referenceCount: number;
+    shared: boolean;
+    orphan: boolean;
+    retained: boolean;
+    memories: ImageLibraryMemory[];
+    firstSeenAt?: number;
+    lastSeenAt?: number;
+    readableBySessionId?: string;
+    fileName?: string;
+}
+
+/** Snapshot returned by `/aux images --json` / `aux-image-library` projection. */
+export interface ImageLibrarySnapshot {
+    generatedAt: number;
+    settings: {
+        imageRetentionDays: number;
+        imageAutoCleanEnabled: boolean;
+    };
+    counts: {
+        total: number;
+        orphan: number;
+        shared: number;
+        retained: number;
+        withMemory: number;
+    };
+    entries: ImageLibraryEntry[];
+}
+
+/** Props supplied to the sidebar footer image-library action. */
+export interface AuxImageLibraryButtonProps {
+    wide: boolean;
+    sessions: NonNullable<AuxStatusChipProps['sessions']> & {
+        open(sessionId: string): void;
+    };
+    runAuxCommand: (line: string) => Promise<{
+        kind: 'success' | 'error';
+        text?: string;
+    }>;
+}
+
 /** One reasoning-effort entry advertised for an exact model route. */
 export interface AuxModelReasoningEffort {
     id: string;

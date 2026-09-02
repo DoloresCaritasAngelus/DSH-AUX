@@ -91,7 +91,41 @@ window.__ModuleLoader__.load({
 			".ax-patch-ledger-table td{padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);vertical-align:top}",
 			".ax-patch-ledger-table tr:last-child td{border-bottom:0}",
 			".ax-patch-ledger-table .ax-patch-desc{max-width:280px;min-width:180px;white-space:normal;overflow-wrap:anywhere}",
-			".ax-patch-pkg{font-family:var(--dsw-alias-font-mono,monospace);font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}"
+			".ax-patch-pkg{font-family:var(--dsw-alias-font-mono,monospace);font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}",
+			".ax-image-overlay{position:fixed;inset:0;z-index:40;background:color-mix(in srgb,var(--dsw-alias-bg-base,#000) 55%,transparent);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px}",
+			".ax-image-panel{width:min(960px,calc(100vw - 32px));max-height:calc(100vh - 80px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-inverted);border-radius:16px;box-shadow:var(--dsw-shadow-lv3);overflow:hidden}",
+			".ax-image-panel-header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--dsw-alias-border-l2)}",
+			".ax-image-panel-title{font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary)}",
+			".ax-image-panel-stats{font-size:12px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}",
+			".ax-image-panel-actions{margin-left:auto;display:flex;gap:6px;align-items:center}",
+			".ax-image-search{min-width:180px;flex:1;border:1px solid var(--dsw-alias-border-strong);border-radius:8px;padding:5px 10px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2)}",
+			".ax-image-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 16px;border-bottom:1px solid var(--dsw-alias-border-l2)}",
+			".ax-image-chip{border:1px solid var(--dsw-alias-border-l2);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:var(--dsw-alias-bg-layer-1)}",
+			".ax-image-chip-active{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary)}",
+			".ax-image-bulk{display:flex;gap:6px;align-items:center;margin-left:auto;font-size:12px;color:var(--dsw-alias-label-secondary)}",
+			".ax-image-grid{padding:14px;overflow-y:auto;display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));flex:1}",
+			".ax-image-card{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;overflow:hidden;background:var(--dsw-alias-bg-layer-2);cursor:pointer;position:relative;transition:border-color .15s}",
+			".ax-image-card:hover{border-color:var(--dsw-alias-label-secondary)}",
+			".ax-image-card-selected{border-color:var(--dsw-alias-state-business-primary);box-shadow:0 0 0 1px var(--dsw-alias-state-business-primary)}",
+			".ax-image-thumb{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:var(--dsw-alias-bg-layer-3)}",
+			".ax-image-thumb-placeholder{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-caption);font-size:24px;background:var(--dsw-alias-bg-layer-3)}",
+			".ax-image-card-body{padding:6px 8px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary)}",
+			".ax-image-badge{display:inline-block;margin:0 2px 2px 0;border-radius:999px;padding:0 5px;font-size:10px;line-height:16px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}",
+			".ax-image-badge-orphan{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}",
+			".ax-image-badge-shared{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-primary)}",
+			".ax-image-badge-retained{color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-primary)}",
+			".ax-image-badge-memory{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}",
+			".ax-image-checkbox{position:absolute;top:6px;left:6px;width:16px;height:16px;accent-color:var(--dsw-alias-state-business-primary)}",
+			".ax-image-empty{padding:40px;text-align:center;color:var(--dsw-alias-label-tertiary);font-size:13px}",
+			".ax-image-detail{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-top:1px solid var(--dsw-alias-border-l2);max-height:45%;overflow-y:auto}",
+			".ax-image-detail-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--dsw-alias-label-secondary)}",
+			".ax-image-pager{display:flex;gap:6px;align-items:center;justify-content:flex-end;padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l2);font-size:12px;color:var(--dsw-alias-label-tertiary)}",
+			".ax-image-action{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:3px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:var(--dsw-alias-bg-layer-1)}",
+			".ax-image-action-danger{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}",
+			".ax-image-action:disabled{opacity:.5;cursor:default}",
+			".ax-image-sidebar-badge{display:inline-flex;align-items:center;gap:6px;width:100%;height:42px;padding:0 10px;border:none;border-radius:12px;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit;font-size:14px}",
+			".ax-image-sidebar-badge:hover{background:var(--dsw-alias-interactive-bg-hover)}",
+			".ax-image-sidebar-badge[data-rail]{width:36px;height:36px;padding:0;justify-content:center;border-radius:50%}"
 		].join("");
 		const tagId = "@dolorescaritasangelus/dsh-aux/Aux.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
@@ -242,7 +276,47 @@ window.__ModuleLoader__.load({
 			"chip.compress": "压缩",
 			"chip.success": "成功",
 			"chip.fail": "失败",
-			"chip.fallback": " (已降级)"
+			"chip.fallback": " (已降级)",
+			"imageLibrary.open": "图库",
+			"imageLibrary.title": "图片库",
+			"imageLibrary.search": "搜索文件名 / 记忆 / 会话",
+			"imageLibrary.refresh": "刷新",
+			"imageLibrary.close": "关闭",
+			"imageLibrary.total": "共 {total} 张",
+			"imageLibrary.shared": "共享 {n}",
+			"imageLibrary.orphan": "孤儿 {n}",
+			"imageLibrary.retained": "固化 {n}",
+			"imageLibrary.withMemory": "有记忆 {n}",
+			"imageLibrary.filterAll": "全部",
+			"imageLibrary.filterShared": "仅共享",
+			"imageLibrary.filterOrphan": "仅孤儿",
+			"imageLibrary.filterRetained": "仅固化",
+			"imageLibrary.filterMemory": "仅有记忆",
+			"imageLibrary.selected": "已选 {n}",
+			"imageLibrary.selectAll": "全选",
+			"imageLibrary.invert": "反选",
+			"imageLibrary.clear": "清空",
+			"imageLibrary.delete": "删除",
+			"imageLibrary.deleteOrphans": "回收孤儿",
+			"imageLibrary.retain": "固化",
+			"imageLibrary.unretain": "取消固化",
+			"imageLibrary.viewSmall": "小",
+			"imageLibrary.viewMedium": "中",
+			"imageLibrary.viewLarge": "大",
+			"imageLibrary.orphanBadge": "孤儿",
+			"imageLibrary.sharedBadge": "共享",
+			"imageLibrary.retainedBadge": "固化",
+			"imageLibrary.memoryBadge": "有记忆",
+			"imageLibrary.noImage": "暂无图片",
+			"imageLibrary.noResult": "没有匹配的图片",
+			"imageLibrary.confirmDelete": "确认删除所选图片? 被会话引用的图片将跳过,除非强制。",
+			"imageLibrary.confirmOrphans": "确认回收这些孤儿图片?",
+			"imageLibrary.opDone": "操作完成",
+			"imageLibrary.opFailed": "操作失败: {msg}",
+			"imageLibrary.detailOwners": "归属会话",
+			"imageLibrary.detailMemories": "分析记忆",
+			"imageLibrary.jump": "跳转",
+			"imageLibrary.image": "图片"
 		};
 		const enDict = {
 			"settings.title": "Auxiliary Models",
@@ -383,7 +457,47 @@ window.__ModuleLoader__.load({
 			"chip.compress": "Compress",
 			"chip.success": "OK",
 			"chip.fail": "FAIL",
-			"chip.fallback": " (fallback)"
+			"chip.fallback": " (fallback)",
+			"imageLibrary.open": "Gallery",
+			"imageLibrary.title": "Image Library",
+			"imageLibrary.search": "Search filename / memory / session",
+			"imageLibrary.refresh": "Refresh",
+			"imageLibrary.close": "Close",
+			"imageLibrary.total": "{total} images",
+			"imageLibrary.shared": "shared {n}",
+			"imageLibrary.orphan": "orphan {n}",
+			"imageLibrary.retained": "retained {n}",
+			"imageLibrary.withMemory": "memory {n}",
+			"imageLibrary.filterAll": "All",
+			"imageLibrary.filterShared": "Shared",
+			"imageLibrary.filterOrphan": "Orphan",
+			"imageLibrary.filterRetained": "Retained",
+			"imageLibrary.filterMemory": "Memory",
+			"imageLibrary.selected": "{n} selected",
+			"imageLibrary.selectAll": "Select all",
+			"imageLibrary.invert": "Invert",
+			"imageLibrary.clear": "Clear",
+			"imageLibrary.delete": "Delete",
+			"imageLibrary.deleteOrphans": "Reclaim orphans",
+			"imageLibrary.retain": "Retain",
+			"imageLibrary.unretain": "Unretain",
+			"imageLibrary.viewSmall": "Small",
+			"imageLibrary.viewMedium": "Medium",
+			"imageLibrary.viewLarge": "Large",
+			"imageLibrary.orphanBadge": "Orphan",
+			"imageLibrary.sharedBadge": "Shared",
+			"imageLibrary.retainedBadge": "Retained",
+			"imageLibrary.memoryBadge": "Memory",
+			"imageLibrary.noImage": "No images yet",
+			"imageLibrary.noResult": "No matching images",
+			"imageLibrary.confirmDelete": "Delete selected images? Referenced images will be skipped unless forced.",
+			"imageLibrary.confirmOrphans": "Reclaim these orphan images?",
+			"imageLibrary.opDone": "Done",
+			"imageLibrary.opFailed": "Failed: {msg}",
+			"imageLibrary.detailOwners": "Owner sessions",
+			"imageLibrary.detailMemories": "Analysis memory",
+			"imageLibrary.jump": "Open",
+			"imageLibrary.image": "Image"
 		};
 
 		var __locale = null;
@@ -1183,6 +1297,262 @@ window.__ModuleLoader__.load({
 		 * Falls back to the projection's last-inserted task if history is not
 		 * available (e.g. older hosts or a failed history read).
 		 */
+		/**
+		 * Image Library floating panel opened from the sidebar footer action.
+		 * Data is loaded through `/aux images --json`; thumbnails are read via
+		 * `sessions.binding(...).readAttachment` when a readable owner exists.
+		 */
+		function ImageLibraryPanel(props) {
+			const { sessions, runAuxCommand, onClose } = props;
+			const t = (props && props.t) || __t;
+			useLocaleRevision();
+			const [data, setData] = react.useState(null);
+			const [loading, setLoading] = react.useState(false);
+			const [error, setError] = react.useState(null);
+			const [query, setQuery] = react.useState("");
+			const [filter, setFilter] = react.useState("all");
+			const [thumbSize, setThumbSize] = react.useState("medium");
+			const [selected, setSelected] = react.useState(() => new Set());
+			const [detailId, setDetailId] = react.useState(null);
+			const [busy, setBusy] = react.useState(false);
+			const [notice, setNotice] = react.useState(null);
+
+			const load = react.useCallback(() => {
+				let alive = true;
+				setLoading(true);
+				setError(null);
+				Promise.resolve()
+					.then(() => runAuxCommand("/aux images --json"))
+					.then((result) => {
+						if (!alive) return;
+						if (result.kind !== "success") throw new Error(result.text || "image load failed");
+						const parsed = JSON.parse(result.text);
+						setData(parsed);
+					})
+					.catch((err) => {
+						if (alive) setError(err instanceof Error ? err.message : String(err));
+					})
+					.finally(() => {
+						if (alive) setLoading(false);
+					});
+				return () => { alive = false; };
+			}, [runAuxCommand]);
+			react.useEffect(load, [load]);
+
+			const entries = (data?.entries ?? []).filter((entry) => {
+				if (filter === "orphan" && !entry.orphan) return false;
+				if (filter === "shared" && !entry.shared) return false;
+				if (filter === "retained" && !entry.retained) return false;
+				if (filter === "withMemory" && entry.memories.length === 0) return false;
+				if (query) {
+					const q = query.toLowerCase();
+					const hit =
+						entry.attachmentId.toLowerCase().includes(q) ||
+						(entry.fileName || "").toLowerCase().includes(q) ||
+						(entry.hash || "").toLowerCase().includes(q) ||
+						entry.ownerSessions.some((sid) => sid.toLowerCase().includes(q)) ||
+						entry.memories.some((m) => (m.question || "").toLowerCase().includes(q) || (m.summary || "").toLowerCase().includes(q));
+					if (!hit) return false;
+				}
+				return true;
+			});
+			const counts = data?.counts ?? { total: 0, orphan: 0, shared: 0, retained: 0, withMemory: 0 };
+
+			const runAction = async (line, okText) => {
+				setBusy(true);
+				setNotice(null);
+				try {
+					const result = await runAuxCommand(line);
+					if (result.kind !== "success") throw new Error(result.text || "action failed");
+					if (okText) setNotice(okText);
+					load();
+				} catch (err) {
+					setNotice(__t("imageLibrary.opFailed").replace("{msg}", err instanceof Error ? err.message : String(err)));
+				} finally {
+					setBusy(false);
+				}
+			};
+
+			const deleteSelected = () => {
+				const ids = [...selected];
+				if (ids.length === 0) return;
+				if (!window.confirm(__t("imageLibrary.confirmDelete"))) return;
+				runAction("/aux image delete " + ids[0] + " --force", __t("imageLibrary.opDone")).then(() => {
+					// For simplicity, first version deletes one at a time from selection.
+					const rest = ids.slice(1);
+					if (rest.length > 0) {
+						// Chain remaining deletes.
+						(async () => {
+							for (const id of rest) {
+								await runAction("/aux image delete " + id + " --force");
+							}
+							setNotice(__t("imageLibrary.opDone"));
+						})();
+					}
+					setSelected(new Set());
+				});
+			};
+			const deleteOrphans = () => {
+				if (!window.confirm(__t("imageLibrary.confirmOrphans"))) return;
+				runAction("/aux image gc-orphans", __t("imageLibrary.opDone")).then(() => setSelected(new Set()));
+			};
+			const toggleRetain = (entry) => {
+				const line = entry.retained ? "/aux image unretain " + entry.attachmentId : "/aux image retain " + entry.attachmentId;
+				runAction(line, __t("imageLibrary.opDone"));
+			};
+			const toggleSelect = (id) => {
+				setSelected((prev) => {
+					const next = new Set(prev);
+					if (next.has(id)) next.delete(id); else next.add(id);
+					return next;
+				});
+			};
+			const selectAllVisible = () => {
+				setSelected(new Set(entries.map((e) => e.attachmentId)));
+			};
+			const invertVisible = () => {
+				setSelected((prev) => {
+					const next = new Set(prev);
+					for (const e of entries) {
+						if (next.has(e.attachmentId)) next.delete(e.attachmentId); else next.add(e.attachmentId);
+					}
+					return next;
+				});
+			};
+
+			const overlay = react.createElement("div", { className: "ax-image-overlay", onClick: (e) => { if (e.target === e.currentTarget) onClose(); } },
+				react.createElement("div", { className: "ax-image-panel", onClick: (e) => e.stopPropagation() },
+					react.createElement("div", { className: "ax-image-panel-header" },
+						react.createElement("span", { className: "ax-image-panel-title" }, __t("imageLibrary.title")),
+						react.createElement("input", { className: "ax-image-search", placeholder: __t("imageLibrary.search"), value: query, onChange: (e) => setQuery(e.target.value) }),
+						react.createElement("button", { className: "ax-image-action", onClick: load, disabled: loading || busy }, __t("imageLibrary.refresh")),
+						react.createElement("button", { className: "ax-image-action", onClick: onClose }, __t("imageLibrary.close"))
+					),
+					react.createElement("div", { className: "ax-image-toolbar" },
+						react.createElement("span", { className: "ax-image-panel-stats" },
+							__t("imageLibrary.total").replace("{total}", String(counts.total)) + " · " +
+							__t("imageLibrary.shared").replace("{n}", String(counts.shared)) + " · " +
+							__t("imageLibrary.orphan").replace("{n}", String(counts.orphan)) + " · " +
+							__t("imageLibrary.retained").replace("{n}", String(counts.retained)) + " · " +
+							__t("imageLibrary.withMemory").replace("{n}", String(counts.withMemory))
+						),
+						[["all", "imageLibrary.filterAll"], ["shared", "imageLibrary.filterShared"], ["orphan", "imageLibrary.filterOrphan"], ["retained", "imageLibrary.filterRetained"], ["withMemory", "imageLibrary.filterMemory"]].map(([key, label]) =>
+							react.createElement("button", { key, className: "ax-image-chip" + (filter === key ? " ax-image-chip-active" : ""), onClick: () => setFilter(key) }, __t(label))
+						),
+						react.createElement("span", { className: "ax-image-bulk" },
+							__t("imageLibrary.selected").replace("{n}", String(selected.size)),
+							react.createElement("button", { className: "ax-image-action", onClick: selectAllVisible }, __t("imageLibrary.selectAll")),
+							react.createElement("button", { className: "ax-image-action", onClick: invertVisible }, __t("imageLibrary.invert")),
+							react.createElement("button", { className: "ax-image-action", onClick: () => setSelected(new Set()) }, __t("imageLibrary.clear")),
+							react.createElement("button", { className: "ax-image-action ax-image-action-danger", disabled: busy || selected.size === 0, onClick: deleteSelected }, __t("imageLibrary.delete")),
+							react.createElement("button", { className: "ax-image-action ax-image-action-danger", disabled: busy, onClick: deleteOrphans }, __t("imageLibrary.deleteOrphans")),
+							[["small", "imageLibrary.viewSmall"], ["medium", "imageLibrary.viewMedium"], ["large", "imageLibrary.viewLarge"]].map(([key, label]) =>
+								react.createElement("button", { key, className: "ax-image-chip" + (thumbSize === key ? " ax-image-chip-active" : ""), onClick: () => setThumbSize(key) }, __t(label))
+							)
+						)
+					),
+					react.createElement("div", { className: "ax-image-grid" },
+						loading ? react.createElement("div", { className: "ax-image-empty" }, "…") :
+						error ? react.createElement("div", { className: "ax-image-empty ax-error" }, String(error)) :
+						entries.length === 0 ? react.createElement("div", { className: "ax-image-empty" }, query || filter !== "all" ? __t("imageLibrary.noResult") : __t("imageLibrary.noImage")) :
+						entries.map((entry) => {
+							const isSel = selected.has(entry.attachmentId);
+							return react.createElement("div", { key: entry.attachmentId, className: "ax-image-card" + (isSel ? " ax-image-card-selected" : ""), onClick: () => setDetailId(entry.attachmentId) },
+								react.createElement("input", { type: "checkbox", className: "ax-image-checkbox", checked: isSel, onClick: (e) => e.stopPropagation(), onChange: () => toggleSelect(entry.attachmentId) }),
+								react.createElement(ImageThumb, { sessions, entry, size: thumbSize }),
+								react.createElement("div", { className: "ax-image-card-body" },
+									entry.orphan ? react.createElement("span", { className: "ax-image-badge ax-image-badge-orphan" }, __t("imageLibrary.orphanBadge")) : null,
+									entry.shared ? react.createElement("span", { className: "ax-image-badge ax-image-badge-shared" }, __t("imageLibrary.sharedBadge")) : null,
+									entry.retained ? react.createElement("span", { className: "ax-image-badge ax-image-badge-retained" }, __t("imageLibrary.retainedBadge")) : null,
+									entry.memories.length > 0 ? react.createElement("span", { className: "ax-image-badge ax-image-badge-memory" }, __t("imageLibrary.memoryBadge")) : null,
+									react.createElement("div", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, entry.fileName || entry.hash)
+								)
+							);
+						})
+					),
+					detailId ? react.createElement(ImageDetail, { sessions, entries, detailId, runAuxCommand, toggleRetain, onCloseDetail: () => setDetailId(null) }) : null,
+					notice ? react.createElement("div", { className: "ax-image-detail-row" }, notice) : null
+				)
+			);
+			return overlay;
+		}
+
+		/** Loads one image thumbnail via readAttachment. */
+		function ImageThumb(props) {
+			const { sessions, entry } = props;
+			const [url, setUrl] = react.useState(null);
+			const [failed, setFailed] = react.useState(false);
+			react.useEffect(() => {
+				let alive = true;
+				let objectUrl = null;
+				setUrl(null);
+				setFailed(false);
+				if (!entry.readableBySessionId) { setFailed(true); return; }
+				const binding = sessions?.binding?.(entry.readableBySessionId);
+				const session = binding?.session;
+				if (!session || typeof session.readAttachment !== "function") { setFailed(true); return; }
+				session.readAttachment(entry.attachmentId).then((res) => {
+					if (!alive) return;
+					if (!res.ok || !res.value) { setFailed(true); return; }
+					const bytes = res.value.data;
+					const mediaType = res.value.attachment?.mediaType || "image/png";
+					const blob = new Blob([bytes], { type: mediaType });
+					objectUrl = URL.createObjectURL(blob);
+					setUrl(objectUrl);
+				}).catch(() => { if (alive) setFailed(true); });
+				return () => { alive = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+				// eslint-disable-next-line react-hooks/exhaustive-deps
+			}, [sessions, entry.attachmentId, entry.readableBySessionId]);
+			if (failed) return react.createElement("div", { className: "ax-image-thumb-placeholder" }, "🖼");
+			if (!url) return react.createElement("div", { className: "ax-image-thumb-placeholder" }, "…");
+			return react.createElement("img", { className: "ax-image-thumb", src: url, alt: entry.fileName || entry.hash });
+		}
+
+		/** Detail drawer for one image entry. */
+		function ImageDetail(props) {
+			const { sessions, entries, detailId, runAuxCommand, toggleRetain, onCloseDetail } = props;
+			const t = (props && props.t) || __t;
+			const entry = entries.find((e) => e.attachmentId === detailId);
+			if (!entry) return null;
+			return react.createElement("div", { className: "ax-image-detail" },
+				react.createElement("div", { className: "ax-image-detail-row" },
+					react.createElement("strong", null, entry.fileName || entry.hash),
+					entry.orphan ? react.createElement("span", { className: "ax-image-badge ax-image-badge-orphan" }, __t("imageLibrary.orphanBadge")) : null,
+					entry.shared ? react.createElement("span", { className: "ax-image-badge ax-image-badge-shared" }, __t("imageLibrary.sharedBadge")) : null,
+					entry.retained ? react.createElement("span", { className: "ax-image-badge ax-image-badge-retained" }, __t("imageLibrary.retainedBadge")) : null
+				),
+				react.createElement("div", { className: "ax-image-detail-row" },
+					__t("imageLibrary.detailOwners") + ": " + (entry.ownerSessions.length > 0 ? entry.ownerSessions.join(", ") : "—"),
+					entry.ownerLiveSessions.slice(0, 5).map((sid) => react.createElement("button", { key: sid, className: "ax-image-action", onClick: () => sessions?.open?.(sid) }, sid.slice(0, 12) + "… " + __t("imageLibrary.jump")))
+				),
+				entry.memories.length > 0 ? react.createElement("div", { className: "ax-image-detail-row" },
+					__t("imageLibrary.detailMemories") + ":",
+					react.createElement("div", null, entry.memories.slice(0, 5).map((m) => react.createElement("div", { key: m.at + "-" + m.question }, `Q: ${m.question} → A: ${m.summary}`)))
+				) : null,
+				react.createElement("div", { className: "ax-image-detail-row" },
+					react.createElement("button", { className: "ax-image-action ax-image-action-danger", onClick: () => { if (window.confirm(__t("imageLibrary.confirmDelete"))) runAuxCommand("/aux image delete " + entry.attachmentId + " --force").then(() => onCloseDetail()); } }, __t("imageLibrary.delete")),
+					react.createElement("button", { className: "ax-image-action", onClick: () => toggleRetain(entry) }, entry.retained ? __t("imageLibrary.unretain") : __t("imageLibrary.retain")),
+					react.createElement("button", { className: "ax-image-action", onClick: onCloseDetail }, __t("imageLibrary.close"))
+				)
+			);
+		}
+
+		/** Sidebar footer action: button to open the image library. */
+		function ImageLibraryButton(props) {
+			const { sessions, runAuxCommand, wide } = props;
+			const [open, setOpen] = react.useState(false);
+			return react.createElement("div", null,
+				react.createElement("button", {
+					type: "button",
+					className: "ax-image-sidebar-badge",
+					"data-rail": !wide ? "true" : void 0,
+					onClick: () => setOpen(true),
+					"aria-label": __t("imageLibrary.open")
+				}, wide ? __t("imageLibrary.open") : "🖼"),
+				open ? react.createElement(ImageLibraryPanel, { sessions, runAuxCommand, onClose: () => setOpen(false) }) : null
+			);
+		}
+
 		function AuxStatusChip(props) {
 			const t = (props && props.t) || __t;
 			useLocaleRevision();
@@ -1339,6 +1709,14 @@ window.__ModuleLoader__.load({
 				locale: NS,
 				inject: () => ({ sessions })
 			}, AuxStatusChip));
+			ctx.slots.inject("sidebar.footer.action", () => ctx.slots.register({
+				name: "sidebar.footer.action",
+				id: "aux-image-library",
+				order: 20,
+				label: () => __t("imageLibrary.open"),
+				locale: NS,
+				inject: () => ({ sessions, runAuxCommand })
+			}, ImageLibraryButton));
 		}
 		exports.apply = apply;
 		exports.inject = inject;
