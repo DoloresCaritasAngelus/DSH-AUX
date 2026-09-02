@@ -369,6 +369,7 @@ Before the first persistent `tool/call`, only the Minimal tool pair is exposed a
 |---|---|
 | [PROJECT.md](./PROJECT.md) | Long-term project overview (human) |
 | [IMAGE-LIBRARY-DESIGN.md](./IMAGE-LIBRARY-DESIGN.md) | Image lifecycle visualization panel design |
+| [IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md](./IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md) | Image-library implementation plan |
 | [PROJECT.AI.md](./PROJECT.AI.md) | Long-term project overview (AI/agent) |
 | [CHANGELOG.md](./CHANGELOG.md) | Version history |
 | [TESTING.md](./TESTING.md) | Test file list and baseline |

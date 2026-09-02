@@ -34,6 +34,7 @@ dsh-aux/README*          generated snapshots from root README (do not hand-edit)
 PROJECT.md               human long-term overview
 PROJECT.AI.md            this file
 IMAGE-LIBRARY-DESIGN.md  Image-library visualization design
+IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md  Image-library execution plan
 dsh-aux/AI.md            AI install/verification guide
 ```
 

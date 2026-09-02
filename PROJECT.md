@@ -93,6 +93,7 @@ DSH 迭代很快，尤其是 0.1.2-alpha.x 后：
 | [PROJECT.md](./PROJECT.md) | 人类长期项目总览（本文件） |
 | [PROJECT.AI.md](./PROJECT.AI.md) | AI/代理长期项目总览 |
 | [IMAGE-LIBRARY-DESIGN.md](./IMAGE-LIBRARY-DESIGN.md) | 图片生命周期可视化面板正式设计 |
+| [IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md](./IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md) | 图片库实施计划（并行任务分解） |
 | [dsh-aux/AI.md](./dsh-aux/AI.md) | AI 安装/验证指南 |
 | [CHANGELOG.md](./CHANGELOG.md) | 版本历史 |
 | [PRD.md](./PRD.md) | 需求规格与设计决策 |

@@ -364,6 +364,7 @@ const result = await ctx.auxLlm.call("compress", {
 |---|---|
 | [PROJECT.md](./PROJECT.md) | 长期项目总览（人类友好） |
 | [IMAGE-LIBRARY-DESIGN.md](./IMAGE-LIBRARY-DESIGN.md) | 图片生命周期可视化面板设计 |
+| [IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md](./IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md) | 图片库实施计划（并行任务分解） |
 | [PROJECT.AI.md](./PROJECT.AI.md) | 长期项目总览（AI/代理友好） |
 | [CHANGELOG.md](./CHANGELOG.md) | 版本历史 |
 | [TESTING.md](./TESTING.md) | 测试文件清单与基线 |
