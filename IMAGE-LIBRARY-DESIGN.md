@@ -186,6 +186,7 @@ aux.imageAutoCleanEnabled?: boolean // 默认 false？由产品决定
 
 ```ts
 interface ImageLibraryEntry {
+  kind: 'image' | string;      // 预留扩展：当前仅 'image'，未来可表示网页快照/压缩产物等
   attachmentId: string;        // sha256:xxx
   hash: string;                // xxx
   mediaType?: string;          // 来自扩展名/ref，可能缺失
@@ -413,6 +414,10 @@ AUX 设置页已经承载工具任务/桥接/子代理/全局/平台开关/诊�
 - 与状态过滤器关系：
   - 过滤器 chips（共享/孤儿/固化/有记忆/本会话）与搜索词为 **AND**；
   - 搜索只缩小当前 chip 范围。
+- 记忆命中反馈（低成本、高价值）：
+  - 搜索词命中 `image-memory.json` 的 `question`/`summary` 时，卡片显示“记忆命中”角标；
+  - 详情中高亮命中的记忆片段；
+  - 空结果提示“试试搜索图片分析时的问题/描述”，引导用户利用记忆搜索。
 - 交互：
   - 输入即过滤（防抖 ~200ms）；
   - 空结果显示空态 + “清除搜索/清除过滤”按钮；
@@ -484,6 +489,22 @@ dsh-aux/src/client.js (或拆成 client/image-library.js)
 - `ImageLibrarySelectionState`（selectedIds / lastActionedFilter）
 - `ImageLibraryViewPreferences`（pageSize / thumbnailSize / paginationMode）
 - 图库面板 props 需要 `sessions` / `runAuxCommand`（设置页组件已有类似注入，可抽公共 hook）。
+
+### 6.8 未来扩展性：从“图片库”到“资产库”（只预留，不过度设计）
+
+当前只做图片生命周期管理。但 AUX 已有 `web_extract` / `web_crawl` / `compress_text`，
+未来也可能新增工具并产生可管理的“产物/文件”。为避免届时推翻重构，**仅预留**：
+
+1. **数据模型**：`ImageLibraryEntry` 已含 `kind` 字段，现在恒为 `'image'`；
+   未来新增资源类型时，可扩展 `kind` 与可选来源字段，不破坏现有消费方。
+2. **服务端聚合**：`image-library.js` 命名与函数以“library entry”为主，不叫死 `attachmentId`；
+   后续可增加 `collectLibrarySources()` 或按 kind 分派，但暂不实现。
+3. **投影/命令**：投影与 `/aux images` 命令保持“通用列表”语义，不把图片专属字段写死到不可扩展；
+   当前仍只输出图片。
+4. **UI**：过滤器和分组在概念上按 `kind` 设计，但现在只渲染 `kind === 'image'`；
+   搜索/批量操作逻辑天然与资源类型解耦（搜索名称/记忆/归属）。
+5. **明确不做**：不建通用插件注册表、不做 artifact schema、不做 web_extract 落盘迁移、
+   不把 web/compress 产物纳入当前图库——等真实需求出现再扩展。
 
 ---
 ## 7. 与 DSH 溯源/轨迹/投影的耦合
