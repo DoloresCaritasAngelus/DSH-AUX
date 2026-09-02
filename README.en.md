@@ -9,7 +9,7 @@
 > Whenever you need me, just call me directly～
 
 ![Version](https://img.shields.io/badge/version-0.4.1-FIX1-blue)
-![Tests](https://img.shields.io/badge/tests-320-brightgreen)
+![Tests](https://img.shields.io/badge/tests-319-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--alpha.3-0078D4)
 
@@ -344,12 +344,12 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **Platform**: DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3 (verified on 0.1.2-alpha.2 / 0.1.2-alpha.3); Node ≥ 20.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are all official DSH packages (bundled with the platform); no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (320 tests; file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (319 tests; file list and baseline in `TESTING.md`).
 
 ### Integrated components
 
 - **image-bridge**: lets text-only main models receive pasted images while keeping thumbnails; re-run `bridge/apply-patch.mjs` after `npm update`.
-- **settings dynamic exposure**: the settings page can read/write aux config; corresponding patches are shipped in this repo's `bridge/`.
+- **settings writability**: the settings page can read/write aux config; native on the DSH alpha line, rc.6 patch retired to `bridge/retired/`.
 - **session event registration channel**: `aux/llm-call` is written with `ignorable: true`; if the patch is missing, events are downgraded (not written) to protect session logs.
 - **session deletion synergy**: works with `dsh-plugin-session-delete` to clean up unreferenced images when a session is deleted.
 - **subagent-bridge**: transparently takes over native `subagent` and `workflow` parallel `agent()` children.

@@ -29,8 +29,8 @@ const TOOL_KEYS = ["vision_analyze", "web_extract", "web_crawl", "compress_text"
 
 /** Packages whose patched `lib/index.js` participates in restart detection. */
 const PATCH_PACKAGES = [
-  "dsh-host-apiproxy",
   "dsh-agent-loop",
+  "dsh-api-session-controller",
   "dsh-tool-subagent",
   "dsh-workflow-worker-thread",
   "dsh-tool-skill",
@@ -39,50 +39,31 @@ const PATCH_PACKAGES = [
 
 /**
  * Patch ledger: one row per local bridge patch that dsh-aux maintains.
- * This is the single source used by `/aux status` and the settings UI to
- * show "which patches exist / installed / missing / not applicable".
+ * Main branch supports DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3 only.
+ * Retired legacy patches (host-apiproxy / rc.6 settings) live in
+ * `bridge/retired/` and are intentionally not listed here.
  *
  * Each entry:
  * - `id`: stable key used by the UI and status payloads.
  * - `group`: P-number ledger family (P1-P6/P11 bridge apply-patch, P7 session,
- *   P8 whitelist, P9/P10 settings allowlist — rc.6 only).
+ *   P8 whitelist).
  * - `pkg`: target DSH package that the patch would modify.
  * - `mark`: source marker string that indicates the patch is applied.
- * - `optionalPackage`: when true, a missing package means the patch is
- *   not applicable rather than missing (e.g. dsh-host-apiproxy on alpha.3).
  * - `description`: short human-readable purpose.
  */
 const PATCH_LEDGER = [
-  {
-    id: "bridge-image-admit",
-    group: "P1-P6",
-    pkg: "dsh-host-apiproxy",
-    mark: "dsh-image bridge v2 (local patch)",
-    optionalPackage: true,
-    description: "image block 原样进入会话消息(UI 缩略图 + 附件硬链接)"
-  },
   {
     id: "bridge-agent-loop",
     group: "P1-P6",
     pkg: "dsh-agent-loop",
     mark: "image-bridge v2 (local patch)",
-    optionalPackage: false,
     description: "模型输入边界将图片改写为 vision_analyze 路径文本"
-  },
-  {
-    id: "bridge-select-model",
-    group: "P1-P6",
-    pkg: "dsh-host-apiproxy",
-    mark: "dsh-image bridge v3 (local patch)",
-    optionalPackage: true,
-    description: "含图会话允许切换到纯文本模型(rc.2+ 原生,自动不适用)"
   },
   {
     id: "bridge-session-controller",
     group: "P1-P6",
     pkg: "dsh-api-session-controller",
     mark: "dsh-aux image bridge v3 (local patch)",
-    optionalPackage: false,
     description: "alpha.x session-controller 图片门控移除"
   },
   {
@@ -90,7 +71,6 @@ const PATCH_LEDGER = [
     group: "P1-P6",
     pkg: "dsh-tool-subagent",
     mark: "requires_vision:",
-    optionalPackage: false,
     description: "subagent 工具增加 requires_vision 可选参数"
   },
   {
@@ -98,7 +78,6 @@ const PATCH_LEDGER = [
     group: "P1-P6",
     pkg: "dsh-tool-subagent",
     mark: 'ctx.get("auxLlm")',
-    optionalPackage: false,
     description: "subagent execute 读取 auxLlm.subagentRoute 注入路由"
   },
   {
@@ -106,7 +85,6 @@ const PATCH_LEDGER = [
     group: "P1-P6",
     pkg: "dsh-workflow-worker-thread",
     mark: "subagentIncludeWorkflow",
-    optionalPackage: false,
     description: "workflow agent() 子代理也走 AUX 路由"
   },
   {
@@ -114,7 +92,6 @@ const PATCH_LEDGER = [
     group: "P1-P6",
     pkg: "dsh-tool-skill",
     mark: "skill auditor",
-    optionalPackage: false,
     description: "skill 工具增加可选 task 参数供预审桥接"
   },
   {
@@ -122,7 +99,6 @@ const PATCH_LEDGER = [
     group: "P7",
     pkg: "dsh-session",
     mark: "dsh-aux ignorable (local patch)",
-    optionalPackage: false,
     description: "session.append 支持 ignorable 自定义事件"
   },
   {
@@ -130,26 +106,7 @@ const PATCH_LEDGER = [
     group: "P8",
     pkg: "dsh-session",
     mark: "aux/llm-call",
-    optionalPackage: false,
     description: "aux/llm-call 事件白名单"
-  },
-  {
-    id: "settings-dynamic-expose",
-    group: "P9",
-    pkg: "dsh-settings",
-    mark: "dsh-aux dynamic expose (local patch)",
-    optionalPackage: true,
-    nativeOnCurrentLine: true,
-    description: "rc.6 settings 动态暴露补丁(rc.7+ 原生,自动不适用)"
-  },
-  {
-    id: "settings-allowlist",
-    group: "P10",
-    pkg: "dsh-host-apiproxy",
-    mark: "dsh-aux settings dynamic expose (local patch)",
-    optionalPackage: true,
-    nativeOnCurrentLine: true,
-    description: "rc.6 api-proxy settings 白名单补丁(rc.7+ 原生,自动不适用)"
   }
 ];
 
@@ -165,10 +122,10 @@ async function readPatchSource(pkg) {
 /**
  * Collect the detailed patch ledger. It only reads installed files and never
  * writes to native packages. For each patch it reports:
- * - `state`: installed | missing | not-applicable | unknown
+ * - `state`: installed | missing | unknown
  * - `present`: whether the target package file exists
  * - `required`: whether this patch is needed on the current DSH line
- *   (optional packages that do not exist are reported not-applicable)
+ *   (all listed patches are required on alpha.2/alpha.3)
  */
 export async function collectPatchLedger() {
   const sources = new Map();
@@ -181,15 +138,7 @@ export async function collectPatchLedger() {
     }
     const present = src !== void 0;
     const installed = present && src.includes(patch.mark);
-    // 当前支持线(alpha.2/alpha.3)原生已具备 P9/P10 的能力,不再需要这些
-    // rc.6 专用补丁。legacy 分支维护旧版时使用独立代码,不受此标记影响。
-    const nativeOnCurrentLine = patch.nativeOnCurrentLine === true;
-    const applicable = !nativeOnCurrentLine && (present || !patch.optionalPackage);
-    const state = nativeOnCurrentLine || (!present && patch.optionalPackage)
-      ? "not-applicable"
-      : installed
-        ? "installed"
-        : "missing";
+    const state = !present ? "unknown" : installed ? "installed" : "missing";
     rows.push({
       id: patch.id,
       group: patch.group,
@@ -197,7 +146,7 @@ export async function collectPatchLedger() {
       description: patch.description,
       state,
       installed,
-      required: applicable,
+      required: true,
       present
     });
   }

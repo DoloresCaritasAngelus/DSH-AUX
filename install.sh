@@ -97,11 +97,9 @@ run node "$HERE/bridge/apply-patch.mjs"
 echo "  [session-ignorable] 应用 dsh-session ignorable 补丁(append 支持 ignorable + 白名单放行 aux/llm-call)..."
 run node "$HERE/bridge/patch-session-ignorable.mjs"
 
-# 5. settings 动态暴露补丁(设置页可写 aux 配置,插件原生能力)
-echo "  [settings-dynamic-expose] 应用 dsh-settings 补丁(注册时声明 exposedToWeb)..."
-run node "$HERE/bridge/patch-settings-dynamic-expose.mjs"
-echo "  [settings-allowlist] 应用 api-proxy 动态暴露补丁(v2,从 listExposed 合并)..."
-run node "$HERE/bridge/patch-settings-allowlist.mjs"
+# 5. settings 可写性:DSH alpha 线原生支持,不需要 rc.6 settings 补丁。
+#    旧补丁见 bridge/retired/ 与 legacy 分支。
+echo "  [settings] alpha 线原生支持设置页读写 aux,跳过 rc.6 settings 补丁"
 
 # 6. start-dsh.sh 启动自愈 hook(幂等;--no-start-hook 跳过)
 #    npm 升级会清 symlink/补丁/白名单,启动前自愈可避免重演 rc.7 事故。

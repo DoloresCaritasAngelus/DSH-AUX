@@ -2232,20 +2232,20 @@ test('workflow-bridge 状态: 通过 Node 解析能给出明确状态(不再因�
 });
 
 test('bridge-locate: require.resolve 能解析 @deepseek-ai 包主入口', () => {
-  const target = resolvePackageFile('dsh-host-apiproxy');
-  assert.ok(target !== void 0, '应能解析 dsh-host-apiproxy');
+  const target = resolvePackageFile('dsh-agent-loop');
+  assert.ok(target !== void 0, '应能解析 dsh-agent-loop');
   assert.ok(target.endsWith('/lib/index.js'), `应指向 lib/index.js,实际: ${target}`);
 });
 
 test('collectPatchLedger: 返回结构完整且状态枚举合法', async () => {
   const ledger = await collectPatchLedger();
   assert.ok(Array.isArray(ledger), '应返回数组');
-  assert.ok(ledger.length >= 10, '应覆盖 P1-P11 主要补丁');
+  assert.ok(ledger.length >= 8, '应覆盖 alpha 线 P1-P8 主要补丁');
   for (const entry of ledger) {
     assert.equal(typeof entry.id, 'string');
     assert.equal(typeof entry.pkg, 'string');
     assert.equal(typeof entry.description, 'string');
-    assert.ok(['installed', 'missing', 'not-applicable', 'unknown'].includes(entry.state), `state 非法: ${entry.state}`);
+    assert.ok(['installed', 'missing', 'unknown'].includes(entry.state), `state 非法: ${entry.state}`);
     assert.equal(typeof entry.installed, 'boolean');
     assert.equal(typeof entry.required, 'boolean');
     assert.equal(typeof entry.present, 'boolean');

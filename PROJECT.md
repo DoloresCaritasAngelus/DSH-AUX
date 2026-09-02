@@ -17,7 +17,7 @@ DSH-AUX 是 DeepSeek Harness（DSH）的辅助模型系统：
 DSH 迭代很快，尤其是 0.1.2-alpha.x 后：
 
 - 移除 `connection.api`，客户端设置页需要走 `remote.*` / `sessions`；
-- `dsh-host-apiproxy` 在 alpha.3 被移除，图片门控移到 `dsh-api-session-controller`；
+- `dsh-host-apiproxy` 在 alpha.3 被移除，图片门控移到 `dsh-api-session-controller`；相关旧补丁已退役到 `bridge/retired/`；
 - 部分本地补丁是对官方 DSH 包源码的小改动，官方升级后容易漂移。
 
 因此项目需要持续跟踪 DSH 版本、维护补丁台账、保持设置页可用，并尽量把“必须改原生包”的范围压缩到最小。
@@ -70,10 +70,10 @@ DSH 迭代很快，尤其是 0.1.2-alpha.x 后：
 
 | 补丁族 | 作用 | 当前线 |
 |---|---|---|
-| P1-P6 / P11 | image admit / agent-loop / selectModel / session-controller / subagent / workflow / skill schema | 必需（alpha.3 部分目标不存在则自动不适用） |
+| P1-P6 / P11 | agent-loop / session-controller / subagent schema+request / workflow / skill schema | 必需 |
 | P7 | session append 支持 ignorable 自定义事件 | 必需 |
 | P8 | `aux/llm-call` 白名单 | 必需 |
-| P9 / P10 | rc.6 的 settings 动态暴露/白名单 | alpha.2+ 原生具备，自动不适用 |
+| 已退役 | host-apiproxy admit/selectModel、rc.6 settings P9/P10、rc.8 老锚点 | 移入 `bridge/retired/`，legacy 分支保留 |
 
 > 明细状态由 `collectPlatformStatus().patchLedger` 输出，UI 有补丁清单表。
 

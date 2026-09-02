@@ -1016,7 +1016,7 @@ window.__ModuleLoader__.load({
 									react.createElement("td", { className: "ax-patch-desc", title: entry.description }, entry.description),
 									react.createElement("td", { className: "ax-patch-pkg" }, entry.pkg),
 									react.createElement("td", null,
-										react.createElement("span", { className: "ax-status-badge ax-status-badge-" + (entry.state === "installed" ? "installed" : entry.state === "missing" ? "missing" : "not-applicable") },
+										react.createElement("span", { className: "ax-status-badge ax-status-badge-" + (entry.state === "installed" ? "installed" : entry.state === "missing" ? "missing" : entry.state === "unknown" ? "unknown" : "not-applicable") },
 											t("status.patchLedger.state." + entry.state)
 										)
 									)

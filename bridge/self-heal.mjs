@@ -16,7 +16,7 @@
  *   3. P7 session append ignorable 写入口:缺失时外科式补上(专用块,不做白名单整跑);
  *   4. P8 白名单:保证 lib/index.js 与 lib/types/known-event-types.js 都含
  *      "aux/llm-call"(不负责 thinking/language——那是 dsh-thinking-zh 插件的事);
- *   5. P9/P10 settings:调带 rc 守卫的脚本(rc.6 需要则打,rc.7+ 原生自动跳过)。
+ *   5. 旧版 rc.6 settings 补丁(P9/P10)已退役,见 bridge/retired/,主支不再调用。
  *
  * 用法:
  *   node bridge/self-heal.mjs            # 实际自愈(写盘)
@@ -27,7 +27,7 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deployedFile, guardPackageFile, guardTarget, readPackageVersion, isRc7OrNewer } from "./target.js";
+import { deployedFile, guardPackageFile, guardTarget } from "./target.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url)); // <repo>/bridge
 const REPO = resolve(HERE, "..");
@@ -164,7 +164,7 @@ function ensureWhitelist(root) {
 function main() {
   const root = detectDshRoot();
   if (!root) { log("未找到 DSH 部署根(跳过自愈)"); return; }
-  // 子脚本(apply-patch / settings 补丁)需要 DSH_ROOT 解析目标;不设置时,
+  // 子脚本(apply-patch)需要 DSH_ROOT 解析目标;不设置时,
   // 包缺失会回退到仓库相对路径并触发 unsafe patch target。
   process.env.DSH_ROOT = root;
   log(`DSH 根: ${root} (${DRY ? "dry-run" : "实际修复"})`);
@@ -176,11 +176,6 @@ function main() {
   step("P1-P6/P11", () => { log("重跑 P1-P6/P11 桥接补丁(幂等)..."); runNode(join(HERE, "apply-patch.mjs")); });
   step("P7", () => ensureSessionAppendIgnorable());
   step("P8", () => ensureWhitelist(root));
-  step("P9/P10", () => {
-    log("settings 补丁(rc 守卫自动决定)...");
-    runNode(join(HERE, "patch-settings-dynamic-expose.mjs"));
-    runNode(join(HERE, "patch-settings-allowlist.mjs"));
-  });
   log(DRY ? "dry-run 完成(未写盘)" : "自愈完成。若本次有修复,请重启 DSH 生效。");
 }
 

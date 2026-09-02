@@ -10,7 +10,7 @@
  *   5. P7 session ignorable 是否已打;
  *   6. P8 aux/llm-call 白名单是否在;
  *   7. start-dsh.sh 自愈 hook 是否在;
- *   8. DSH 版本是否在支持范围(rc.6 / rc.7 / rc.8 / 0.1.1-rc.1 / rc.2 / 0.1.2-alpha.2)。
+ *   8. DSH 版本是否在支持范围(0.1.2-alpha.2 / 0.1.2-alpha.3)。
  *
  * 用法:
  *   node scripts/doctor.mjs
@@ -21,7 +21,6 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isRc7OrNewer } from "../bridge/target.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
@@ -151,12 +150,10 @@ function main() {
     const dshVersion = readVersion(join(root, "node_modules/@deepseek-ai/dsh/package.json"));
     if (!dshVersion) {
       record("WARN", "version", "无法读取 @deepseek-ai/dsh 版本");
-    } else if (isRc7OrNewer(dshVersion)) {
-      record("OK", "version", `DSH ${dshVersion} 在支持范围(0.1.0-rc.7+ / 0.1.1-rc.x / 0.1.2-alpha.x)`);
-    } else if (dshVersion === "0.1.0-rc.6") {
-      record("OK", "version", `DSH ${dshVersion} 在支持范围(rc.6,保留 P9/P10)`);
+    } else if (dshVersion === "0.1.2-alpha.2" || dshVersion === "0.1.2-alpha.3") {
+      record("OK", "version", `DSH ${dshVersion} 在支持范围(0.1.2-alpha.2 / 0.1.2-alpha.3)`);
     } else {
-      record("WARN", "version", `DSH ${dshVersion} 不在已验证支持范围(rc.6/7/8 或 0.1.1-rc.x/0.1.2-alpha.x),请关注 dsh-aux 更新`);
+      record("WARN", "version", `DSH ${dshVersion} 不在主支支持范围;旧版请使用 legacy 分支`);
     }
   }
 

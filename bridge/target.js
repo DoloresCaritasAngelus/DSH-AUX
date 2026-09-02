@@ -122,39 +122,3 @@ export function guardPackageFile(file, label) {
     process.exit(1);
   }
 }
-
-/**
- * Read the `version` field of the package owning a patch target
- * (`.../lib/index.js` → sibling `package.json`). Returns null when unavailable.
- */
-export function readPackageVersion(targetFile) {
-  const pkgPath = join(dirname(targetFile), "..", "package.json");
-  if (!existsSync(pkgPath)) return null;
-  try {
-    const parsed = JSON.parse(readFileSync(pkgPath, "utf8"));
-    return typeof parsed.version === "string" ? parsed.version : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Whether an installed package version is on the rc.7+ line (or later), i.e.
- * DSH web settings are exposed dynamically via `settings.describe()` and the
- * rc.6-era allowlist/dynamic-expose patches are no longer applicable.
- *
- * Handles both `0.1.0-rc.7` / `0.1.0-rc.8` (rc number ≥ 7) and the later
- * `0.1.1-rc.1` line, plus any 0.1.x/0.2.x release after 0.1.0-rc.6.
- */
-export function isRc7OrNewer(version) {
-  if (typeof version !== "string") return false;
-  const v = version.trim();
-  // 0.1.0-rc.N: rc number ≥ 7 is the original rc.7+ boundary.
-  const rc010 = /^0\.1\.0-rc\.([0-9]+)$/i.exec(v);
-  if (rc010 !== null) return Number(rc010[1]) >= 7;
-  // Stable 0.1.0 and every later 0.1.x/0.2.x line are newer than 0.1.0-rc.6.
-  if (/^0\.1\.0(?:-|$)/.test(v)) return true;
-  if (/^0\.1\.[1-9]/.test(v)) return true;
-  if (/^0\.[2-9]\./.test(v)) return true;
-  return false;
-}

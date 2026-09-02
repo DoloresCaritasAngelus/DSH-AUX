@@ -61,15 +61,15 @@ dsh-aux/AI.md            AI install/verification guide
 
 Files:
 - `bridge/apply-patch.mjs` — idempotent apply/dry-run/rollback for P1-P6/P11 bridge patches
-- `bridge/self-heal.mjs` — symlink + P7/P8 + P9/P10 guard, runs at DSH startup
+- `bridge/self-heal.mjs` — symlink + P7/P8 guard, runs at DSH startup
 - `bridge/patch-session-ignorable.mjs` — P7 session ignorable write support
-- `bridge/patch-settings-dynamic-expose.mjs` / `bridge/patch-settings-allowlist.mjs` — rc.6 only; alpha line skips
+- `bridge/retired/` — retired rc.6/host-apiproxy/rc.8 patches (not used on main)
 
 Patch ledger families:
-- P1-P6/P11: image admit / agent-loop / selectModel / session-controller / subagent schema+request / workflow / skill schema
+- P1-P6/P11: agent-loop / session-controller / subagent schema+request / workflow / skill schema
 - P7: session `append(..., { ignorable: true })`
 - P8: `aux/llm-call` event whitelist
-- P9/P10: rc.6 settings dynamic expose + allowlist (not applicable on alpha line)
+- Retired: host-apiproxy admit/selectModel, rc.6 settings P9/P10, rc.8 anchors — in `bridge/retired/`
 
 Current deployment verification pattern:
 - From DSH root cwd or via DSH_ROOT, `resolvePackageFile(pkg)` should point only at `<DSH_ROOT>/node_modules/@deepseek-ai/<pkg>/lib/index.js`.

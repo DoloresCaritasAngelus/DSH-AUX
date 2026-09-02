@@ -9,7 +9,7 @@
 > 需要我的时候，直接叫我就好～
 
 ![Version](https://img.shields.io/badge/version-0.4.1-FIX1-blue)
-![Tests](https://img.shields.io/badge/tests-320-brightgreen)
+![Tests](https://img.shields.io/badge/tests-319-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--alpha.3-0078D4)
 
@@ -344,12 +344,12 @@ const result = await ctx.auxLlm.call("compress", {
 - **平台**：DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3（已验证 0.1.2-alpha.2 / 0.1.2-alpha.3）；Node ≥ 20。
 - **旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）用户**：请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。主支不再支持这些版本。
 - **运行时零第三方依赖**：peerDependencies 全部是 DSH 官方包（环境自带），无 `dependencies`。
-- **测试零依赖**：`node --test tests/*.test.js`（320 项；文件清单与基线见 `TESTING.md`）。
+- **测试零依赖**：`node --test tests/*.test.js`（319 项；文件清单与基线见 `TESTING.md`）。
 
 ### 集成组件
 
 - **image-bridge**：让纯文本主模型也能直接粘贴图片，UI 保留缩略图；`npm update` 后需重跑 `bridge/apply-patch.mjs`。
-- **settings 动态暴露**：设置页可读写 aux 配置；对应补丁已随本仓库 `bridge/` 落地。
+- **settings 可写性**：设置页可读写 aux 配置；DSH alpha 线为原生能力，rc.6 旧补丁已退役到 `bridge/retired/`。
 - **会话事件注册通道**：`aux/llm-call` 以 `ignorable: true` 标记写入；未装补丁时自动降级不写事件，保护会话日志。
 - **会话删除协同**：配合 `dsh-plugin-session-delete`，删除会话时自动清理无引用图片。
 - **subagent-bridge**：透明接管原生 `subagent` 与 `workflow` 并行 `agent()` 子代理。

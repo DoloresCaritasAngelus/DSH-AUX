@@ -1,29 +1,28 @@
 #!/usr/bin/env node
 /**
- * dsh-image-bridge 补丁安装器(适配 dsh-aux vision_analyze 版,DSH alpha 线)
+ * dsh-image-bridge 补丁安装器 v2(适配 dsh-aux vision_analyze 版)
  *
- * 当前主分支只支持 DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3。
- * 旧版(rc.6 ~ 0.1.1-rc.2)的 host-apiproxy / settings 动态暴露等补丁已
- * 迁入 bridge/retired/,不再参与安装与自愈;旧版用户请使用
- * legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2。
+ * 让纯文本对话模型(deepseek-v4-flash 等)也能接收用户粘贴的图片,同时
+ * 让用户在 UI 里看到自己发的图片缩略图:
  *
- * 让纯文本对话模型也能接收用户粘贴的图片,同时让用户在 UI 里看到自己发的
- * 图片缩略图:
- *
- *  1) @deepseek-ai/dsh-agent-loop(buildRequest):模型输入边界处,把
+ *  1) @deepseek-ai/dsh-host-apiproxy(admit):image block 原样保留进
+ *     会话消息(UI 渲染缩略图),仅为每个附件对象补建带扩展名的硬链接。
+ *  2) @deepseek-ai/dsh-agent-loop(buildRequest):模型输入边界处,把
  *     image block 改写为"本地路径文本"(仅当模型非图像能力——
  *     resolveModelInfo 的 inputModalities 不含 image;或 dsh-aux 开启了
  *     forceAuxVision 强制原生视觉也走 AUX),模型用 dsh-aux
  *     的 vision_analyze 工具(imagePath 参数)把图片交给辅助视觉模型。
- *  2) @deepseek-ai/dsh-api-session-controller(prompt):alpha.x 接管图片
- *     能力门控,这里移除其"不支持图片输入的模型不能接收图片"的拦截。
- *  3) @deepseek-ai/dsh-tool-subagent(schema):为 subagent 工具增加
+ *     多模态模型(如 volcengine-ark/doubao-seed-2.0-lite)默认保持原生图片。
+ *  3) @deepseek-ai/dsh-host-apiproxy(selectModel):允许在含图片的会话中
+ *     切换到纯文本模型。旧逻辑会因为"会话里有图片"而拒绝无图像能力的
+ *     模型;有了上面的输入边界桥接后这个限制不再必要。
+ *  4) @deepseek-ai/dsh-tool-subagent(schema):为 subagent 工具增加
  *     可选的 `requires_vision` 参数(native 透明接管用)。
- *  4) @deepseek-ai/dsh-tool-subagent(request):executed 时读取
+ *  5) @deepseek-ai/dsh-tool-subagent(request):executed 时读取
  *     `ctx.auxLlm.subagentRoute()` 注入 agentOptions/toolFilter。
- *  5) @deepseek-ai/dsh-workflow-worker-thread(startChild):让 workflow
+ *  6) @deepseek-ai/dsh-workflow-worker-thread(startChild):让 workflow
  *     `agent()` 扇出的子代理同样走 AUX 子代理路由(includeWorkflow 门控)。
- *  6) @deepseek-ai/dsh-tool-skill(schema):为 skill 工具增加可选 `task`
+ *  7) @deepseek-ai/dsh-tool-skill(schema):为 skill 工具增加可选 `task`
  *     参数,供技能预审桥接读取主模型意图。
  *
  * 用法:
@@ -43,6 +42,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // ── 目标文件 ────────────────────────────────────────────────────────────────
 // 不写死任何用户绝对路径:按部署形态相对解析(symlink / 源码树),并在读写前
 // 校验目标必须位于 node_modules/@deepseek-ai/.../lib/index.js。
+const API_PROXY_FILE = guardTarget(deployedFile(
+  "../../../@deepseek-ai/dsh-host-apiproxy/lib/index.js",
+  "../../../node_modules/@deepseek-ai/dsh-host-apiproxy/lib/index.js"
+), "dsh-image-bridge");
 const AGENT_LOOP_FILE = guardTarget(deployedFile(
   "../../../@deepseek-ai/dsh-agent-loop/lib/index.js",
   "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js"
@@ -66,6 +69,18 @@ const SESSION_CONTROLLER_FILE = guardTarget(deployedFile(
 
 const TARGETS = [
   {
+    label: "dsh-host-apiproxy",
+    file: API_PROXY_FILE,
+    mark: "dsh-image bridge v2 (local patch)",
+    states: [
+      { name: "v2", detect: (d) => d.includes("dsh-image bridge v2 (local patch)"), action: "skip" },
+      { name: "v1", detect: (d) => d.includes("dsh-vision bridge (local patch)"), block: await readFile(join(HERE, "v1-block.txt"), "utf8"), action: "replace" },
+      { name: "original", detect: (d) => d.includes("MODEL_DOES_NOT_SUPPORT_IMAGES"), block: await readFile(join(HERE, "orig-block.txt"), "utf8"), action: "replace" }
+    ],
+    patched: await readFile(join(HERE, "patched-block.txt"), "utf8"),
+    backupPrefix: "index.js.bak-"
+  },
+  {
     label: "dsh-agent-loop",
     file: AGENT_LOOP_FILE,
     mark: "image-bridge v2 (local patch)",
@@ -79,9 +94,24 @@ const TARGETS = [
         block: await readFile(join(HERE, "orig-agent-loop-alpha2-block.txt"), "utf8"),
         replacement: await readFile(join(HERE, "patched-agent-loop-alpha2-block.txt"), "utf8"),
         action: "replace"
-      }
+      },
+      { name: "original", detect: (d) => d.includes("Compose one frozen request and bind it to the adapter registration"), block: await readFile(join(HERE, "orig-agent-loop-block.txt"), "utf8"), action: "replace" }
     ],
-    patched: await readFile(join(HERE, "patched-agent-loop-alpha2-block.txt"), "utf8"),
+    patched: await readFile(join(HERE, "patched-agent-loop-block.txt"), "utf8"),
+    backupPrefix: "index.js.bak-"
+  },
+  {
+    label: "dsh-host-apiproxy (selectModel)",
+    file: API_PROXY_FILE,
+    mark: "dsh-image bridge v3 (local patch)",
+    states: [
+      { name: "v3", detect: (d) => d.includes("dsh-image bridge v3 (local patch)"), action: "skip" },
+      // 0.1.1-rc.2+ 官方移除了 selectModel 的图片门控,原生行为等价 v3,
+      // 不再需要本地补丁。
+      { name: "native-rc2", detect: (d) => d.includes("async selectModel(request)") && !d.includes("does not accept image input, but this session already contains images"), action: "skip" },
+      { name: "original", detect: (d) => d.includes("does not accept image input, but this session already contains images"), block: await readFile(join(HERE, "orig-select-model-block.txt"), "utf8"), action: "replace" }
+    ],
+    patched: await readFile(join(HERE, "patched-select-model-block.txt"), "utf8"),
     backupPrefix: "index.js.bak-"
   },
   {
@@ -113,9 +143,10 @@ const TARGETS = [
         block: await readFile(join(HERE, "orig-subagent-schema-alpha2-block.txt"), "utf8"),
         replacement: await readFile(join(HERE, "patched-subagent-schema-alpha2-block.txt"), "utf8"),
         action: "replace"
-      }
+      },
+      { name: "original", detect: (d) => d.includes("...backgroundEnabled ? { run_in_background:"), block: await readFile(join(HERE, "orig-subagent-schema-block.txt"), "utf8"), action: "replace" }
     ],
-    patched: await readFile(join(HERE, "patched-subagent-schema-alpha2-block.txt"), "utf8"),
+    patched: await readFile(join(HERE, "patched-subagent-schema-block.txt"), "utf8"),
     backupPrefix: "index.js.bak-"
   },
   {
@@ -130,9 +161,10 @@ const TARGETS = [
         block: await readFile(join(HERE, "orig-subagent-request-alpha2-block.txt"), "utf8"),
         replacement: await readFile(join(HERE, "patched-subagent-request-alpha2-block.txt"), "utf8"),
         action: "replace"
-      }
+      },
+      { name: "original", detect: (d) => d.includes("...config.agentOptions !== void 0 ? { agentOptions: config.agentOptions } : {}"), block: await readFile(join(HERE, "orig-subagent-request-block.txt"), "utf8"), action: "replace" }
     ],
-    patched: await readFile(join(HERE, "patched-subagent-request-alpha2-block.txt"), "utf8"),
+    patched: await readFile(join(HERE, "patched-subagent-request-block.txt"), "utf8"),
     backupPrefix: "index.js.bak-"
   },
   {

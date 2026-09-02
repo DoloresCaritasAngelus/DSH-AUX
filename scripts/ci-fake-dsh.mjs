@@ -117,8 +117,6 @@ try {
 
   run("apply-patch (P1-P6/P11)", "bridge/apply-patch.mjs");
   run("session-ignorable (P7)", "bridge/patch-session-ignorable.mjs");
-  run("settings-dynamic-expose (P9)", "bridge/patch-settings-dynamic-expose.mjs");
-  run("settings-allowlist (P10)", "bridge/patch-settings-allowlist.mjs");
 
   if (APPLY) {
     // Simulate the start-hook self-heal so P7/P8 whitelist writes also happen,
