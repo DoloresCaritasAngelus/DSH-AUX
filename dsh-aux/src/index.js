@@ -48,9 +48,10 @@ import {
   projectSettings,
   validateAuxSettings
 } from "./config.js";
-import { AuxCallError, finishError, recordAuxEvent, recordDebugEvent, redactDebugData, sessionPatchCandidates } from "./events.js";
-import { syncAuxPlatformProjection, syncAuxStatusProjection } from "./projection.js";
+import { AuxCallError, finishError, recordAuxEvent, recordDebugEvent, redactDebugData, sessionPatchCandidates, recordImageLibraryEvent } from "./events.js";
+import { syncAuxPlatformProjection, syncAuxStatusProjection, syncAuxImageLibraryProjection, publishImageLibrary, publishImageLibraryToSession } from "./projection.js";
 import { publishPlatformStatus, publishPlatformStatusToSession } from "./status.js";
+import { collectImageLibrary } from "./images/image-library.js";
 import {
   auxPreStepReminderText,
   auxToolsGuide,
@@ -306,12 +307,15 @@ export class AuxLlmService extends Service {
       this._projectionCtx = projectionCtx;
       syncAuxStatusProjection(this);
       syncAuxPlatformProjection(this);
+      syncAuxImageLibraryProjection(this);
       // Seed the projection for already-attached sessions so the settings
-      // page can read status without executing a slash command.
+      // page can read status/image-library without executing a slash command.
       publishPlatformStatus(this).catch(() => {});
+      publishImageLibrary(this).catch(() => {});
     });
     ctx.on("session/created", (session) => {
       publishPlatformStatusToSession(this, session).catch(() => {});
+      publishImageLibraryToSession(this, session).catch(() => {});
     });
     ctx.inject(["commands"], (commandCtx) => {
       commandCtx.commands.register({
@@ -327,7 +331,7 @@ export class AuxLlmService extends Service {
         // actually run. Mirror of how official /goal /plan /preset /echo
         // register their argument-taking commands.
         input: {
-          hint: "status [--json] | history [N] | history full [N] | debug [N] | patch [--json] | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory"
+          hint: "status [--json] | history [N] | history full [N] | debug [N] | patch [--json] | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory | images [--json] | image delete|gc-orphans|retain|unretain <attachmentId>"
         },
         handler: ({ agent, rawInput }) => handleAuxCommand(this, agent, rawInput)
       });

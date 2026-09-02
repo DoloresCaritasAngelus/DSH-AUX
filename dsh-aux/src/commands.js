@@ -13,6 +13,10 @@ import { AUX_TASKS, resolvePrimaryRoute } from "./route.js";
 import { detectDshRoot } from "./bridge-locate.js";
 import { gcImages } from "./images/gc.js";
 import { handleMemoryCommand } from "./images/memory.js";
+import { collectImageLibrary, collectImageLibraryEntries } from "./images/image-library.js";
+import { deleteImage, deleteOrphans } from "./images/image-actions.js";
+import { loadRetained, setRetained } from "./images/retention.js";
+import { publishImageLibrary } from "./projection.js";
 import { collectPlatformStatus, publishPlatformStatus } from "./status.js";
 import { runVision } from "./tools/vision.js";
 import { runWebExtract } from "./tools/web-extract.js";
@@ -53,6 +57,117 @@ function formatStatusItem(entry) {
   return `${entry.key}: ${stateText}(${reason})${detail} [${mode}]${patch}`;
 }
 
+/** Parse common option pairs from an args array into a map. */
+function parseOptions(args, optionNames) {
+  const opts = {};
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg.startsWith("--")) {
+      const key = arg.slice(2);
+      if (optionNames.includes(key)) {
+        const value = args[i + 1];
+        if (value !== void 0 && !value.startsWith("--")) {
+          opts[key] = value;
+          i += 1;
+        } else {
+          opts[key] = true;
+        }
+      }
+    }
+  }
+  return opts;
+}
+
+/** Human text for one image-library entry. */
+function formatImageEntry(entry) {
+  const status = [];
+  if (entry.orphan) status.push("孤儿");
+  if (entry.shared) status.push("共享");
+  if (entry.retained) status.push("固化");
+  if (entry.memories.length > 0) status.push(`记忆×${entry.memories.length}`);
+  const refs = entry.ownerSessions.length > 0 ? entry.ownerSessions.join(",") : "无归属";
+  return `- ${entry.attachmentId}${entry.fileName ? ` (${entry.fileName})` : ""} [${status.join(" / ") || "正常"}] 引用:${refs}`;
+}
+
+/** /aux images — image library list/JSON. */
+export async function handleImagesCommand(service, args) {
+  const json = args.includes("--json");
+  const opts = parseOptions(args, ["filter", "query", "limit", "offset", "session"]);
+  const filter = opts.filter === true ? void 0 : String(opts.filter ?? "all");
+  const query = opts.query === true ? void 0 : String(opts.query ?? "");
+  const limit = opts.limit === true || opts.limit === void 0 ? void 0 : Number(opts.limit);
+  const offset = opts.offset === true || opts.offset === void 0 ? 0 : Number(opts.offset);
+  const sessionId = opts.session === true ? void 0 : String(opts.session ?? "");
+
+  const entries = await collectImageLibraryEntries(service, {
+    filter,
+    query: query === "" ? void 0 : query,
+    limit,
+    offset,
+    sessionId: sessionId === "" ? void 0 : sessionId
+  });
+  const snapshot = await collectImageLibrary(service);
+
+  if (json) {
+    return { kind: "success", text: JSON.stringify({ ...snapshot, entries }) };
+  }
+  const lines = [
+    `图片库: 共 ${snapshot.counts.total} 张(共享 ${snapshot.counts.shared}, 孤儿 ${snapshot.counts.orphan}, 固化 ${snapshot.counts.retained}, 有记忆 ${snapshot.counts.withMemory})`,
+    ...entries.map(formatImageEntry)
+  ];
+  return { kind: "success", text: lines.join("\n") };
+}
+
+/** /aux image <action> — delete/retain/orphan management. */
+export async function handleImageCommand(service, args) {
+  const action = args[0] ?? "";
+  const json = args.includes("--json");
+  const rest = args.slice(1).filter((arg) => arg !== "--json");
+  const force = rest.includes("--force");
+  const includeRetained = rest.includes("--include-retained");
+  const valueArgs = rest.filter((arg) => !arg.startsWith("--"));
+
+  const error = (text, code) => ({ kind: "error", text: code ? `${code}: ${text}` : text });
+
+  try {
+    if (action === "delete") {
+      const id = valueArgs[0];
+      if (id === void 0) return error("用法: /aux image delete <attachmentId> [--force]", "USAGE");
+      const result = await deleteImage(service, id, { force });
+      if (json) return { kind: "success", text: JSON.stringify(result) };
+      return { kind: "success", text: `已删除图片 ${result.deleted}${result.freedBytes ? ` (释放 ${result.freedBytes} bytes)` : ""}` };
+    }
+    if (action === "gc-orphans" || action === "reclaim") {
+      const result = await deleteOrphans(service, { includeRetained });
+      if (json) return { kind: "success", text: JSON.stringify(result) };
+      return {
+        kind: "success",
+        text: `孤儿回收完成: 删除 ${result.deleted.length} 张, 跳过 ${result.skipped.length} 张${result.freedBytes ? ` (释放 ${result.freedBytes} bytes)` : ""}`
+      };
+    }
+    if (action === "retain" || action === "unretain") {
+      const id = valueArgs[0];
+      if (id === void 0) return error(`用法: /aux image ${action} <attachmentId>`, "USAGE");
+      const retained = action === "retain";
+      const result = await setRetained(id, retained);
+      if (json) return { kind: "success", text: JSON.stringify({ ok: true, attachmentId: id, retained: result.retained }) };
+      return { kind: "success", text: retained ? `已固化图片 ${id}` : `已取消固化图片 ${id}` };
+    }
+    if (action === "list" || action === "ls" || action === "") {
+      return handleImagesCommand(service, args);
+    }
+    return error("用法: /aux image delete|gc-orphans|retain|unretain <attachmentId>", "USAGE");
+  } catch (err) {
+    const code = err?.code || "ERROR";
+    return error(err?.message ?? String(err), code);
+  } finally {
+    // Any successful mutation should refresh the projection.
+    if (["delete", "gc-orphans", "reclaim", "retain", "unretain"].includes(action)) {
+      publishImageLibrary(service).catch(() => {});
+    }
+  }
+}
+
 /** Handle the /aux command. */
 export async function handleAuxCommand(service, agent, rawInput) {
   const args = rawInput.trim().split(/\s+/).filter(Boolean);
@@ -75,6 +190,12 @@ export async function handleAuxCommand(service, agent, rawInput) {
   }
   if (sub === "memory") {
     return await handleMemoryCommand(args.slice(1));
+  }
+  if (sub === "images") {
+    return await handleImagesCommand(service, args.slice(1));
+  }
+  if (sub === "image") {
+    return await handleImageCommand(service, args.slice(1));
   }
   if (sub === "history") {
     return await handleHistoryCommand(service, agent, args.slice(1));

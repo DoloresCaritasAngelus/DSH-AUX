@@ -29,6 +29,10 @@ export const AUX_PLATFORM_EVENT = "aux/platform-status";
 export const AUX_STATUS_KEY = "aux-status";
 /** Projection key exposing the latest platform status snapshot for settings UI. */
 export const AUX_PLATFORM_KEY = "aux-platform";
+/** Session event type carrying an image-library snapshot (ignorable, non-surface). */
+export const AUX_IMAGE_LIBRARY_EVENT = "aux/image-library";
+/** Projection key exposing the latest image-library snapshot for the Web UI. */
+export const AUX_IMAGE_LIBRARY_KEY = "aux-image-library";
 /** Tool names registered by dsh-aux (hidden from the `minimal` preset). */
 export const AUX_TOOL_NAMES = Object.freeze(["vision_analyze", "web_extract", "web_crawl", "compress_text"]);
 /** Interval (ms) for reconciling the session-to-image ownership map against

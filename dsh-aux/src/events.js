@@ -4,7 +4,7 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/events
  */
-import { AUX_CALL_EVENT, AUX_DEBUG_EVENT, AUX_PLATFORM_EVENT } from "./config.js";
+import { AUX_CALL_EVENT, AUX_DEBUG_EVENT, AUX_PLATFORM_EVENT, AUX_IMAGE_LIBRARY_EVENT } from "./config.js";
 import { readPackageFile } from "./bridge-locate.js";
 
 /** One auxiliary call outcome. */
@@ -205,5 +205,24 @@ export async function recordPlatformEvent(service, session, data) {
     session.append(AUX_PLATFORM_EVENT, clean, void 0, { ignorable: true });
   } catch {
     /* platform status logging must never fail */
+  }
+}
+
+/**
+ * Log one image-library snapshot as an ignorable, non-surface session event.
+ * The Web UI reads it through the `aux-image-library` projection so it never
+ * needs to execute a slash command just to refresh the image panel.
+ */
+export async function recordImageLibraryEvent(service, session, data) {
+  if (session === void 0) return;
+  if (!await sessionEventsSupported(service)) return;
+  try {
+    const clean = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== void 0) clean[key] = value;
+    }
+    session.append(AUX_IMAGE_LIBRARY_EVENT, clean, void 0, { ignorable: true });
+  } catch {
+    /* image-library logging must never fail */
   }
 }
