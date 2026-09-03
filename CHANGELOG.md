@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.2 (2026-09-03) — 图片库发布 + 诊断/补丁瘦身
 
 - **一键打补丁可靠性**:
   - `/aux patch` 现在先探测真实 DSH 部署根,并以部署根为 `cwd` + 显式 `DSH_ROOT` 运行 `apply-patch` / `self-heal`,避免误打仓库内旧测试 `node_modules`。
