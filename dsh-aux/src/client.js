@@ -1549,7 +1549,12 @@ window.__ModuleLoader__.load({
 			const year = date.getFullYear();
 			if (String(activeLocaleId()).toLowerCase().startsWith("en")) {
 				const utcDate = new Date(Date.UTC(year, date.getMonth(), date.getDate(), 12));
-				return (includeYear ? year + " " : "") + utcDate.toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric" }) + (includeYear ? ", " + year : "");
+				return utcDate.toLocaleDateString("en-US", {
+					timeZone: "UTC",
+					month: "long",
+					day: "numeric",
+					...(includeYear ? { year: "numeric" } : {})
+				});
 			}
 			return (includeYear ? year + "年" : "") + month + "月" + day + "日";
 		}
