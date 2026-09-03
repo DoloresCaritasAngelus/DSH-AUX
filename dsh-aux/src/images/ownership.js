@@ -7,6 +7,31 @@
 import { readFile as readFileText, rename as renameFile, unlink as unlinkFile, writeFile as writeFileText } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 
+/** Path to the workspace registry state (archive set). */
+export function workspaceRegistryPath() {
+  const home = process.env.DSH_HOME || (process.env.HOME ? process.env.HOME + "/.dsh" : void 0);
+  return home === void 0 ? void 0 : home + "/storages/workspace.json";
+}
+
+/**
+ * Read the archived session id set from the DSH workspace registry.
+ * Missing/corrupt file degrades to an empty set; archiving is an optional
+ * display/readability classification and must never break image collection.
+ */
+export async function loadArchivedSessionIds() {
+  const path = workspaceRegistryPath();
+  if (path === void 0) return new Set();
+  try {
+    const raw = await readFileText(path, "utf8");
+    const parsed = JSON.parse(raw);
+    const archived = parsed?.global?.archivedSessionIds;
+    if (!Array.isArray(archived)) return new Set();
+    return new Set(archived.filter((id) => typeof id === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
 /** Path to the session→attachment ownership map. */
 export function sessionImagesPath() {
   const home = process.env.DSH_HOME || (process.env.HOME ? process.env.HOME + "/.dsh" : void 0);

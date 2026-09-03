@@ -10,7 +10,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **319**(2026-09-02)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **360**(2026-09-03)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 
@@ -42,6 +42,11 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/images-review.test.js` | 图片归属/回收/记忆 |
 | `tests/lifecycle-durability.test.js` | 生命周期持久化损坏恢复/空条目清理/共享引用回收/加载重试 |
 | `tests/memory-race.test.js` | 图片记忆并发/竞态 |
+| `tests/image-retention.test.js` | 图片固化保留 JSON(原子写/损坏/并发) |
+| `tests/image-library.test.js` | 图库聚合/搜索/过滤/孤儿/共享/记忆 |
+| `tests/image-actions.test.js` | 单张删除/孤儿回收/ownership 清理/符号链接安全 |
+| `tests/image-commands.test.js` | `/aux images` 与 `/aux image` 命令层 |
+| `tests/image-locate.test.js` | 图片定位:最近 user/message seq 与 vision_analyze callId/callSeq |
 | `tests/readme-sync.test.js` | U1:包内 README == 根 README 生成快照(防漂移) |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
 | `tests/subagent-route.test.js` | subagent 路由判定(native/manual/vision-aware) |

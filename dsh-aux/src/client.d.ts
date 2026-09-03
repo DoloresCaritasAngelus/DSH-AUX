@@ -76,6 +76,123 @@ export interface AuxPlatformProjection {
     }>;
 }
 
+/** One image-library memory record shown in the UI. */
+export interface ImageLibraryMemory {
+    sessionId: string;
+    question: string;
+    summary: string;
+    at: number;
+}
+
+/** One image-library entry shown by the gallery panel. */
+export interface ImageLibraryEntry {
+    kind: string;
+    attachmentId: string;
+    hash: string;
+    mediaType?: string;
+    bytes?: number;
+    mtimeMs?: number;
+    /**
+     * Optional display/preview dimensions. Not currently emitted by the host;
+     * kept as an opt-in extension point so future server-side metadata can
+     * surface without changing the UI contract.
+     */
+    width?: number;
+    height?: number;
+    ownerSessions: string[];
+    ownerLiveSessions: string[];
+    ownerArchivedSessions?: string[];
+    referenceCount: number;
+    shared: boolean;
+    orphan: boolean;
+    archived?: boolean;
+    retained: boolean;
+    memories: ImageLibraryMemory[];
+    firstSeenAt?: number;
+    lastSeenAt?: number;
+    readableBySessionId?: string;
+    fileName?: string;
+}
+
+/** Snapshot returned by `/aux images --json` / `aux-image-library` projection. */
+export interface ImageLibrarySnapshot {
+    generatedAt: number;
+    settings: {
+        imageRetentionDays: number;
+        imageAutoCleanEnabled: boolean;
+    };
+    counts: {
+        total: number;
+        orphan: number;
+        archived: number;
+        shared: number;
+        retained: number;
+        withMemory: number;
+    };
+    entries: ImageLibraryEntry[];
+}
+
+/** One located anchor returned by `/aux image locate <id> --json`. */
+export interface ImageLibraryAnchor {
+    sessionId: string;
+    messageSeq: number | null;
+    callId: string | null;
+    callSeq: number | null;
+}
+
+/** Wire result of `/aux image locate <id> --json`. */
+export interface AuxImageLocateResult {
+    attachmentId: string;
+    found: boolean;
+    anchors: ImageLibraryAnchor[];
+}
+
+/**
+ * Session services actually consumed by the image library components
+ * (projection reads, attachment reads, session titles, and precise open/load).
+ */
+export interface AuxImageLibrarySessions {
+    open(sessionId: string): void;
+    binding(sessionId: string): {
+        session?: {
+            projections?: {
+                faceOf(key: string): {
+                    getSnapshot(): unknown;
+                };
+            };
+            readAttachment(attachmentId: string): Promise<{
+                ok: boolean;
+                value?: {
+                    data: Uint8Array;
+                    attachment?: { mediaType?: string };
+                };
+            }>;
+            loadThrough(seq: number): Promise<void>;
+        };
+    } | undefined;
+    list: {
+        getSnapshot(): {
+            ids: string[];
+            byId: Record<string, {
+                id?: string;
+                sessionId?: string;
+                displayTitle?: string;
+                title?: string;
+            }>;
+        };
+    };
+}
+
+/** Props supplied to the sidebar footer image-library action. */
+export interface AuxImageLibraryButtonProps {
+    wide: boolean;
+    sessions: AuxImageLibrarySessions;
+    runAuxCommand: (line: string) => Promise<{
+        kind: 'success' | 'error';
+        text?: string;
+    }>;
+}
+
 /** One reasoning-effort entry advertised for an exact model route. */
 export interface AuxModelReasoningEffort {
     id: string;

@@ -17,6 +17,19 @@
   - `doctor` / `target.js` / `install-dsh-version` 收窄到 `0.1.2-alpha.2` / `0.1.2-alpha.3`。
 - **项目文档**:
   - 新增 `PROJECT.md`(人类友好)与 `PROJECT.AI.md`(AI/代理友好)长期项目总览,并在 README 文档地图同步。
+- **图片库(IMAGE-LIBRARY)**:
+  - 服务端: `retention.js` / `image-library.js` / `image-actions.js`,管理 image-retention.json、聚合对象库/归属/记忆、安全删除与孤儿回收。
+  - 命令: `/aux images` 与 `/aux image delete|gc-orphans|retain|unretain`。
+  - 投影/事件: `aux-image-library` 投影 + `aux/image-library` ignorable 事件。
+  - 客户端: 侧边栏“图库”入口 + 浮层面板(网格/缩略图/搜索/过滤/复选/批量/详情/会话跳转)。
+  - 新增 `/aux image locate <attachmentId> [--session <id>] [--json]`:定位图片最近出现的 `user/message` seq 与 `vision_analyze` tool/call callId/callSeq,供详情页“去对话/去轨迹”跳转。
+  - 客户端体验改进:小/中/大缩略图档位真实生效且不再固定裁成正方形;详情改为居中大弹窗(可拖拽/缩放、记忆分块折叠、元数据可读);打开面板优先读 `aux-image-library` 投影,不再默认在聊天流刷 JSON。
+  - 图库新增分组/排序视图:支持按日期(今天按 6 小时分桶、昨天/本周/本月/今年/往年)或按会话分组;分组时显示可折叠粘性组头(组名 + 数量),支持组内排序与独立组间排序;重复图片在所属会话组内均出现,孤儿组始终置顶。
+  - 图库新增“已归档”状态:归档会话的图片不再被误判为孤儿,统计/筛选/会话分组中单独显示“已归档”;有 live owner 时缩略图优先从 live 会话读取,仅归档引用时保留占位并展示归档标记。
+  - 图库支持鼠标拖拽框选多张图片(支持 Shift/Ctrl 追加选择),批量操作更顺手。
+  - 图库维护:抽取公共对象扫描到 `images/fs-utils.js`、统一 retention 读写到 `retention.js`、修正 `locate --session` 参数边界、新增图库快照契约测试。
+  - 图库删除安全:只有被会话引用的图片才走 `--force`(二次确认文案显示引用数);无引用图片直接普通删除;批量栏提示“含过滤外 N 项”。
+  - 测试基线 356 -> 360。
 
 ## 0.4.1-FIX1 (2026-09-01) — alpha.3 设置页/状态芯片修复
 
