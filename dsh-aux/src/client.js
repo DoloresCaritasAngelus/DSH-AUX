@@ -51,6 +51,7 @@ window.__ModuleLoader__.load({
 			".ax-row label{font-size:12px;color:var(--dsw-alias-label-tertiary)}",
 			".ax-row input,.ax-row select{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-strong);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}",
 			".ax-row input:focus-visible,.ax-row select:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:1px}",
+			".ax-hint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}",
 			".ax-field-head{display:flex;align-items:center;gap:6px;min-width:0}",
 			".ax-field-head[role=button]{cursor:pointer;border-radius:4px;padding:2px 4px;margin:-2px -4px}",
 			".ax-field-head[role=button]:hover{background:var(--dsw-alias-interactive-bg-hover)}",
@@ -244,6 +245,7 @@ window.__ModuleLoader__.load({
 			"skill.mode.report-ondemand": "report-ondemand (仅报告,可按需取原文)",
 			"skill.mode.auto": "auto (未来)",
 			"debug.fullToolTrace": "记录完整工具调用/反馈 (fullToolTrace)",
+			"debug.fullToolTraceHint": "开启后会写入 aux/debug 会话事件;若 dsh-session ignorable 补丁缺失,事件不会写入,请先重打补丁并重启。",
 			"debug.maxDebugEventBytes": "单条 debug 事件大小上限 (字节)",
 			"debug.debugEventsInHistory": "debug 事件混入 /aux history",
 			"debug.redactSecrets": "记录时排除疑似密钥/PII (redactSecrets)",
@@ -403,10 +405,6 @@ window.__ModuleLoader__.load({
 			"imageLibrary.groupSortTitleZa": "标题(Z→A)",
 			"imageLibrary.groupSortRefsDesc": "引用数(多→少)",
 			"imageLibrary.dateToday": "今天",
-			"imageLibrary.dateYesterday": "昨天",
-			"imageLibrary.dateThisWeek": "本周",
-			"imageLibrary.dateThisMonth": "本月",
-			"imageLibrary.dateThisYear": "今年",
 			"imageLibrary.groupCount": "{n} 项",
 			"imageLibrary.groupCollapse": "折叠此组",
 			"imageLibrary.groupExpand": "展开此组"
@@ -475,6 +473,7 @@ window.__ModuleLoader__.load({
 			"skill.mode.report-ondemand": "report-ondemand (report only, original on demand)",
 			"skill.mode.auto": "auto (future)",
 			"debug.fullToolTrace": "Record full tool calls/results (fullToolTrace)",
+			"debug.fullToolTraceHint": "Enabling writes aux/debug session events; if the dsh-session ignorable patch is missing, events are not written — re-apply patches and restart first.",
 			"debug.maxDebugEventBytes": "Max debug event bytes",
 			"debug.debugEventsInHistory": "Include debug events in /aux history",
 			"debug.redactSecrets": "Redact likely secrets/PII when recording (redactSecrets)",
@@ -634,10 +633,6 @@ window.__ModuleLoader__.load({
 			"imageLibrary.groupSortTitleZa": "Title (Z→A)",
 			"imageLibrary.groupSortRefsDesc": "References (high→low)",
 			"imageLibrary.dateToday": "Today",
-			"imageLibrary.dateYesterday": "Yesterday",
-			"imageLibrary.dateThisWeek": "This week",
-			"imageLibrary.dateThisMonth": "This month",
-			"imageLibrary.dateThisYear": "This year",
 			"imageLibrary.groupCount": "{n} items",
 			"imageLibrary.groupCollapse": "Collapse group",
 			"imageLibrary.groupExpand": "Expand group"
@@ -1409,6 +1404,7 @@ window.__ModuleLoader__.load({
 						)
 					),
 					switchRow(t("debug.fullToolTrace"), draft?.debug?.fullToolTrace === true, false, (e) => setDebug("fullToolTrace", e.target.checked)),
+					react.createElement("div", { className: "ax-hint" }, __t("debug.fullToolTraceHint")),
 					react.createElement("div", { className: "ax-row" },
 						react.createElement("label", { htmlFor: "ax-debug-maxDebugEventBytes" }, t("debug.maxDebugEventBytes")),
 						react.createElement("input", {
@@ -1448,10 +1444,8 @@ window.__ModuleLoader__.load({
 		const GROUP_ORPHAN = "__orphan__";
 		const GROUP_ARCHIVED = "__archived__";
 		const GROUP_UNKNOWN = "__unknown__";
-		const GROUP_YESTERDAY = "__yesterday__";
-		const GROUP_THIS_WEEK = "__thisweek__";
-		const GROUP_THIS_MONTH = "__thismonth__";
-		const GROUP_THIS_YEAR = "__thisyear__";
+		/** 30-day rolling cutoff used by date grouping: "recent day" vs "month". */
+		const DATE_GROUP_RECENT_DAYS = 30;
 		// Synthetic session-group ids. Orphan/archived are pinned above ordinary
 		// session groups; if future group types need a position too, add them to
 		// this ordered table instead of hard-coding another if/else in sorting.
@@ -1530,6 +1524,46 @@ window.__ModuleLoader__.load({
 			}
 		}
 
+		/** Active locale id: prefers the real locale service, falls back to navigator. */
+		function activeLocaleId() {
+			try {
+				if (__locale && typeof __locale.getLocale === "function") {
+					const snapshot = __locale.getLocale();
+					if (snapshot && typeof snapshot.active === "string") return snapshot.active;
+				}
+			} catch {
+				/* locale read is best-effort */
+			}
+			if (typeof navigator === "undefined") return "zh";
+			for (const tag of (navigator.languages || []).concat([navigator.language])) {
+				const primary = String(tag || "").toLowerCase().split("-")[0];
+				if (primary === "zh" || primary === "en") return primary;
+			}
+			return "zh";
+		}
+
+		/** Locale-aware short date label for a day bucket. */
+		function dateDayLabel(date, includeYear = false) {
+			const month = date.getMonth() + 1;
+			const day = date.getDate();
+			const year = date.getFullYear();
+			if (String(activeLocaleId()).toLowerCase().startsWith("en")) {
+				const utcDate = new Date(Date.UTC(year, date.getMonth(), date.getDate(), 12));
+				return (includeYear ? year + " " : "") + utcDate.toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric" }) + (includeYear ? ", " + year : "");
+			}
+			return (includeYear ? year + "年" : "") + month + "月" + day + "日";
+		}
+
+		/** Locale-aware month label for a month bucket. */
+		function dateMonthLabel(date) {
+			const year = date.getFullYear();
+			const month = date.getMonth() + 1;
+			if (String(activeLocaleId()).toLowerCase().startsWith("en")) {
+				return new Date(Date.UTC(year, date.getMonth(), 1, 12)).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", year: "numeric" });
+			}
+			return year + "年" + month + "月";
+		}
+
 		/** Readable label for one image entry's modification time. */
 		function imageTimeLabel(entry) {
 			return formatDateTime(entry.mtimeMs);
@@ -1563,23 +1597,39 @@ window.__ModuleLoader__.load({
 			const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 			const startToday = startOfDay(now);
 			const diffDays = Math.floor((startToday - startOfDay(date)) / 86400000);
+			// 策略:
+			//   - 今天:按 6 小时桶(保持最近粒度)
+			//   - 距今 <= 30 天且非今天:按具体日期分组
+			//   - 距今 > 30 天:按自然月分组(同月一张图时用 9月, 跨年时 2025年9月)
+			//   - 更远只跨年份:按年分组(历史年份)
+			// 不再用 本周/本月/今年 这种“会随日历瞬间吞掉很多图”的粗粒度桶。
 			if (diffDays === 0) {
 				const bucket = Math.floor(date.getHours() / 6); // 0..3
 				const bucketStart = bucket * 6;
 				const label = __t("imageLibrary.dateToday") + " " + String(bucketStart).padStart(2, "0") + ":00";
 				return { id: "today-" + bucket, label, value: startToday + bucketStart * 3600000 };
 			}
-			if (diffDays === 1) {
-				const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
-				return { id: GROUP_YESTERDAY, label: __t("imageLibrary.dateYesterday"), value: startOfDay(yesterday) };
+			if (diffDays <= DATE_GROUP_RECENT_DAYS) {
+				const dayStart = startOfDay(date);
+				const includeYear = date.getFullYear() !== now.getFullYear();
+				return {
+					id: "day-" + date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate(),
+					label: dateDayLabel(date, includeYear),
+					value: dayStart
+				};
 			}
-			const startWeek = new Date(now); startWeek.setHours(0,0,0,0); startWeek.setDate(now.getDate() - now.getDay());
-			if (date.getTime() >= startWeek.getTime()) return { id: GROUP_THIS_WEEK, label: __t("imageLibrary.dateThisWeek"), value: startWeek.getTime() };
-			const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-			if (date.getTime() >= startMonth.getTime()) return { id: GROUP_THIS_MONTH, label: __t("imageLibrary.dateThisMonth"), value: startMonth.getTime() };
 			const startYear = new Date(now.getFullYear(), 0, 1);
-			if (date.getTime() >= startYear.getTime()) return { id: GROUP_THIS_YEAR, label: __t("imageLibrary.dateThisYear"), value: startYear.getTime() };
-			return { id: "year-" + date.getFullYear(), label: String(date.getFullYear()), value: new Date(date.getFullYear(), 0, 1).getTime() };
+			if (date.getTime() < startYear.getTime()) {
+				// 往年:按年份分组,避免几十个 2025 年月组/日期组淹没列表。
+				return { id: "year-" + date.getFullYear(), label: String(date.getFullYear()), value: new Date(date.getFullYear(), 0, 1).getTime() };
+			}
+			// 当年但超过 30 天:按月份分组;1 月/2 月等月份标签带年份以避免歧义。
+			const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+			return {
+				id: "month-" + date.getFullYear() + "-" + (date.getMonth() + 1),
+				label: dateMonthLabel(date),
+				value: monthStart.getTime()
+			};
 		}
 
 		/** Expand multi-owner entries into occurrences for session grouping. */
