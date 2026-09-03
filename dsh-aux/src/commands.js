@@ -7,6 +7,7 @@ import { AUX_CALL_EVENT, AUX_DEBUG_EVENT, AUX_SETTINGS_NAMESPACE } from "./confi
 import childProcess from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 import { AUX_TASKS, resolvePrimaryRoute } from "./route.js";
 import { detectDshRoot } from "./bridge-locate.js";
@@ -335,6 +336,8 @@ export async function handleDebugCommand(service, agent, args) {
  *   { ok, restartRequired, steps: [{ name, ok, output, error? }] }
  */
 export async function handlePatchCommand(service, json = false) {
+  // commands.js lives at <repo>/dsh-aux/src/commands.js; two URL levels up
+  // from the file resolves to the repository root (where bridge/ lives).
   const repo = fileURLToPath(new URL("../..", import.meta.url));
   // 每次调用时再 promisify,便于测试在动态 import 前/后替换 child_process.execFile。
   const execFileAsync = promisify(childProcess.execFile);
@@ -344,8 +347,8 @@ export async function handlePatchCommand(service, json = false) {
   const dshRoot = detectDshRoot() ?? repo;
   const patchCwd = dshRoot;
   const stepDefs = [
-    ["apply-patch", ["bridge/apply-patch.mjs"]],
-    ["self-heal", ["bridge/self-heal.mjs"]]
+    ["apply-patch", [join(repo, "bridge/apply-patch.mjs")]],
+    ["self-heal", [join(repo, "bridge/self-heal.mjs")]]
   ];
   const output = [];
   const steps = [];
