@@ -101,14 +101,14 @@ export async function handleImagesCommand(service, args) {
   const offset = opts.offset === true || opts.offset === void 0 ? 0 : Number(opts.offset);
   const sessionId = opts.session === true ? void 0 : String(opts.session ?? "");
 
+  const snapshot = await collectImageLibrary(service);
   const entries = await collectImageLibraryEntries(service, {
     filter,
     query: query === "" ? void 0 : query,
     limit,
     offset,
     sessionId: sessionId === "" ? void 0 : sessionId
-  });
-  const snapshot = await collectImageLibrary(service);
+  }, snapshot.entries);
 
   if (json) {
     return { kind: "success", text: JSON.stringify({ ...snapshot, entries }) };

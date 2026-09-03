@@ -278,11 +278,15 @@ export async function collectImageLibrary(service) {
  * @param {number} [opts.limit]
  * @param {number} [opts.offset]
  * @param {string} [opts.sessionId]
+ * @param {ImageLibraryEntry[]} [prebuiltEntries] Optional already-built
+ *   entries (e.g. from collectImageLibrary) to avoid a second full scan.
  * @returns {Promise<ImageLibraryEntry[]>}
  */
-export async function collectImageLibraryEntries(service, opts = {}) {
+export async function collectImageLibraryEntries(service, opts = {}, prebuiltEntries) {
   const options = opts || {};
-  let result = await buildImageLibraryEntries(service);
+  let result = Array.isArray(prebuiltEntries)
+    ? prebuiltEntries
+    : await buildImageLibraryEntries(service);
 
   if (options.sessionId !== void 0 && options.sessionId !== null && options.sessionId !== "") {
     const sessionId = String(options.sessionId);
