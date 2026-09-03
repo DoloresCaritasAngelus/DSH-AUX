@@ -338,6 +338,9 @@ window.__ModuleLoader__.load({
 			"imageLibrary.filterRetained": "仅固化",
 			"imageLibrary.filterMemory": "仅有记忆",
 			"imageLibrary.selected": "已选 {n}",
+			"imageLibrary.selectedOutsideFilter": "（含过滤外 {n} 项）",
+			"imageLibrary.confirmDeleteReferenced": "所选图片中有 {n} 项被会话引用，确认将解除引用并物理删除？",
+			"imageLibrary.confirmDeleteOneReferenced": "该图片被 {n} 个会话引用，确认将解除引用并物理删除？",
 			"imageLibrary.selectAll": "全选",
 			"imageLibrary.invert": "反选",
 			"imageLibrary.clear": "清空",
@@ -566,6 +569,9 @@ window.__ModuleLoader__.load({
 			"imageLibrary.filterRetained": "Retained",
 			"imageLibrary.filterMemory": "Memory",
 			"imageLibrary.selected": "{n} selected",
+			"imageLibrary.selectedOutsideFilter": " (includes {n} outside filter)",
+			"imageLibrary.confirmDeleteReferenced": "{n} selected images are referenced by sessions. Confirm removing references and deleting them?",
+			"imageLibrary.confirmDeleteOneReferenced": "This image is referenced by {n} sessions. Confirm removing references and deleting it?",
 			"imageLibrary.selectAll": "Select all",
 			"imageLibrary.invert": "Invert",
 			"imageLibrary.clear": "Clear",
@@ -1776,6 +1782,9 @@ window.__ModuleLoader__.load({
 				return true;
 			});
 			const counts = data?.counts ?? { total: 0, orphan: 0, archived: 0, shared: 0, retained: 0, withMemory: 0 };
+			const visibleSelected = entries.filter((entry) => selected.has(entry.attachmentId)).length;
+			const outsideCount = selected.size - visibleSelected;
+			const selectedReferencedCount = (data?.entries ?? []).filter((entry) => selected.has(entry.attachmentId) && (entry.ownerSessions || []).length > 0).length;
 			const groups = buildGroups(entries, groupBy, sortKey, groupSortKey, sessions);
 			const toggleGroup = (id) => {
 				setCollapsedGroups((prev) => {
@@ -1916,12 +1925,19 @@ window.__ModuleLoader__.load({
 			const deleteSelected = async () => {
 				const ids = [...selected];
 				if (ids.length === 0) return;
-				if (!window.confirm(__t("imageLibrary.confirmDelete"))) return;
+				const entryById = new Map((data?.entries ?? []).map((entry) => [entry.attachmentId, entry]));
+				const referencedIds = ids.filter((id) => (entryById.get(id)?.ownerSessions || []).length > 0);
+				const referencedCount = referencedIds.length;
+				const outsideHint = outsideCount > 0 ? __t("imageLibrary.selectedOutsideFilter").replace("{n}", String(outsideCount)) : "";
+				if (referencedCount > 0) {
+					if (!window.confirm(__t("imageLibrary.confirmDeleteReferenced").replace("{n}", String(referencedCount)) + outsideHint)) return;
+				} else if (!window.confirm(__t("imageLibrary.confirmDelete") + outsideHint)) return;
 				setBusy(true);
 				setNotice(null);
 				try {
 					for (const id of ids) {
-						const result = await runAuxCommand("/aux image delete " + id + " --force");
+						const isReferenced = referencedIds.includes(id);
+						const result = await runAuxCommand("/aux image delete " + id + (isReferenced ? " --force" : ""));
 						if (result.kind !== "success") throw new Error(result.text || "delete failed");
 					}
 					setSelected(new Set());
@@ -2029,7 +2045,7 @@ window.__ModuleLoader__.load({
 						) : null
 					),
 					react.createElement("span", { className: "ax-image-bulk" },
-						__t("imageLibrary.selected").replace("{n}", String(selected.size)),
+						__t("imageLibrary.selected").replace("{n}", String(selected.size)) + (outsideCount > 0 ? __t("imageLibrary.selectedOutsideFilter").replace("{n}", String(outsideCount)) : ""),
 						react.createElement("button", { className: "ax-image-action", onClick: selectAllVisible }, __t("imageLibrary.selectAll")),
 						react.createElement("button", { className: "ax-image-action", onClick: invertVisible }, __t("imageLibrary.invert")),
 						react.createElement("button", { className: "ax-image-action", onClick: () => setSelected(new Set()) }, __t("imageLibrary.clear")),
@@ -2247,9 +2263,13 @@ window.__ModuleLoader__.load({
 						react.createElement("span", { className: "ax-image-modal-actions" },
 							react.createElement("button", { className: "ax-image-action", onClick: () => toggleRetain(entry) }, entry.retained ? __t("imageLibrary.unretain") : __t("imageLibrary.retain")),
 							react.createElement("button", { className: "ax-image-action ax-image-action-danger", onClick: async () => {
-								if (window.confirm(__t("imageLibrary.confirmDelete"))) {
+								const referenced = (entry.ownerSessions || []).length;
+								const confirmText = referenced > 0
+									? __t("imageLibrary.confirmDeleteOneReferenced").replace("{n}", String(referenced))
+									: __t("imageLibrary.confirmDelete");
+								if (window.confirm(confirmText)) {
 									try {
-										const result = await runAuxCommand("/aux image delete " + entry.attachmentId + " --force");
+										const result = await runAuxCommand("/aux image delete " + entry.attachmentId + (referenced > 0 ? " --force" : ""));
 										if (result.kind !== "success") throw new Error(result.text || "delete failed");
 										onCloseDetail();
 									} catch (err) {
