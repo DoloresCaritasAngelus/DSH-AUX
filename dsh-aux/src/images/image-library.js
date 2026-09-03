@@ -8,6 +8,7 @@ import { readFile as readFileText } from "node:fs/promises";
 import { liveSessionIds, loadArchivedSessionIds, loadSessionImages } from "./ownership.js";
 import { imageMemoryPath } from "./memory.js";
 import { scanObjectFiles } from "./fs-utils.js";
+import { loadRetained } from "./retention.js";
 
 const HASH_ID_RE = /^sha256:([a-f0-9]{64})$/;
 const OBJECT_FILE_RE = /^([a-f0-9]{64})(?:\.(png|jpg|jpeg|webp|gif))?$/;
@@ -22,12 +23,6 @@ const EXTENSION_MEDIA_TYPES = Object.freeze({
 /** Resolve the DSH home used by AUX attachment paths. */
 function homePath() {
   return process.env.DSH_HOME || (process.env.HOME ? process.env.HOME + "/.dsh" : void 0);
-}
-
-/** Path to the AUX-owned retention marks file (local helper for this module). */
-function imageRetentionPath() {
-  const home = homePath();
-  return home === void 0 ? void 0 : home + "/attachments/v1/image-retention.json";
 }
 
 /**
@@ -57,26 +52,6 @@ async function readImageMemoryEntries() {
     return parsed.entries.filter((entry) => entry !== null && typeof entry === "object");
   } catch {
     return [];
-  }
-}
-
-/**
- * Read the retained set directly from disk, matching the eventual
- * `retention.js` format without importing that module yet.
- *
- * @returns {Promise<Set<string>>}
- */
-async function readRetainedFromDisk() {
-  const path = imageRetentionPath();
-  if (path === void 0) return new Set();
-  try {
-    const raw = await readFileText(path, "utf8");
-    const parsed = JSON.parse(raw);
-    const retained = parsed === null || typeof parsed !== "object" ? void 0 : parsed.retained;
-    if (!Array.isArray(retained)) return new Set();
-    return new Set(retained.filter((id) => typeof id === "string"));
-  } catch {
-    return new Set();
   }
 }
 
@@ -161,7 +136,7 @@ async function buildImageLibraryEntries(service) {
     liveSessionIds(service),
     loadArchivedSessionIds().catch(() => new Set()),
     readImageMemoryEntries(),
-    readRetainedFromDisk(),
+    loadRetained(),
     home === void 0 ? [] : scanObjectFiles(home + "/attachments/v1/objects")
   ]);
   // Archived sessions are hidden from UI surfaces but their logs still appear
