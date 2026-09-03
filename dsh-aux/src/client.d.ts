@@ -33,6 +33,18 @@ export interface AuxCallHistoryEvent {
     };
 }
 
+/** One patch-ledger entry shown by the diagnostics panel. */
+export interface AuxPatchLedgerEntry {
+    id: string;
+    group: string;
+    pkg: string;
+    description: string;
+    state: 'installed' | 'missing' | 'not-applicable' | 'unknown';
+    installed: boolean;
+    required: boolean;
+    present: boolean;
+}
+
 /** Wire value of the `aux-platform` projection used by the diagnostics panel. */
 export interface AuxPlatformProjection {
     generatedAt?: number;
@@ -42,6 +54,7 @@ export interface AuxPlatformProjection {
         protected?: string[];
     };
     eventsSupported?: boolean;
+    patchLedger?: AuxPatchLedgerEntry[];
     items: Array<{
         key: string;
         kind?: 'tool' | 'bridge';

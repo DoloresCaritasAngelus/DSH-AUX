@@ -248,9 +248,8 @@ export class AuxLlmService extends Service {
       dshSettings.installSettingsSection(ctx, AUX_SETTINGS_NAMESPACE, AUX_SETTINGS_SCHEMA, projectSettings({}), {
         ...settingsHooks,
         // The settings page is a first-class capability of this plugin:
-        // declare the namespace exposed to the Web configuration client
-        // (requires the dynamic-expose patch on dsh-settings + api-proxy,
-        // see bridge/patch-settings-dynamic-expose.mjs).
+        // declare the namespace exposed to the Web configuration client.
+        // Alpha line is native; legacy used rc.6 dynamic-expose patch (retired).
         exposedToWeb: true
       });
     } else if (typeof ctx.inject === "function") {

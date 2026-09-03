@@ -83,7 +83,15 @@ window.__ModuleLoader__.load({
 			".ax-status-issue{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;font-size:12px;line-height:18px}",
 			".ax-status-issue-active{border-color:var(--dsw-alias-state-warn-primary);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 8%,transparent)}",
 			".ax-status-issue-text{flex:1;min-width:0;white-space:pre-line;overflow-wrap:anywhere}",
-			".ax-status-summary{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}"
+			".ax-status-summary{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}",
+			".ax-patch-ledger{margin-top:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden}",
+			".ax-patch-ledger-title{padding:8px 12px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2)}",
+			".ax-patch-ledger-table{width:100%;border-collapse:collapse;font-size:12px;line-height:18px}",
+			".ax-patch-ledger-table th{text-align:left;padding:6px 10px;color:var(--dsw-alias-label-tertiary);font-weight:500;border-bottom:1px solid var(--dsw-alias-border-l2)}",
+			".ax-patch-ledger-table td{padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);vertical-align:top}",
+			".ax-patch-ledger-table tr:last-child td{border-bottom:0}",
+			".ax-patch-ledger-table .ax-patch-desc{max-width:280px;min-width:180px;white-space:normal;overflow-wrap:anywhere}",
+			".ax-patch-pkg{font-family:var(--dsw-alias-font-mono,monospace);font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}"
 		].join("");
 		const tagId = "@dolorescaritasangelus/dsh-aux/Aux.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
@@ -187,6 +195,16 @@ window.__ModuleLoader__.load({
 			"status.diagnostics": "诊断与修复",
 			"status.diagnostics.desc": "补丁、依赖或配置缺失时,在这里一键修复。",
 			"status.noIssues": "所有可选能力状态正常。",
+			"status.patchLedger.title": "补丁清单",
+			"status.patchLedger.desc": "当前 DSH 所需本地补丁的逐项状态。",
+			"status.patchLedger.id": "补丁",
+			"status.patchLedger.group": "编号",
+			"status.patchLedger.pkg": "目标包",
+			"status.patchLedger.state": "状态",
+			"status.patchLedger.state.installed": "已安装",
+			"status.patchLedger.state.missing": "缺失",
+			"status.patchLedger.state.not-applicable": "不适用",
+			"status.patchLedger.state.unknown": "未知",
 			"status.restartRequired": "补丁已写入,重启 DSH 后生效",
 			"status.state.enabled": "可用",
 			"status.state.disabled": "已关闭",
@@ -318,6 +336,16 @@ window.__ModuleLoader__.load({
 			"status.diagnostics": "Diagnostics & Repair",
 			"status.diagnostics.desc": "Fix missing patches, dependencies, or configuration here.",
 			"status.noIssues": "All optional capabilities are healthy.",
+			"status.patchLedger.title": "Patch ledger",
+			"status.patchLedger.desc": "Per-patch status for the local DSH modifications.",
+			"status.patchLedger.id": "Patch",
+			"status.patchLedger.group": "ID",
+			"status.patchLedger.pkg": "Package",
+			"status.patchLedger.state": "State",
+			"status.patchLedger.state.installed": "Installed",
+			"status.patchLedger.state.missing": "Missing",
+			"status.patchLedger.state.not-applicable": "N/A",
+			"status.patchLedger.state.unknown": "Unknown",
 			"status.restartRequired": "Patches written; restart DSH to apply",
 			"status.state.enabled": "Enabled",
 			"status.state.disabled": "Disabled",
@@ -969,6 +997,34 @@ window.__ModuleLoader__.load({
 				const warnings = Array.isArray(status.warnings) ? status.warnings : [];
 				const attentionCount = issues.length + warnings.length;
 				const summary = t("status.overview").replace("{enabled}", String(enabledCount)).replace("{issues}", String(attentionCount));
+				const patchLedger = Array.isArray(status.patchLedger) ? status.patchLedger : [];
+				const patchLedgerBlock = patchLedger.length > 0
+					? react.createElement("div", { key: "patch-ledger", className: "ax-patch-ledger" },
+						react.createElement("div", { className: "ax-patch-ledger-title" }, t("status.patchLedger.title")),
+						react.createElement("table", { className: "ax-patch-ledger-table" },
+							react.createElement("thead", null,
+								react.createElement("tr", null,
+									react.createElement("th", null, t("status.patchLedger.group")),
+									react.createElement("th", null, t("status.patchLedger.id")),
+									react.createElement("th", null, t("status.patchLedger.pkg")),
+									react.createElement("th", null, t("status.patchLedger.state"))
+								)
+							),
+							react.createElement("tbody", null,
+								patchLedger.map((entry) => react.createElement("tr", { key: entry.id },
+									react.createElement("td", null, entry.group),
+									react.createElement("td", { className: "ax-patch-desc", title: entry.description }, entry.description),
+									react.createElement("td", { className: "ax-patch-pkg" }, entry.pkg),
+									react.createElement("td", null,
+										react.createElement("span", { className: "ax-status-badge ax-status-badge-" + (entry.state === "installed" ? "installed" : entry.state === "missing" ? "missing" : entry.state === "unknown" ? "unknown" : "not-applicable") },
+											t("status.patchLedger.state." + entry.state)
+										)
+									)
+								))
+							)
+						)
+					)
+					: null;
 				return group("diagnostics", t("status.diagnostics"), t("status.diagnostics.desc"),
 					react.createElement("div", { className: "ax-status-head" },
 						react.createElement("span", { className: "ax-status-summary" },
@@ -1014,7 +1070,8 @@ window.__ModuleLoader__.load({
 									react.createElement("span", { className: "ax-status-issue-text" }, t("status.reason." + warning.reason))
 								);
 							})
-						]
+						],
+					patchLedgerBlock
 				);
 			};
 			return react.createElement("div", { className: "ax-section" },

@@ -10,7 +10,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **319**(2026-08-31)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **319**(2026-09-02)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 
@@ -70,8 +70,7 @@ node bridge/self-heal.mjs --dry-run            # 应全部"已打/跳过",无"�
 node bridge/install-start-hook.mjs <start-dsh.sh> <repo> --dry-run
 node bridge/apply-patch.mjs --dry-run
 node bridge/patch-session-ignorable.mjs --dry-run
-node bridge/patch-settings-dynamic-expose.mjs --dry-run
-node bridge/patch-settings-allowlist.mjs --dry-run
+# rc.6 settings 补丁已退役(bridge/retired/),主支不再 dry-run
 ./install.sh --dry-run                          # 一键安装流程预览
 node scripts/doctor.mjs                         # 部署健康检查(symlink/profile/补丁/白名单/版本)
 ./update.sh --dry-run                           # GitHub 更新流程预览

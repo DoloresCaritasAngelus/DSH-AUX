@@ -349,7 +349,7 @@ const result = await ctx.auxLlm.call("compress", {
 ### 集成组件
 
 - **image-bridge**：让纯文本主模型也能直接粘贴图片，UI 保留缩略图；`npm update` 后需重跑 `bridge/apply-patch.mjs`。
-- **settings 动态暴露**：设置页可读写 aux 配置；对应补丁已随本仓库 `bridge/` 落地。
+- **settings 可写性**：设置页可读写 aux 配置；DSH alpha 线为原生能力，rc.6 旧补丁已退役到 `bridge/retired/`。
 - **会话事件注册通道**：`aux/llm-call` 以 `ignorable: true` 标记写入；未装补丁时自动降级不写事件，保护会话日志。
 - **会话删除协同**：配合 `dsh-plugin-session-delete`，删除会话时自动清理无引用图片。
 - **subagent-bridge**：透明接管原生 `subagent` 与 `workflow` 并行 `agent()` 子代理。
@@ -362,6 +362,8 @@ const result = await ctx.auxLlm.call("compress", {
 
 | 文档 | 内容 |
 |---|---|
+| [PROJECT.md](./PROJECT.md) | 长期项目总览（人类友好） |
+| [PROJECT.AI.md](./PROJECT.AI.md) | 长期项目总览（AI/代理友好） |
 | [CHANGELOG.md](./CHANGELOG.md) | 版本历史 |
 | [TESTING.md](./TESTING.md) | 测试文件清单与基线 |
 | [PRD.md](./PRD.md) | 需求规格与设计决策 |

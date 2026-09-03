@@ -1,6 +1,23 @@
 # Changelog
 
 ## Unreleased
+
+- **一键打补丁可靠性**:
+  - `/aux patch` 现在先探测真实 DSH 部署根,并以部署根为 `cwd` + 显式 `DSH_ROOT` 运行 `apply-patch` / `self-heal`,避免误打仓库内旧测试 `node_modules`。
+  - `bridge-locate` 增加真实部署根权威模式:检测到部署根时只解析部署根下的官方包,不再 fallback 到仓库旧副本。
+- **诊断 UI 补丁明细**:
+  - `/aux status --json` 新增 `patchLedger` 数组,逐项列出 alpha 线必需补丁的目标包、状态(installed/missing/unknown)与描述。
+  - 设置页「诊断与修复」新增补丁清单表,可看到每个补丁状态与目标包。
+- **补丁瘦身/退役(主支只保留 alpha.2/alpha.3)**:
+  - `bridge/apply-patch.mjs` 移除 `dsh-host-apiproxy`(admit/selectModel) 与 rc.8 专用 original 锚点。
+  - `bridge/self-heal.mjs` 移除 rc.6 settings 补丁 P9/P10。
+  - 新增 `bridge/retired/` 休眠目录,保存退役补丁与块文件供未来参考;legacy 分支仍完整保留旧支持。
+  - `imageBridgeStatus` 简化为 alpha 架构检测(agent-loop + session-controller)。
+  - 仓库根 devDependencies 与 overrides 升到 `0.1.2-alpha.3`,移除 `dsh-host-apiproxy`。
+  - `doctor` / `target.js` / `install-dsh-version` 收窄到 `0.1.2-alpha.2` / `0.1.2-alpha.3`。
+- **项目文档**:
+  - 新增 `PROJECT.md`(人类友好)与 `PROJECT.AI.md`(AI/代理友好)长期项目总览,并在 README 文档地图同步。
+
 ## 0.4.1-FIX1 (2026-09-01) — alpha.3 设置页/状态芯片修复
 
 > **兼容性变更**：本版本起不再支持 DSH 0.1.0-rc.6 ~ 0.1.1-rc.2。

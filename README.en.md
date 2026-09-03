@@ -349,7 +349,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 ### Integrated components
 
 - **image-bridge**: lets text-only main models receive pasted images while keeping thumbnails; re-run `bridge/apply-patch.mjs` after `npm update`.
-- **settings dynamic exposure**: the settings page can read/write aux config; corresponding patches are shipped in this repo's `bridge/`.
+- **settings writability**: the settings page can read/write aux config; native on the DSH alpha line, rc.6 patch retired to `bridge/retired/`.
 - **session event registration channel**: `aux/llm-call` is written with `ignorable: true`; if the patch is missing, events are downgraded (not written) to protect session logs.
 - **session deletion synergy**: works with `dsh-plugin-session-delete` to clean up unreferenced images when a session is deleted.
 - **subagent-bridge**: transparently takes over native `subagent` and `workflow` parallel `agent()` children.
@@ -362,6 +362,8 @@ Before the first persistent `tool/call`, only the Minimal tool pair is exposed a
 
 | Doc | Content |
 |---|---|
+| [PROJECT.md](./PROJECT.md) | Long-term project overview (human) |
+| [PROJECT.AI.md](./PROJECT.AI.md) | Long-term project overview (AI/agent) |
 | [CHANGELOG.md](./CHANGELOG.md) | Version history |
 | [TESTING.md](./TESTING.md) | Test file list and baseline |
 | [PRD.md](./PRD.md) | Requirements & design decisions |

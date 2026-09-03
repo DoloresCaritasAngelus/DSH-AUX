@@ -5,12 +5,12 @@
  *
  * DSH-AUX is not published to npm; this script only swaps the local
  * `@deepseek-ai/*` devDependencies used by the test suite so we can run the
- * same tests against multiple DSH package lines (0.1.0-rc.6, 0.1.0-rc.8,
- * 0.1.1-rc.2, ...) in GitHub Actions without a full containerized DSH.
+ * same tests against DSH alpha lines (0.1.2-alpha.2 / 0.1.2-alpha.3) in
+ * GitHub Actions without a full containerized DSH.
  *
  * Usage:
- *   node scripts/install-dsh-version.mjs --version 0.1.0-rc.8
- *   node scripts/install-dsh-version.mjs --version 0.1.0-rc.6 --keep
+ *   node scripts/install-dsh-version.mjs --version 0.1.2-alpha.2
+ *   node scripts/install-dsh-version.mjs --version 0.1.2-alpha.3 --keep
  *
  * --keep keeps the modified package.json (useful when debugging CI locally).
  */
@@ -41,7 +41,6 @@ const DSH_VERSIONED_PACKAGES = [
   "dsh-agent",
   "dsh-agent-loop",
   "dsh-compaction-basic",
-  "dsh-host-apiproxy",
   "dsh-llm",
   "dsh-session",
   "dsh-settings",
@@ -60,21 +59,8 @@ const EXTRA_DEV_PACKAGES = {
   "0.1.2-alpha.3": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"]
 };
 
-// Some DSH releases do not publish every @deepseek-ai/dsh-* package at the
-// same version. For example, dsh-host-apiproxy is removed from the source
-// tree in 0.1.2-alpha.x and its last npm release stays at 0.1.1-rc.2.
-const DSH_VERSION_EXCEPTIONS = {
-  "0.1.2-alpha.2": {
-    "dsh-host-apiproxy": "0.1.1-rc.2"
-  },
-  "0.1.2-alpha.3": {
-    "dsh-host-apiproxy": "0.1.1-rc.2"
-  }
-};
-
-function packageVersion(name) {
-  return DSH_VERSION_EXCEPTIONS[version]?.[name] ?? version;
-}
+// Alpha lines no longer include dsh-host-apiproxy; the workspace devDependencies
+// already target 0.1.2-alpha.3 and install-dsh-version only swaps the line.
 
 // All @deepseek-ai/dsh-* packages share the DSH release line. Forcing them all
 // (including transitive packages such as dsh-system-prompt) to the same version
@@ -103,7 +89,6 @@ const DSH_OVERRIDE_PACKAGES = [
   "dsh-file-reference",
   "dsh-goal",
   "dsh-home-paths",
-  "dsh-host-apiproxy",
   "dsh-host-directory-picker",
   "dsh-host-plugin-inventory",
   "dsh-host-webserver",
@@ -148,7 +133,6 @@ const DSH_OVERRIDE_PACKAGES = [
 const VERIFY_PACKAGES = [
   "dsh-agent",
   "dsh-session",
-  "dsh-host-apiproxy",
   "dsh-tool-skill"
 ];
 
@@ -158,7 +142,7 @@ let changed = 0;
 for (const name of DSH_VERSIONED_PACKAGES) {
   const key = `@deepseek-ai/${name}`;
   if (Object.hasOwn(devDeps, key)) {
-    devDeps[key] = packageVersion(name);
+    devDeps[key] = version;
     changed += 1;
   } else {
     console.warn(`[install-dsh-version] 跳过未声明依赖: ${key}`);
@@ -166,7 +150,7 @@ for (const name of DSH_VERSIONED_PACKAGES) {
 }
 for (const name of EXTRA_DEV_PACKAGES[version] ?? []) {
   const key = `@deepseek-ai/${name}`;
-  devDeps[key] = packageVersion(name);
+  devDeps[key] = version;
   changed += 1;
 }
 if (changed === 0) {
@@ -176,7 +160,7 @@ if (changed === 0) {
 
 const overrides = pkg.overrides ?? {};
 for (const name of DSH_OVERRIDE_PACKAGES) {
-  overrides[`@deepseek-ai/${name}`] = packageVersion(name);
+  overrides[`@deepseek-ai/${name}`] = version;
 }
 pkg.overrides = overrides;
 
@@ -207,8 +191,8 @@ try {
     );
     const installed = pkgJson.version;
     console.log(`[install-dsh-version] 已安装 @deepseek-ai/${name}@${installed}`);
-    if (installed !== packageVersion(name)) {
-      console.error(`[install-dsh-version] 版本不匹配: @deepseek-ai/${name} 期望 ${packageVersion(name)},实际 ${installed}`);
+    if (installed !== version) {
+      console.error(`[install-dsh-version] 版本不匹配: @deepseek-ai/${name} 期望 ${version},实际 ${installed}`);
       process.exit(1);
     }
   }

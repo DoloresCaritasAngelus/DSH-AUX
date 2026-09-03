@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import {
   detectNeedsVision,
   resolveSubagentRoute,
@@ -166,9 +167,10 @@ test('/aux patch --json: handlePatchCommand 返回结构化步骤(stub execFileA
   const calls = []
   cp.execFile = (file, args, options, callback) => {
     calls.push({ file, args, options })
-    if (args[0] === 'bridge/apply-patch.mjs') {
+    const script = String(args[0] || '').split(/[\\/]/).pop()
+    if (script === 'apply-patch.mjs') {
       callback(null, { stdout: 'apply output\n', stderr: '' })
-    } else if (args[0] === 'bridge/self-heal.mjs') {
+    } else if (script === 'self-heal.mjs') {
       callback(null, { stdout: 'self-heal output\n', stderr: '' })
     } else {
       callback(new Error('unexpected script: ' + args[0]))
@@ -188,6 +190,13 @@ test('/aux patch --json: handlePatchCommand 返回结构化步骤(stub execFileA
     assert.deepEqual(data.remaining, [])
     assert.equal(calls.length, 2)
     assert.ok(calls.every((c) => c.args[0].endsWith('.mjs')))
+    // 脚本必须用仓库内的绝对路径启动;仅靠相对路径在 cwd=dshRoot 时会在
+    // 部署根下寻找 bridge/*.mjs,导致真实部署找不到文件。
+    assert.ok(calls.every((c) => c.args[0].startsWith('/') && c.args[0].includes('/bridge/')))
+    assert.ok(calls.every((c) => existsSync(c.args[0])), 'bridge script should exist on disk')
+    // handlePatchCommand 应把真实 DSH 根传给子进程,避免误打仓库内旧测试依赖。
+    assert.ok(calls.every((c) => c.options && c.options.cwd && typeof c.options.cwd === 'string'))
+    assert.ok(calls.every((c) => c.options && c.options.env && typeof c.options.env.DSH_ROOT === 'string'))
   } finally {
     cp.execFile = originalExecFile
   }
