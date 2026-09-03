@@ -23,6 +23,7 @@ import { runVision } from "./tools/vision.js";
 import { runWebExtract } from "./tools/web-extract.js";
 import { runWebCrawl } from "./tools/web-crawl.js";
 import { runCompress } from "./tools/compress.js";
+import { sessionEvents } from "./session-utils.js";
 
 /** Human-readable reason text for a status item/issue. */
 function statusReasonText(reason) {
@@ -310,7 +311,7 @@ export function handleHistoryCommand(service, agent, args) {
     }
   }
   const includeDebug = service?.debugConfig?.debugEventsInHistory === true;
-  const events = (agent?.session?.events ?? []).filter((event) =>
+  const events = sessionEvents(agent?.session).filter((event) =>
     event?.type === AUX_CALL_EVENT ||
     (includeDebug && event?.type === AUX_DEBUG_EVENT)
   );
@@ -444,7 +445,7 @@ export async function handleDebugCommand(service, agent, args) {
   }
   let events;
   if (targetId === currentId) {
-    events = agent?.session?.events ?? [];
+    events = sessionEvents(agent?.session);
   } else {
     let sp;
     try {
@@ -632,7 +633,7 @@ export async function handleModelCommand(service, args) {
 
 /** Fold the latest aux call record per task from a session log. */
 export function recentCalls(agent) {
-  const events = agent?.session?.events ?? [];
+  const events = sessionEvents(agent?.session);
   const latest = new Map();
   for (const event of events) {
     if (event.type !== AUX_CALL_EVENT) continue;

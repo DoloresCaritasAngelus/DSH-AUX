@@ -54,10 +54,10 @@ CI 已支持“包级 DSH 版本矩阵”(不跑完整容器),用于提前发现
    - 更新后再跑 `ci-fake-dsh.mjs --dry-run`;
    - 在 CI 注释/TESTING/CHANGELOG 记录原因。
 4. 当前已知未适配:
-   - `0.1.1-rc.2`:`dsh-host-apiproxy` selectModel 代码块已变化,补丁尚未适配,
-     所以绿门矩阵停在 `0.1.0-rc.6` / `0.1.0-rc.8` / `0.1.1-rc.1`。
+   - 旧版 `0.1.1-rc.2` 及更早由 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 维护;
+     主支绿门矩阵覆盖 `0.1.2-alpha.2` ~ `0.1.2-rc.1`。
 5. 矩阵验证不只测一个包:安装脚本会抽查 `dsh-agent` / `dsh-session` /
-   `dsh-host-apiproxy` / `dsh-tool-skill` 的版本一致。
+   `dsh-tool-skill` 的版本一致。
 
 ## 启动自愈
 - `~/dsh/start-dsh.sh` 已在启动前调用 `bridge/self-heal.mjs`(幂等,失败不阻塞):

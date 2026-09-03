@@ -54,7 +54,7 @@ dsh plugin --profile web add "file:/path/to/dsh-aux"
 ```sh
 cd <仓库>/bridge
 node apply-patch.mjs                 # image-bridge / subagent / workflow / skill 补丁(幂等)
-# 设置页可写 aux 在当前 DSH alpha 线是原生能力,不再需要 rc.6 settings 白名单补丁
+# 设置页可写 aux 在当前 DSH 0.1.2 线是原生能力,不再需要 rc.6 settings 白名单补丁
 ```
 
 检查输出无 error;成功后跳到 §3。
@@ -111,7 +111,7 @@ dsh --profile web --dump-config 2>/dev/null | grep -A1 "id: aux" | head -4
 | `--dump-config` 无 aux 行 | insert 未生效 / YAML 语法错 / id 冲突 | 检查 cordis.patch.yml 缩进与 `name` 完全一致;确保插在顶层数组 |
 | 工具未注册、/aux 无响应 | 补丁层改了但未重启 | 重启 DSH(host 插件改动必须重启) |
 | client 设置页不显示 | client bundle 未加载 | 确认 package.json 的 `dsh.client` 声明存在且 platform 为 web |
-| 重启后报插件加载错误 | 版本不匹配 | 检查 DSH 版本 ∈ 0.1.2-alpha.2/0.1.2-alpha.3;查看启动日志(`~/dsh/dsh-web.log`) |
+| 重启后报插件加载错误 | 版本不匹配 | 检查 DSH 版本 ∈ 0.1.2-alpha.2 ~ 0.1.2-rc.1;查看启动日志(`~/dsh/dsh-web.log`) |
 | 发图报 MODEL_DOES_NOT_SUPPORT_IMAGES | 纯文本主模型 + 未装 bridge 补丁 | 可选:安装 `bridge/` 补丁(见 §6),或换多模态主模型 |
 
 ## 5. 卸载
@@ -149,7 +149,7 @@ rm "$DSH_ROOT/node_modules/<NAME>"
   中的 `bridge/patch-session-ignorable.mjs` 补齐 append 的 `ignorable` 写入
   入口并放行白名单。**未装时插件自动降级为不写事件**(保护会话日志),
   `/aux status` 显示"会话事件记录:已停用"。`npm update` 后重跑。
-- **settings 可写性**:当前 DSH alpha 线原生支持设置页读写 aux 配置,不再需要
+- **settings 可写性**:当前 DSH 0.1.2 线原生支持设置页读写 aux 配置,不再需要
   rc.6 的 settings 白名单补丁(旧补丁见 `bridge/retired/` 与 legacy 分支)。
 - **会话删除**:DSH 原生无删除会话功能,配合社区插件(如 dsh-plugin-session-delete);
   删除会话时 dsh-aux 会自动清理其无引用图片。

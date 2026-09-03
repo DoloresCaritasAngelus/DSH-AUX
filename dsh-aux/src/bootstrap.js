@@ -10,6 +10,7 @@
  * @module @dolorescaritasangelus/dsh-aux/bootstrap
  */
 import { AUX_TOOLS_GUIDE } from "./prompt.js";
+import { sessionEvents } from "./session-utils.js";
 
 /** Whether this agent runs the `minimal` preset. */
 export function isMinimalPreset(agent) {
@@ -59,8 +60,8 @@ export function shouldUsePreStepAuxGuide(service, agent) {
  * has actually started using tools and the catalog has been expanded.
  */
 export function isAuxGuidePromoted(agent) {
-  return Array.isArray(agent?.session?.events) &&
-    agent.session.events.some((event) => event.type === "tool/call");
+  const events = sessionEvents(agent?.session);
+  return events.some((event) => event.type === "tool/call");
 }
 
 /** Mode-aware reminder text injected once after Bootstrap promotion. */

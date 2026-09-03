@@ -2,7 +2,7 @@
 /**
  * dsh-image-bridge 补丁安装器(适配 dsh-aux vision_analyze 版,DSH alpha 线)
  *
- * 当前主分支只支持 DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3。
+ * 当前主分支只支持 DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1。
  * 旧版(rc.6 ~ 0.1.1-rc.2)的 host-apiproxy / settings 动态暴露等补丁已
  * 迁入 bridge/retired/,不再参与安装与自愈;旧版用户请使用
  * legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2。

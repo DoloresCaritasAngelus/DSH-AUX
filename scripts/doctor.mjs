@@ -10,7 +10,7 @@
  *   5. P7 session ignorable 是否已打;
  *   6. P8 aux/llm-call 白名单是否在;
  *   7. start-dsh.sh 自愈 hook 是否在;
- *   8. DSH 版本是否在支持范围(0.1.2-alpha.2 / 0.1.2-alpha.3)。
+ *   8. DSH 版本是否在支持范围(0.1.2-alpha.2 ~ 0.1.2-rc.1)。
  *
  * 用法:
  *   node scripts/doctor.mjs
@@ -150,8 +150,8 @@ function main() {
     const dshVersion = readVersion(join(root, "node_modules/@deepseek-ai/dsh/package.json"));
     if (!dshVersion) {
       record("WARN", "version", "无法读取 @deepseek-ai/dsh 版本");
-    } else if (dshVersion === "0.1.2-alpha.2" || dshVersion === "0.1.2-alpha.3") {
-      record("OK", "version", `DSH ${dshVersion} 在支持范围(0.1.2-alpha.2 / 0.1.2-alpha.3)`);
+    } else if (["0.1.2-alpha.2", "0.1.2-alpha.3", "0.1.2-alpha.4", "0.1.2-alpha.5", "0.1.2-rc.1"].includes(dshVersion)) {
+      record("OK", "version", `DSH ${dshVersion} 在支持范围(0.1.2-alpha.2 ~ 0.1.2-rc.1)`);
     } else {
       record("WARN", "version", `DSH ${dshVersion} 不在主支支持范围;旧版请使用 legacy 分支`);
     }

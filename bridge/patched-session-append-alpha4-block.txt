@@ -1,0 +1,28 @@
+	append(type, data, ...opts) {
+		const surfaceOpts = opts[0];
+		const surfaceMetadata = {
+			...surfaceOpts?.sourceEventSeqs === void 0 ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
+			...surfaceOpts?.surfaceOp === void 0 ? {} : { surfaceOp: surfaceOpts.surfaceOp }
+		};
+		// dsh-aux ignorable (local patch): opts[1].ignorable marks an
+		// out-of-repo plugin event as skippable for log interpretation, so
+		// the persistence read path (KNOWN_SESSION_EVENT_TYPES whitelist)
+		// accepts it while the event itself stays in the log — projections
+		// and event-sourced state still replay normally. This implements the
+		// registration surface the whitelist comment defers.
+		const ignorableMark = opts[1]?.ignorable === true;
+		const dataSnapshot = snapshotJsonValue(data);
+		if (dataSnapshot === void 0) throw new Error(`session event "${type}" carries non-JSON-serializable data`);
+		assertSupportedRequestHeader(type, dataSnapshot, `session event "${type}"`);
+		const surfaceMetadataSnapshot = snapshotJsonValue(surfaceMetadata);
+		if (surfaceMetadataSnapshot === void 0) throw new Error(`session event "${type}" carries non-JSON-serializable surface metadata`);
+		const entry = attachments.get(this);
+		if (entry?.appending) throw new Error("session append cannot reenter while another append is being published");
+		const event = deepFreeze({
+			type,
+			seq: SessionSeq(this.log.length),
+			time: Date.now(),
+			data: dataSnapshot,
+			...ignorableMark ? { ignorable: true } : {},
+			...surfaceMetadataSnapshot
+		});

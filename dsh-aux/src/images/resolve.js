@@ -6,6 +6,7 @@
  */
 import { basename, mediaTypeForPath, mediaTypeFromContentType } from "../media.js";
 import { fetchWithSsrf } from "../fetch.js";
+import { sessionEvents } from "../session-utils.js";
 
 /** Read a response body as bytes, aborting as soon as the cap is exceeded. */
 async function readBytesCapped(response, byteCap) {
@@ -55,7 +56,7 @@ export async function resolveImageRef(service, args, exec) {
     // Find the durable ref in the session's user messages.
     const agent = exec.agent;
     const session = agent?.session;
-    const events = session?.events ?? [];
+    const events = sessionEvents(session);
     for (const event of events) {
       if (event.type !== "user/message") continue;
       const content = event.message?.content ?? event.data?.message?.content ?? [];

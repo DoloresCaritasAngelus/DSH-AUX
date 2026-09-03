@@ -1,7 +1,7 @@
 /**
  * dsh-aux image-bridge patch detection (DSH alpha line).
  *
- * Main branch supports DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3 only.
+ * Main branch supports DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1.
  * In this architecture:
  * - `dsh-agent-loop` carries the model-input image bridge + forceAuxVision;
  * - `dsh-api-session-controller` owns the image-admission capability gate and

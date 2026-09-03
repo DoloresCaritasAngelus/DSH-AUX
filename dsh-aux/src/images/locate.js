@@ -9,6 +9,7 @@
  * @module @dolorescaritasangelus/dsh-aux/images/locate
  */
 import { loadSessionImages } from "./ownership.js";
+import { sessionEvents } from "../session-utils.js";
 
 /** Attachment ids are content-addressed: `sha256:<64 hex>`. */
 const HASH_ID_RE = /^sha256:([a-f0-9]{64})$/;
@@ -78,7 +79,10 @@ function contentOfUserEvent(event) {
 async function readSessionEvents(service, sessionId, opts = {}) {
   const liveSession = opts?.liveSession;
   if (liveSession !== void 0 && liveSession !== null && liveSession.id === sessionId) {
-    if (Array.isArray(liveSession.events)) return liveSession.events;
+    const events = sessionEvents(liveSession);
+    if (events.length > 0 || typeof liveSession.snapshotEvents === "function" || Array.isArray(liveSession.events)) {
+      return events;
+    }
   }
   let persistence;
   try {

@@ -341,3 +341,36 @@ test('locateImageAnchors: liveSession events are used without persistence inspec
     assert.equal(result.anchors[0].callSeq, 18);
   });
 });
+
+test('locateImageAnchors: new API liveSession snapshotEvents are used without persistence inspect', async () => {
+  await withFixture(async (fixture) => {
+    const id = attachmentIdFor('live-snapshot-session');
+    await fixture.writeSessionImages({ 'session-current': [id] });
+    const log = [
+      userMessageEvent({ seq: 12, content: [imageBlock(id)] }),
+      visionCallEvent({ seq: 18, callId: 'call_live_snapshot', arguments: { attachmentId: id, question: 'live?' } })
+    ];
+    const liveSession = {
+      id: 'session-current',
+      snapshotEvents() {
+        return Object.freeze([...log]);
+      }
+    };
+    // No sessionPersistence in ctx at all; locate must use snapshotEvents().
+    const service = {
+      ctx: { get: () => void 0 },
+      _sessionImages: new Map(),
+      _sessionImagesLoaded: false,
+      _sessionImagesDirty: false,
+      _sessionImagesWriteQueue: Promise.resolve()
+    };
+
+    const result = await locateImageAnchors(service, id, { liveSession });
+
+    assert.equal(result.found, true);
+    assert.equal(result.anchors[0].sessionId, 'session-current');
+    assert.equal(result.anchors[0].messageSeq, 12);
+    assert.equal(result.anchors[0].callId, 'call_live_snapshot');
+    assert.equal(result.anchors[0].callSeq, 18);
+  });
+});
