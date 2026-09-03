@@ -160,8 +160,9 @@ export async function handleImageCommand(service, args, agent) {
       if (id === void 0) return error("用法: /aux image locate <attachmentId> [--session <id>] [--json]", "USAGE");
       const sessionEquals = rest.find((arg) => arg.startsWith("--session="))?.slice("--session=".length);
       const sessionIndex = rest.indexOf("--session");
+      const sessionNext = sessionIndex >= 0 ? rest[sessionIndex + 1] : void 0;
       const sessionArg = sessionEquals ??
-        (sessionIndex >= 0 ? rest[sessionIndex + 1] : void 0);
+        (typeof sessionNext === "string" && !sessionNext.startsWith("--") ? sessionNext : void 0);
       const result = await locateImageAnchors(service, id, {
         ...(agent?.session !== void 0 ? { liveSession: agent.session } : {}),
         ...(typeof sessionArg === "string" && sessionArg.length > 0 ? { sessionId: sessionArg } : {})

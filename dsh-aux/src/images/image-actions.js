@@ -6,14 +6,13 @@
  */
 import {
   lstat as lstatFile,
-  readFile as readFileText,
   readdir,
-  rename as renameFile,
-  unlink as unlinkFile,
-  writeFile as writeFileText
+  unlink as unlinkFile
 } from "node:fs/promises";
 import { dirname } from "node:path";
 import { ensureSessionImagesLoaded, loadSessionImages, saveSessionImages } from "./ownership.js";
+import { loadRetained, setRetained } from "./retention.js";
+import { scanObjectFiles } from "./fs-utils.js";
 
 /** attachment id format used by the image store. */
 const HASH_ID_RE = /^sha256:([a-f0-9]{64})$/;
@@ -23,12 +22,6 @@ const OBJECT_FILE_RE = /^([a-f0-9]{64})(?:\.(png|jpg|jpeg|webp|gif))?$/;
 /** Locate the DSH home using the same rule as the other image modules. */
 function homePath() {
   return process.env.DSH_HOME || (process.env.HOME ? process.env.HOME + "/.dsh" : void 0);
-}
-
-/** Path to the AUX-owned retention marks file. */
-function imageRetentionPath() {
-  const home = homePath();
-  return home === void 0 ? void 0 : home + "/attachments/v1/image-retention.json";
 }
 
 /** Derive the extensionless object file path for a valid attachment id. */
@@ -55,43 +48,6 @@ function referencedError(attachmentId, refs) {
   );
   error.code = "REFERENCED";
   return error;
-}
-
-/** Read the retained set directly from `image-retention.json`. */
-async function readRetainedSet(path) {
-  if (path === void 0) return new Set();
-  try {
-    const raw = await readFileText(path, "utf8");
-    const parsed = JSON.parse(raw);
-    const retained = parsed !== null && typeof parsed === "object" ? parsed.retained : void 0;
-    if (!Array.isArray(retained)) return new Set();
-    return new Set(retained.filter((id) => typeof id === "string"));
-  } catch {
-    // Missing or unreadable retention files simply mean nothing is retained.
-    return new Set();
-  }
-}
-
-/** Local helper: read whether one attachment is currently retained. */
-async function isRetainedLocal(attachmentId) {
-  const retained = await readRetainedSet(imageRetentionPath());
-  return retained.has(attachmentId);
-}
-
-/** Local helper: atomically add/remove one retention entry, preserving others. */
-async function setRetainedLocal(attachmentId, retained) {
-  const path = imageRetentionPath();
-  if (path === void 0) return;
-  const set = await readRetainedSet(path);
-  if (retained) {
-    set.add(attachmentId);
-  } else {
-    set.delete(attachmentId);
-  }
-  const tmp = path + ".tmp";
-  const payload = JSON.stringify({ version: 1, retained: [...set].sort() });
-  await writeFileText(tmp, payload);
-  await renameFile(tmp, path);
 }
 
 /**
@@ -203,51 +159,6 @@ async function deleteObjectFiles(attachmentId, { requireBase = true } = {}) {
 }
 
 /**
- * Safely scan the object store for regular object files. Symlinked buckets and
- * symlinked files are never followed.
- *
- * @returns Array<{ fileName, path }> for real regular files.
- */
-async function scanObjectFiles(root) {
-  const results = [];
-  let buckets;
-  try {
-    buckets = await readdir(root, { withFileTypes: true });
-  } catch {
-    return results;
-  }
-  for (const bucketEnt of buckets) {
-    if (!bucketEnt.isDirectory() || bucketEnt.isSymbolicLink()) continue;
-    const bucketPath = root + "/" + bucketEnt.name;
-    try {
-      const bucketStat = await lstatFile(bucketPath);
-      if (!bucketStat.isDirectory() || bucketStat.isSymbolicLink()) continue;
-    } catch {
-      continue;
-    }
-    let files;
-    try {
-      files = await readdir(bucketPath, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const fileEnt of files) {
-      if (!fileEnt.isFile() || fileEnt.isSymbolicLink()) continue;
-      const filePath = bucketPath + "/" + fileEnt.name;
-      try {
-        const fileStat = await lstatFile(filePath);
-        if (!fileStat.isFile() || fileStat.isSymbolicLink()) continue;
-        results.push({ fileName: fileEnt.name, path: filePath, bytes: fileStat.size });
-      } catch {
-        // Best-effort scan: skip unreadable entries.
-      }
-    }
-  }
-  results.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-  return results;
-}
-
-/**
  * Remove one attachment id from every session ownership set and persist the
  * updated map through ownership's serialized save queue.
  */
@@ -281,10 +192,11 @@ export async function deleteImage(service, attachmentId, opts = {}) {
   const refs = await referencesFor(service, attachmentId);
   if (refs.length > 0 && !force) throw referencedError(attachmentId, refs);
 
-  const retained = await isRetainedLocal(attachmentId);
+  const retainedSet = await loadRetained();
+  const retained = retainedSet.has(attachmentId);
   const { freedBytes } = await deleteObjectFiles(attachmentId, { requireBase: true });
   await removeFromOwnership(service, attachmentId);
-  if (retained) await setRetainedLocal(attachmentId, false);
+  if (retained) await setRetained(attachmentId, false);
 
   return { ok: true, deleted: attachmentId, freedBytes };
 }
@@ -311,7 +223,7 @@ export async function deleteOrphans(service, opts = {}) {
     if (!hashes.has(hash)) hashes.set(hash, { attachmentId: "sha256:" + hash });
   }
 
-  const retainedSet = await readRetainedSet(imageRetentionPath());
+  const retainedSet = await loadRetained();
   const deleted = [];
   const skipped = [];
   let freedBytes = 0;
@@ -330,7 +242,7 @@ export async function deleteOrphans(service, opts = {}) {
     }
 
     const result = await deleteObjectFiles(attachmentId, { requireBase: false });
-    if (retained) await setRetainedLocal(attachmentId, false);
+    if (retained) await setRetained(attachmentId, false);
     deleted.push(attachmentId);
     freedBytes += result.freedBytes;
   }

@@ -381,3 +381,71 @@ test('missing session-images.json / image-memory.json / retention file does not 
     assert.equal(snapshot.counts.withMemory, 0);
   });
 });
+
+test('契约: collectImageLibrary 快照 JSON 结构完整(客户端依赖字段)', async () => {
+  await withFixture(async (fixture) => {
+    await fixture.writeObject(imageA, { mediaType: 'image/png', bytes: 32 });
+    await fixture.writeObject(imageB, { mediaType: 'image/jpeg', bytes: 16 });
+    await fixture.writeSessionImages({
+      'sess-1': [imageA],
+      'sess-2': [imageB]
+    });
+    await fixture.writeMemory([
+      {
+        sessionId: 'sess-1',
+        attachmentId: imageA,
+        question: 'q',
+        summary: 's',
+        at: 10
+      }
+    ]);
+    await fixture.writeWorkspace({ archivedSessionIds: [] });
+
+    const service = makeService({
+      sessions: [{ id: 'sess-1' }, { id: 'sess-2' }],
+      snapshots: []
+    });
+    const snapshot = await collectImageLibrary(service);
+
+    // Snapshot envelope fields used by the client/commands.
+    assert.equal(typeof snapshot.generatedAt, 'number');
+    assert.deepEqual(Object.keys(snapshot.settings).sort(), ['imageAutoCleanEnabled', 'imageRetentionDays']);
+    assert.deepEqual(Object.keys(snapshot.counts).sort(), [
+      'archived',
+      'orphan',
+      'retained',
+      'shared',
+      'total',
+      'withMemory'
+    ]);
+    assert.ok(Array.isArray(snapshot.entries));
+
+    // Every entry carries the client-facing fields.
+    for (const entry of snapshot.entries) {
+      for (const key of [
+        'kind',
+        'attachmentId',
+        'hash',
+        'ownerSessions',
+        'ownerLiveSessions',
+        'referenceCount',
+        'shared',
+        'orphan',
+        'archived',
+        'retained',
+        'memories'
+      ]) {
+        assert.ok(key in entry, `entry should contain ${key}`);
+      }
+      assert.equal(typeof entry.attachmentId, 'string');
+      assert.equal(typeof entry.hash, 'string');
+      assert.ok(Array.isArray(entry.ownerSessions));
+      assert.ok(Array.isArray(entry.ownerLiveSessions));
+      assert.ok(Array.isArray(entry.memories));
+      assert.equal(typeof entry.referenceCount, 'number');
+      assert.equal(typeof entry.orphan, 'boolean');
+      assert.equal(typeof entry.archived, 'boolean');
+      assert.equal(typeof entry.retained, 'boolean');
+    }
+  });
+});
