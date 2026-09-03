@@ -1,7 +1,7 @@
 # Retired / Sleeping DSH-AUX patches
 
 > 这些补丁/块文件目前 **不被主分支引用**，只做历史备份与未来参考。
-> 主分支当前只支持 DSH `0.1.2-alpha.2` ~ `0.1.2-alpha.3`；旧版支持在
+> 主分支当前支持 DSH `0.1.2-alpha.2` ~ `0.1.2-rc.1`；旧版支持在
 > `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 分支完整保留。
 >
 > DSH 仍处于破坏性更新阶段，这些旧实现未来可能用于找思路或直接复用，
@@ -9,7 +9,7 @@
 
 ## 为什么退役
 
-- `dsh-host-apiproxy` 在 alpha.2/alpha.3 已不存在 → admit / selectModel 补丁不再适用。
+- `dsh-host-apiproxy` 在 0.1.2 线已不存在 → admit / selectModel 补丁不再适用。
 - P9/P10 settings 动态暴露/白名单是 rc.6 专用 → alpha 线原生已具备，不再适用。
 - `dsh-agent-loop` / `dsh-tool-subagent` 的 rc.8 老 `original` 锚点只服务于已抛弃的旧 DSH → 由 alpha2 锚点取代。
 - v1 image-bridge 升级块只服务于 host-apiproxy 旧版 → 随 host-apiproxy 退役。

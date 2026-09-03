@@ -113,16 +113,31 @@ function ensureSessionAppendIgnorable() {
   ), "dsh-aux-self-heal");
   const data = readFileSync(tgt, "utf8");
   if (data.includes("opts[1]?.ignorable")) { log("P7 已打,跳过"); return; }
-  const orig = readFileSync(join(HERE, "orig-session-append.txt"), "utf8").trim();
-  const patched = readFileSync(join(HERE, "patched-session-append.txt"), "utf8").trim();
-  if (!data.includes(orig)) { log("⚠️ P7 无法自动补:append 原块不匹配,请人工核对 rc 版本"); return; }
-  if (DRY) { log("[dry-run] 将打 P7 session append ignorable"); return; }
+
+  // DSH 0.1.2-alpha.2/alpha.3 and 0.1.2-alpha.4+/rc.1 have different
+  // append internals (`seq: this.log.length` vs `seq: SessionSeq(...)`),
+  // so choose the matching original block before replacing.
+  const appendVariants = [
+    ["alpha.2/3", "orig-session-append.txt", "patched-session-append.txt"],
+    ["alpha.4+/rc.1", "orig-session-append-alpha4-block.txt", "patched-session-append-alpha4-block.txt"]
+  ];
+  const variant = appendVariants.find(([label, origFile]) =>
+    data.includes(readFileSync(join(HERE, origFile), "utf8").trim())
+  );
+  if (variant === void 0) {
+    log("⚠️ P7 无法自动补:append 原块不匹配(alpha.2/3 与 alpha.4+/rc.1 均未命中),请人工核对 DSH 版本");
+    return;
+  }
+  const [label, origFile, patchedFile] = variant;
+  const orig = readFileSync(join(HERE, origFile), "utf8").trim();
+  const patched = readFileSync(join(HERE, patchedFile), "utf8").trim();
+  if (DRY) { log(`[dry-run] 将打 P7 session append ignorable(${label})`); return; }
   const bak = `${tgt}.bak-selfheal-${Date.now()}`;
   copyFileSync(tgt, bak);
   const out = data.replace(orig, patched);
   if (!out.includes("opts[1]?.ignorable")) { log("⚠️ P7 替换失败,已回滚"); copyFileSync(bak, tgt); return; }
   writeFileSync(tgt, out);
-  log(`P7 已打(备份 ${bak})`);
+  log(`P7 已打(${label},备份 ${bak})`);
 }
 
 /** P8: 保证两处白名单都含 aux/llm-call(不负责 thinking/language)。 */

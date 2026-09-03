@@ -1,6 +1,6 @@
-# dsh-aux bridge 补丁(DSH alpha 线)
+# dsh-aux bridge 补丁(DSH 0.1.2 线)
 
-> **主分支只支持 DSH `0.1.2-alpha.2` ~ `0.1.2-alpha.3`**。
+> **主分支只支持 DSH `0.1.2-alpha.2` ~ `0.1.2-rc.1`**。
 > 旧版(rc.6 ~ 0.1.1-rc.2)的 host-apiproxy / settings 补丁已退役到
 > [bridge/retired/](./retired/README.md)，legacy 分支仍完整保留。
 > 安装 dsh-aux 时随 `install.sh` 一并应用（非可选）；仅装插件本体的，单独运行本目录脚本补上。

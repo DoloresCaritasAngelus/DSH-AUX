@@ -9,7 +9,7 @@
 - Repo: https://github.com/DoloresCaritasAngelus/DSH-AUX
 - Purpose: auxiliary-model system for DeepSeek Harness (DSH)
 - Current version: `0.4.1-FIX1` (package `dsh-aux/package.json`)
-- Current supported DSH: `0.1.2-alpha.2` ~ `0.1.2-alpha.3`
+- Current supported DSH: `0.1.2-alpha.2` ~ `0.1.2-rc.1`
 - Legacy DSH (`0.1.0-rc.6` ~ `0.1.1-rc.2`): permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2`, release `v0.4.1-legacy`
 - Runtime deps: none third-party; peerDependencies are official DSH packages only
 - Node: >=20
@@ -89,7 +89,7 @@ Current deployment verification pattern:
 
 - Run: `node --test tests/*.test.js`
 - Bridge dry-run: `node bridge/apply-patch.mjs --dry-run`; `node bridge/self-heal.mjs --dry-run`
-- CI: syntax checks, fake-DSH patch smoke, compat matrix `[0.1.2-alpha.2, 0.1.2-alpha.3]`
+- CI: syntax checks, fake-DSH patch smoke, compat matrix `[0.1.2-alpha.2, 0.1.2-alpha.3, 0.1.2-alpha.4, 0.1.2-alpha.5, 0.1.2-rc.1]`
 - Keep README snapshots in sync via `scripts/gen-package-readme.mjs --check`
 - Keep TESTING baseline current when test count changes
 

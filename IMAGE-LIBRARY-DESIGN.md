@@ -13,9 +13,9 @@
 ## 0. 执行上下文（压缩后必读）
 
 - 仓库根：`/home/ehekatl/dsh/dsh work/aux`
-- 当前工作分支：`feat/aux-patch-diagnostics`（本地未推送）
+- 当前工作分支：`feat/dsh-0.1.2-rc1-compat`（本地未推送）
 - 当前 main 已完成的基线：
-  - DSH 支持范围：`0.1.2-alpha.2` ~ `0.1.2-alpha.3`（只支持 alpha 线）
+  - DSH 支持范围：`0.1.2-alpha.2` ~ `0.1.2-rc.1`（支持 0.1.2 alpha/rc 线）
   - 补丁已瘦身，旧补丁在 `bridge/retired/`
   - 已有 `patchLedger`、`/aux patch` 部署根修复、`PROJECT.md` / `PROJECT.AI.md`
 - 项目维护原则：
@@ -622,7 +622,7 @@ README.md / README.en.md / CHANGELOG.md / TESTING.md / PROJECT*.md
 | “固化”语义需清晰 | 产品歧义 | 文档明确：固化跳过自动清理，但手动删除/会话删除的孤儿回收需定义 |
 | 会话跳转在 settings 弹层内可能切换当前会话 | UX | 先尝试 `sessions.open`；若弹层不关闭，再考虑通过 workspace 打开 |
 | `/aux image delete` 产生命令卡片 | 可接受 | 写操作低频；只读走投影 |
-| DSH 未来版本 API 变化 | 维护 | 尽量只依赖 alpha.2/alpha.3 已确认 API；若 readAttachment/投影变化，集中隔离在 adapter |
+| DSH 未来版本 API 变化 | 维护 | 尽量只依赖 0.1.2 线上已确认且新旧 Session API 兼容的 API；若 readAttachment/投影变化，集中隔离在 adapter |
 
 ---
 

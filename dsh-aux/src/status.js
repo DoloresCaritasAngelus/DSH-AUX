@@ -39,7 +39,7 @@ const PATCH_PACKAGES = [
 
 /**
  * Patch ledger: one row per local bridge patch that dsh-aux maintains.
- * Main branch supports DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3 only.
+ * Main branch supports DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1.
  * Retired legacy patches (host-apiproxy / rc.6 settings) live in
  * `bridge/retired/` and are intentionally not listed here.
  *
@@ -125,7 +125,7 @@ async function readPatchSource(pkg) {
  * - `state`: installed | missing | unknown
  * - `present`: whether the target package file exists
  * - `required`: whether this patch is needed on the current DSH line
- *   (all listed patches are required on alpha.2/alpha.3)
+ *   (all listed patches are required on 0.1.2-alpha.2 ~ 0.1.2-rc.1)
  */
 export async function collectPatchLedger() {
   const sources = new Map();

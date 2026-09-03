@@ -10,7 +10,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **360**(2026-09-03)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **370**(2026-09-04)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 
@@ -23,7 +23,7 @@ node scripts/ci-fake-dsh.mjs                                  # fake DSH 根 + b
 node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + 实际补丁 + doctor(CI 专用)
 ```
 
-- 当前 DSH 兼容矩阵:`0.1.2-alpha.2` / `0.1.2-alpha.3`。
+- 当前 DSH 兼容矩阵:`0.1.2-alpha.2` / `0.1.2-alpha.3` / `0.1.2-alpha.4` / `0.1.2-alpha.5` / `0.1.2-rc.1`。
 - 旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）请使用 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 分支 / `v0.4.1-legacy` Release。
 - `0.1.2-alpha.1` 只有 GitHub release,没有对应 npm 包发布,因此无法进入 npm 矩阵;
   源码差异仍纳入研究,但 CI 绿门以 npm 可安装版本为准。
@@ -47,6 +47,7 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/image-actions.test.js` | 单张删除/孤儿回收/ownership 清理/符号链接安全 |
 | `tests/image-commands.test.js` | `/aux images` 与 `/aux image` 命令层 |
 | `tests/image-locate.test.js` | 图片定位:最近 user/message seq 与 vision_analyze callId/callSeq |
+| `tests/session-compat.test.js` | Session API 兼容:旧 `.events` / 新 `snapshotEvents()` 覆盖 bootstrap/history/debug/locate/resolve |
 | `tests/readme-sync.test.js` | U1:包内 README == 根 README 生成快照(防漂移) |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
 | `tests/subagent-route.test.js` | subagent 路由判定(native/manual/vision-aware) |

@@ -1,5 +1,32 @@
 # Changelog
 
+## Next (0.1.2-rc.1 兼容,未发布)
+
+- **DSH 0.1.2-alpha.4+ / rc.1 Session API 兼容**:
+  - 新增 `dsh-aux/src/session-utils.js`,提供 `sessionEvents()` 兼容 helper:
+    新版 DSH 走 `session.snapshotEvents()`,旧版 alpha.2/alpha.3 走 `session.events`。
+  - 迁移 `bootstrap` 晋升判断、`/aux history`、`/aux debug @this`、`/aux status`
+    最近调用、`vision_analyze attachmentId` 定位、`image locate` live-session
+    读取,避免新版 DSH 因缺少 `.events` getter 而失效。
+- **P7 session ignorable 补丁双版本支持**:
+  - 新增 `bridge/orig-session-append-alpha4-block.txt` 与
+    `bridge/patched-session-append-alpha4-block.txt`,覆盖 alpha.4+/rc.1 的
+    `seq: SessionSeq(...)` append 实现。
+  - `patch-session-ignorable.mjs` / `self-heal.mjs` 会按部署源码自动选择
+    alpha.2/3 旧块或 alpha.4+/rc.1 新块。
+- **兼容范围扩展**:
+  - 主支支持范围从 `0.1.2-alpha.2 ~ 0.1.2-alpha.3` 扩展到
+    `0.1.2-alpha.2 ~ 0.1.2-rc.1`。
+  - `scripts/install-dsh-version.mjs` 支持 alpha.4 / alpha.5 / rc.1。
+  - CI compat 矩阵新增 `0.1.2-alpha.4` / `0.1.2-alpha.5` / `0.1.2-rc.1`。
+  - `doctor` 支持范围同步。
+- **测试**:
+  - 新增 `tests/session-compat.test.js`:锁定旧 `.events` 与新版
+    `snapshotEvents()` 两种 Session 形态下的 bootstrap/history/debug/resolve
+    读取。
+  - `tests/image-locate.test.js` 新增新版 live-session `snapshotEvents()` 用例。
+  - 全量基线从 360 增至 370。
+
 ## 0.4.2-FIX1 (2026-09-03) — 图库日期分组修复 + 启动模式/事件提示
 
 - **图库日期分组修复**:
