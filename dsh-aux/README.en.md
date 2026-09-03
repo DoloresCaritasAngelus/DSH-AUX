@@ -13,7 +13,7 @@
 > The main model stays focused on the chat; I take care of images, web pages, and compressing long text!
 > Whenever you need me, just call me directly～
 
-![Version](https://img.shields.io/badge/version-0.4.2-blue)
+![Version](https://img.shields.io/badge/version-0.4.2-FIX1-blue)
 ![Tests](https://img.shields.io/badge/tests-360-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--alpha.3-0078D4)
@@ -187,6 +187,8 @@ After restarting DSH:
 2. Run `/aux status` to see each task's route;
 3. Want vision to use a dedicated model? `/aux model vision <provider>/mimo-v2.5`.
 
+> ⚠️ When starting DSH, use your real launcher (for example `~/dsh/start-dsh.sh` or `npx @deepseek-ai/dsh web`). Do not use `pnpm dsh --profile web`-style development launchers that boot from TS source trees: dsh-aux patches are applied to the published `lib/` artifacts, so source mode does not load them and features can appear patched but remain inactive.
+
 > 💬 "Once installed, just call me~"
 
 ### Updating (GitHub installs)
@@ -227,7 +229,7 @@ Features:
 - **Filter**: All / Shared / Orphan / Archived / Retained / Memory.
 - **Batch actions**: checkboxes or **mouse drag-to-select** (hold `Shift`/`Ctrl` to add to the selection); delete, reclaim orphans, retain/unretain.
 - **Detail**: centered resizable/draggable modal with metadata, owner sessions, analysis memories, and "Go to message / trace" entries (currently a degraded open-session fallback due to DSH public API limits).
-- **Group/sort**: group by date or session; date groups split today into 6-hour buckets plus yesterday/this week/this month/this year/older years; session grouping pins orphan/archived groups on top; supports within-group and between-group sorting.
+- **Group/sort**: group by date or session; date groups use progressive granularity: today in 6-hour buckets, the last 30 days per day, the current year per month, and older years per year; session grouping pins orphan/archived groups on top; supports within-group and between-group sorting.
 - **Archived state**: images referenced only by archived sessions are no longer misclassified as orphans; they appear in the archived count/filter/session group. When a readable live owner exists, the thumbnail tries live sessions first.
 
 Command-line read/manage commands:

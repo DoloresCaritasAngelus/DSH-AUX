@@ -13,7 +13,7 @@
 > 主模型专心聊天，我负责看图、读网页、压长文！
 > 需要我的时候，直接叫我就好～
 
-![Version](https://img.shields.io/badge/version-0.4.2-blue)
+![Version](https://img.shields.io/badge/version-0.4.2-FIX1-blue)
 ![Tests](https://img.shields.io/badge/tests-360-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--alpha.3-0078D4)
@@ -187,6 +187,8 @@ dsh plugin --profile web add "file:$(pwd)"
 2. 输入 `/aux status` 查看各任务路由；
 3. 想让视觉走专用模型？`/aux model vision <provider>/mimo-v2.5`。
 
+> ⚠️ 启动 DSH 时请使用你实际的启动脚本（例如 `~/dsh/start-dsh.sh` / `npx @deepseek-ai/dsh web`）。不要用 `pnpm dsh --profile web` 这类从 TS 源码目录启动的开发模式：dsh-aux 的桥接补丁打在已发布的 `lib/` 构建产物上，源码模式不会加载这些补丁，导致图片/事件等功能“已打补丁但实际未生效”。
+
 > 💬 「装好之后，直接叫我就行～」
 
 ### 更新（GitHub 安装用户）
@@ -227,7 +229,7 @@ node scripts/doctor.mjs    # 更新后健康检查（不修改任何文件）
 - **筛选**：全部 / 共享 / 孤儿 / 已归档 / 固化 / 有记忆。
 - **批量操作**：复选框或**鼠标拖拽框选**（按住 `Shift`/`Ctrl` 可追加选择），可批量删除、回收孤儿、固化/取消固化。
 - **详情**：居中大弹窗，可拖拽/缩放；展示元数据、归属会话、分析记忆；可跳转“去对话 / 去轨迹”（受 DSH 公共 API 限制，当前为打开目标会话的降级入口）。
-- **分组/排序**：可按日期或按会话分组；日期按今天 6 小时桶、昨天/本周/本月/今年/往年；会话分组中孤儿与已归档分组置顶；支持组内排序与独立组间排序。
+- **分组/排序**：可按日期或按会话分组；日期按“今天 6 小时桶 → 近 30 天逐日 → 当年按月 → 往年按年”的渐进粒度；会话分组中孤儿与已归档分组置顶；支持组内排序与独立组间排序。
 - **已归档状态**：归档会话引用的图片不会被误判为孤儿；统计、筛选和会话分组中单独显示“已归档”。有可读 live owner 时缩略图会尝试从 live 会话读取。
 
 命令行也提供只读/管理入口：
