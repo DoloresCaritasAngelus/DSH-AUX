@@ -1,6 +1,6 @@
 # Changelog
 
-## Next (0.1.2-rc.1 兼容,未发布)
+## 0.4.3 (2026-09-04) — DSH 0.1.2-rc.1 兼容
 
 - **DSH 0.1.2-alpha.4+ / rc.1 Session API 兼容**:
   - 新增 `dsh-aux/src/session-utils.js`,提供 `sessionEvents()` 兼容 helper:

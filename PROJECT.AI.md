@@ -8,7 +8,7 @@
 - Name: `@dolorescaritasangelus/dsh-aux` (workspace: DSH-AUX)
 - Repo: https://github.com/DoloresCaritasAngelus/DSH-AUX
 - Purpose: auxiliary-model system for DeepSeek Harness (DSH)
-- Current version: `0.4.1-FIX1` (package `dsh-aux/package.json`)
+- Current version: `0.4.3` (package `dsh-aux/package.json`)
 - Current supported DSH: `0.1.2-alpha.2` ~ `0.1.2-rc.1`
 - Legacy DSH (`0.1.0-rc.6` ~ `0.1.1-rc.2`): permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2`, release `v0.4.1-legacy`
 - Runtime deps: none third-party; peerDependencies are official DSH packages only

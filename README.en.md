@@ -8,7 +8,7 @@
 > The main model stays focused on the chat; I take care of images, web pages, and compressing long text!
 > Whenever you need me, just call me directly～
 
-![Version](https://img.shields.io/badge/version-0.4.2-FIX1-blue)
+![Version](https://img.shields.io/badge/version-0.4.3-blue)
 ![Tests](https://img.shields.io/badge/tests-370-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--rc.1-0078D4)
