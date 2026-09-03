@@ -15,6 +15,7 @@ import { gcImages } from "./images/gc.js";
 import { handleMemoryCommand } from "./images/memory.js";
 import { collectImageLibrary, collectImageLibraryEntries } from "./images/image-library.js";
 import { deleteImage, deleteOrphans } from "./images/image-actions.js";
+import { locateImageAnchors } from "./images/locate.js";
 import { loadRetained, setRetained } from "./images/retention.js";
 import { publishImageLibrary } from "./projection.js";
 import { collectPlatformStatus, publishPlatformStatus } from "./status.js";
@@ -82,6 +83,7 @@ function parseOptions(args, optionNames) {
 function formatImageEntry(entry) {
   const status = [];
   if (entry.orphan) status.push("孤儿");
+  if (entry.archived) status.push("已归档");
   if (entry.shared) status.push("共享");
   if (entry.retained) status.push("固化");
   if (entry.memories.length > 0) status.push(`记忆×${entry.memories.length}`);
@@ -112,14 +114,14 @@ export async function handleImagesCommand(service, args) {
     return { kind: "success", text: JSON.stringify({ ...snapshot, entries }) };
   }
   const lines = [
-    `图片库: 共 ${snapshot.counts.total} 张(共享 ${snapshot.counts.shared}, 孤儿 ${snapshot.counts.orphan}, 固化 ${snapshot.counts.retained}, 有记忆 ${snapshot.counts.withMemory})`,
+    `图片库: 共 ${snapshot.counts.total} 张(共享 ${snapshot.counts.shared}, 孤儿 ${snapshot.counts.orphan}, 已归档 ${snapshot.counts.archived ?? 0}, 固化 ${snapshot.counts.retained}, 有记忆 ${snapshot.counts.withMemory})`,
     ...entries.map(formatImageEntry)
   ];
   return { kind: "success", text: lines.join("\n") };
 }
 
-/** /aux image <action> — delete/retain/orphan management. */
-export async function handleImageCommand(service, args) {
+/** /aux image <action> — delete/retain/orphan/locate management. */
+export async function handleImageCommand(service, args, agent) {
   const action = args[0] ?? "";
   const json = args.includes("--json");
   const rest = args.slice(1).filter((arg) => arg !== "--json");
@@ -153,10 +155,33 @@ export async function handleImageCommand(service, args) {
       if (json) return { kind: "success", text: JSON.stringify({ ok: true, attachmentId: id, retained: result.retained }) };
       return { kind: "success", text: retained ? `已固化图片 ${id}` : `已取消固化图片 ${id}` };
     }
+    if (action === "locate") {
+      const id = valueArgs[0];
+      if (id === void 0) return error("用法: /aux image locate <attachmentId> [--session <id>] [--json]", "USAGE");
+      const sessionEquals = rest.find((arg) => arg.startsWith("--session="))?.slice("--session=".length);
+      const sessionIndex = rest.indexOf("--session");
+      const sessionArg = sessionEquals ??
+        (sessionIndex >= 0 ? rest[sessionIndex + 1] : void 0);
+      const result = await locateImageAnchors(service, id, {
+        ...(agent?.session !== void 0 ? { liveSession: agent.session } : {}),
+        ...(typeof sessionArg === "string" && sessionArg.length > 0 ? { sessionId: sessionArg } : {})
+      });
+      if (!result.found) return error("未找到图片的会话/消息引用", "NOT_FOUND");
+      if (json) return { kind: "success", text: JSON.stringify(result) };
+      const lines = [`图片定位: ${result.attachmentId}`];
+      for (const anchor of result.anchors) {
+        const messageText = anchor.messageSeq === null ? "无消息引用" : `消息 seq ${anchor.messageSeq}`;
+        const visionText = anchor.callId === null
+          ? "无 vision 调用"
+          : `vision 调用 ${anchor.callId} (seq ${anchor.callSeq})`;
+        lines.push(`  ${anchor.sessionId} → ${messageText}, ${visionText}`);
+      }
+      return { kind: "success", text: lines.join("\n") };
+    }
     if (action === "list" || action === "ls" || action === "") {
       return handleImagesCommand(service, args);
     }
-    return error("用法: /aux image delete|gc-orphans|retain|unretain <attachmentId>", "USAGE");
+    return error("用法: /aux image delete|gc-orphans|retain|unretain|locate <attachmentId> [--session <id>] [--json]", "USAGE");
   } catch (err) {
     const code = err?.code || "ERROR";
     return error(err?.message ?? String(err), code);
@@ -195,7 +220,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
     return await handleImagesCommand(service, args.slice(1));
   }
   if (sub === "image") {
-    return await handleImageCommand(service, args.slice(1));
+    return await handleImageCommand(service, args.slice(1), agent);
   }
   if (sub === "history") {
     return await handleHistoryCommand(service, agent, args.slice(1));

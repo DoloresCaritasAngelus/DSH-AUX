@@ -5,7 +5,7 @@
  * @module @dolorescaritasangelus/dsh-aux/images/image-library
  */
 import { lstat as lstatFile, readFile as readFileText, readdir } from "node:fs/promises";
-import { liveSessionIds, loadSessionImages } from "./ownership.js";
+import { liveSessionIds, loadArchivedSessionIds, loadSessionImages } from "./ownership.js";
 import { imageMemoryPath } from "./memory.js";
 
 const HASH_ID_RE = /^sha256:([a-f0-9]{64})$/;
@@ -216,13 +216,19 @@ function entryMatchesQuery(entry, query) {
 /** Assemble every image library entry from disk/scan state. */
 async function buildImageLibraryEntries(service) {
   const home = homePath();
-  const [ownershipMap, liveIds, memoryEntries, retainedSet, scanned] = await Promise.all([
+  const [ownershipMap, liveIds, archivedIds, memoryEntries, retainedSet, scanned] = await Promise.all([
     loadSessionImages().catch(() => new Map()),
     liveSessionIds(service),
+    loadArchivedSessionIds().catch(() => new Set()),
     readImageMemoryEntries(),
     readRetainedFromDisk(),
     home === void 0 ? [] : scanObjectFiles(home + "/attachments/v1/objects")
   ]);
+  // Archived sessions are hidden from UI surfaces but their logs still appear
+  // in persistence listings. For image-library readability/classification we
+  // treat them as non-live; ownership cleanup still uses `liveSessionIds`
+  // directly and therefore keeps archived sessions' images intact.
+  const visibleIds = new Set([...liveIds].filter((id) => !archivedIds.has(id)));
 
   const ownersByAttachment = buildOwnersByAttachment(ownershipMap);
   const memoriesByAttachment = buildMemoriesByAttachment(memoryEntries);
@@ -264,9 +270,11 @@ async function buildImageLibraryEntries(service) {
     const hash = draft.hash;
     const attachmentId = "sha256:" + hash;
     const ownerSessions = ownersByAttachment.get(attachmentId) ?? [];
-    const ownerLiveSessions = ownerSessions.filter((sessionId) => liveIds.has(sessionId));
+    const ownerLiveSessions = ownerSessions.filter((sessionId) => visibleIds.has(sessionId));
+    const ownerArchivedSessions = ownerSessions.filter((sessionId) => archivedIds.has(sessionId));
     const referenceCount = ownerSessions.length;
     const memories = memoriesByAttachment.get(attachmentId) ?? [];
+    const archived = referenceCount > 0 && ownerLiveSessions.length === 0 && ownerArchivedSessions.length > 0;
     entries.push({
       kind: "image",
       attachmentId,
@@ -276,13 +284,15 @@ async function buildImageLibraryEntries(service) {
       ...(draft.mtimeMs !== void 0 ? { mtimeMs: draft.mtimeMs } : {}),
       ownerSessions,
       ownerLiveSessions,
+      ownerArchivedSessions,
       referenceCount,
       shared: referenceCount > 1,
       orphan: referenceCount === 0,
+      archived,
       retained: retainedSet.has(attachmentId),
       memories,
-      ...(ownerLiveSessions.length > 0 || ownerSessions.length > 0
-        ? { readableBySessionId: ownerLiveSessions[0] ?? ownerSessions[0] }
+      ...(ownerLiveSessions.length > 0
+        ? { readableBySessionId: ownerLiveSessions[0] }
         : {}),
       ...(draft.fileName !== void 0 ? { fileName: draft.fileName } : {})
     });
@@ -309,6 +319,7 @@ export async function collectImageLibrary(service) {
     counts: {
       total: entries.length,
       orphan: entries.filter((entry) => entry.orphan).length,
+      archived: entries.filter((entry) => entry.archived).length,
       shared: entries.filter((entry) => entry.shared).length,
       retained: entries.filter((entry) => entry.retained).length,
       withMemory: entries.filter((entry) => entry.memories.length > 0).length
@@ -322,7 +333,7 @@ export async function collectImageLibrary(service) {
  *
  * @param {object} service AUX service.
  * @param {object} [opts]
- * @param {'all'|'orphan'|'shared'|'retained'|'withMemory'} [opts.filter]
+ * @param {'all'|'orphan'|'archived'|'shared'|'retained'|'withMemory'} [opts.filter]
  * @param {string} [opts.query]
  * @param {number} [opts.limit]
  * @param {number} [opts.offset]
@@ -341,6 +352,9 @@ export async function collectImageLibraryEntries(service, opts = {}) {
   switch (options.filter) {
     case "orphan":
       result = result.filter((entry) => entry.orphan);
+      break;
+    case "archived":
+      result = result.filter((entry) => entry.archived);
       break;
     case "shared":
       result = result.filter((entry) => entry.shared);

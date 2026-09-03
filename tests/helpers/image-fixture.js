@@ -66,6 +66,16 @@ export async function createImageFixture() {
     await writeFile(join(v1, 'image-retention.json'), JSON.stringify({ version: 1, retained: Array.isArray(retained) ? retained : [...retained] }));
   }
 
+  async function writeWorkspace({ archivedSessionIds = [] } = {}) {
+    const dir = join(home, 'storages');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'workspace.json'), JSON.stringify({
+      unit: { name: 'workspace', version: 2 },
+      global: { initialized: true, workspaceIds: [], archivedSessionIds },
+      tables: { workspaces: {} }
+    }));
+  }
+
   async function cleanup() {
     await rm(home, { recursive: true, force: true });
   }
@@ -81,6 +91,7 @@ export async function createImageFixture() {
     writeSessionImages,
     writeMemory,
     writeRetention,
+    writeWorkspace,
     cleanup
   };
 }

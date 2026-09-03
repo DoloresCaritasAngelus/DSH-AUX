@@ -66,6 +66,7 @@ test('collectImageLibrary: empty fixture -> counts total 0', async () => {
     assert.deepEqual(snapshot.counts, {
       total: 0,
       orphan: 0,
+      archived: 0,
       shared: 0,
       retained: 0,
       withMemory: 0
@@ -209,6 +210,73 @@ test('collectImageLibraryEntries: search by question/summary finds entry', async
       query: imageA.slice('sha256:'.length)
     });
     assert.deepEqual(byHash.map((e) => e.attachmentId), [imageA]);
+  });
+});
+
+test('collectImageLibrary: archived-only owner -> archived true, not orphan, no readable session', async () => {
+  await withFixture(async (fixture) => {
+    await fixture.writeObject(imageA, { mediaType: 'image/png', bytes: 12 });
+    await fixture.writeSessionImages({ 'sess-archived': [imageA] });
+    // The session is still present in persistence snapshots, but workspace marks it archived.
+    await fixture.writeWorkspace({ archivedSessionIds: ['sess-archived'] });
+    const service = makeService({
+      sessions: [],
+      snapshots: [{ header: { id: 'sess-archived' } }]
+    });
+
+    const snapshot = await collectImageLibrary(service);
+    const entry = snapshot.entries[0];
+    assert.equal(entry.orphan, false);
+    assert.equal(entry.archived, true);
+    assert.deepEqual(entry.ownerSessions, ['sess-archived']);
+    assert.deepEqual(entry.ownerLiveSessions, []);
+    assert.deepEqual(entry.ownerArchivedSessions, ['sess-archived']);
+    assert.equal(entry.readableBySessionId, undefined);
+    assert.equal(snapshot.counts.archived, 1);
+    assert.equal(snapshot.counts.orphan, 0);
+  });
+});
+
+test('collectImageLibrary: live + archived owner -> readable via live, not archived-only', async () => {
+  await withFixture(async (fixture) => {
+    await fixture.writeObject(imageA, { mediaType: 'image/jpeg' });
+    await fixture.writeSessionImages({
+      'sess-live': [imageA],
+      'sess-archived': [imageA]
+    });
+    await fixture.writeWorkspace({ archivedSessionIds: ['sess-archived'] });
+    const service = makeService({
+      sessions: [{ id: 'sess-live' }],
+      snapshots: [{ header: { id: 'sess-archived' } }]
+    });
+
+    const snapshot = await collectImageLibrary(service);
+    const entry = snapshot.entries[0];
+    assert.equal(entry.orphan, false);
+    assert.equal(entry.archived, false);
+    assert.deepEqual(entry.ownerLiveSessions, ['sess-live']);
+    assert.deepEqual(entry.ownerArchivedSessions, ['sess-archived']);
+    assert.equal(entry.readableBySessionId, 'sess-live');
+    assert.equal(snapshot.counts.archived, 0);
+  });
+});
+
+test('collectImageLibraryEntries: filter archived works', async () => {
+  await withFixture(async (fixture) => {
+    await fixture.writeObject(imageA); // archived-only
+    await fixture.writeObject(imageB); // live
+    await fixture.writeSessionImages({
+      'sess-archived': [imageA],
+      'sess-live': [imageB]
+    });
+    await fixture.writeWorkspace({ archivedSessionIds: ['sess-archived'] });
+    const service = makeService({
+      sessions: [{ id: 'sess-live' }],
+      snapshots: [{ header: { id: 'sess-archived' } }]
+    });
+
+    const archived = await collectImageLibraryEntries(service, { filter: 'archived' });
+    assert.deepEqual(archived.map((e) => e.attachmentId), [imageA]);
   });
 });
 
