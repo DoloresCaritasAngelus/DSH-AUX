@@ -9,7 +9,7 @@
 > 需要我的时候，直接叫我就好～
 
 ![Version](https://img.shields.io/badge/version-0.4.1-FIX1-blue)
-![Tests](https://img.shields.io/badge/tests-348-brightgreen)
+![Tests](https://img.shields.io/badge/tests-359-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--alpha.3-0078D4)
 
@@ -32,6 +32,7 @@
 - [平台开关与 SKILL 模式](#平台开关与-skill-模式)
 - [快速开始](#快速开始)
 - [日常命令](#日常命令)
+- [图片库（Image Library）](#图片库image-library)
 - [设置页与状态面板](#设置页与状态面板)
 - [桥接与高级能力](#桥接与高级能力)
 - [安全边界](#安全边界)
@@ -66,6 +67,7 @@
 | **会话压缩桥接** | 配置 `compaction` 后，原生自动/手动压缩改走 AUX |
 | **设置页 + 状态面板** | 分组可折叠，中英双语；完整平台状态、补丁可诊断、一键修复、重启检测 |
 | **会话图片生命周期** | 删会话自动清无引用图片；共享保留、图片记忆跨重启 |
+| **图片库面板** | 侧边栏图库：缩略图档位、搜索/过滤、批量操作、详情弹窗、会话/轨迹入口、分组/排序视图、已归档状态、拖拽框选 |
 | **零第三方运行时依赖** | peerDependencies 全为 DSH 官方包 |
 
 ## 我都能帮你做什么
@@ -210,6 +212,32 @@ node scripts/doctor.mjs    # 更新后健康检查（不修改任何文件）
 | `/aux memory [n]` | 查看最近图片分析记忆 |
 | `/aux gc-images [days]` | 手动回收旧附件图片 |
 
+## 图片库（Image Library）
+
+图片库是 dsh-aux 的**会话图片可视化面板**，入口在 DSH 侧边栏底部的 🖼 按钮（Web UI）。它帮你管理会话里出现过的图片附件、分析记忆与生命周期状态。
+
+打开后支持：
+
+- **查看**：缩略图网格（小/中/大三档），支持搜索文件名、记忆内容或会话。
+- **筛选**：全部 / 共享 / 孤儿 / 已归档 / 固化 / 有记忆。
+- **批量操作**：复选框或**鼠标拖拽框选**（按住 `Shift`/`Ctrl` 可追加选择），可批量删除、回收孤儿、固化/取消固化。
+- **详情**：居中大弹窗，可拖拽/缩放；展示元数据、归属会话、分析记忆；可跳转“去对话 / 去轨迹”（受 DSH 公共 API 限制，当前为打开目标会话的降级入口）。
+- **分组/排序**：可按日期或按会话分组；日期按今天 6 小时桶、昨天/本周/本月/今年/往年；会话分组中孤儿与已归档分组置顶；支持组内排序与独立组间排序。
+- **已归档状态**：归档会话引用的图片不会被误判为孤儿；统计、筛选和会话分组中单独显示“已归档”。有可读 live owner 时缩略图会尝试从 live 会话读取。
+
+命令行也提供只读/管理入口：
+
+| 命令 | 作用 |
+|---|---|
+| `/aux images` | 查看图片库摘要 |
+| `/aux images --json` | 结构化输出图片库快照 |
+| `/aux image delete <id> [--force]` | 删除图片（有引用时默认拒绝，`--force` 强制移除引用） |
+| `/aux image gc-orphans [--include-retained]` | 回收孤儿图片 |
+| `/aux image retain <id>` / `unretain <id>` | 固化 / 取消固化 |
+| `/aux image locate <id> [--session <id>] [--json]` | 定位图片最近出现的消息/调用位置 |
+
+详细接口与数据形状见 [IMAGE-LIBRARY-CONTRACT.md](./IMAGE-LIBRARY-CONTRACT.md) 与 [IMAGE-LIBRARY-DESIGN.md](./IMAGE-LIBRARY-DESIGN.md)。
+
 ## 设置页与状态面板
 
 ### 为什么要先看这里？
@@ -344,7 +372,7 @@ const result = await ctx.auxLlm.call("compress", {
 - **平台**：DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3（已验证 0.1.2-alpha.2 / 0.1.2-alpha.3）；Node ≥ 20。
 - **旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）用户**：请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。主支不再支持这些版本。
 - **运行时零第三方依赖**：peerDependencies 全部是 DSH 官方包（环境自带），无 `dependencies`。
-- **测试零依赖**：`node --test tests/*.test.js`（348 项；文件清单与基线见 `TESTING.md`）。
+- **测试零依赖**：`node --test tests/*.test.js`（359 项；文件清单与基线见 `TESTING.md`）。
 
 ### 集成组件
 

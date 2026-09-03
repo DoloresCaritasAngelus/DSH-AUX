@@ -14,7 +14,7 @@
 > Whenever you need me, just call me directly～
 
 ![Version](https://img.shields.io/badge/version-0.4.1-FIX1-blue)
-![Tests](https://img.shields.io/badge/tests-348-brightgreen)
+![Tests](https://img.shields.io/badge/tests-359-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--alpha.3-0078D4)
 
@@ -37,6 +37,7 @@
 - [Platform switches & SKILL modes](#platform-switches--skill-modes)
 - [Quick Start](#quick-start)
 - [Daily commands](#daily-commands)
+- [Image Library](#image-library)
 - [Settings & status panel](#settings--status-panel)
 - [Bridges & advanced capabilities](#bridges--advanced-capabilities)
 - [Security boundaries](#security-boundaries)
@@ -71,6 +72,7 @@ Models keep getting stronger, but handing "look at this image", "read this page"
 | **Compaction bridge** | With a `compaction` task configured, native auto/manual compaction routes through AUX |
 | **Settings + status panel** | Grouped and collapsible, bilingual; full platform status, patch diagnostics, one-click repair, and restart detection |
 | **Session image lifecycle** | Deleting a session cleans up unreferenced images; shared images are preserved; image memory survives restarts |
+| **Image library panel** | Sidebar gallery: thumbnail sizes, search/filter, batch actions, detail modal, session/trace entry, group/sort views, archived state, drag-to-select |
 | **Zero third-party runtime deps** | peerDependencies are all official DSH packages |
 
 ## What can I do for you
@@ -215,6 +217,32 @@ node scripts/doctor.mjs    # post-update health check (does not modify anything)
 | `/aux memory [n]` | View recent image analysis memory |
 | `/aux gc-images [days]` | Manually reclaim old attachment images |
 
+## Image Library
+
+The image library is dsh-aux's **visual panel for session images**, opened from the 🖼 button at the bottom of the DSH sidebar (Web UI). It helps you manage image attachments, analysis memories, and lifecycle state across sessions.
+
+Features:
+
+- **Browse**: thumbnail grid with small/medium/large sizes; search by file name, memory content, or session.
+- **Filter**: All / Shared / Orphan / Archived / Retained / Memory.
+- **Batch actions**: checkboxes or **mouse drag-to-select** (hold `Shift`/`Ctrl` to add to the selection); delete, reclaim orphans, retain/unretain.
+- **Detail**: centered resizable/draggable modal with metadata, owner sessions, analysis memories, and "Go to message / trace" entries (currently a degraded open-session fallback due to DSH public API limits).
+- **Group/sort**: group by date or session; date groups split today into 6-hour buckets plus yesterday/this week/this month/this year/older years; session grouping pins orphan/archived groups on top; supports within-group and between-group sorting.
+- **Archived state**: images referenced only by archived sessions are no longer misclassified as orphans; they appear in the archived count/filter/session group. When a readable live owner exists, the thumbnail tries live sessions first.
+
+Command-line read/manage commands:
+
+| Command | Purpose |
+|---|---|
+| `/aux images` | Show image library summary |
+| `/aux images --json` | Structured image library snapshot |
+| `/aux image delete <id> [--force]` | Delete an image (default refuses when referenced; `--force` removes references too) |
+| `/aux image gc-orphans [--include-retained]` | Reclaim orphan images |
+| `/aux image retain <id>` / `unretain <id>` | Retain / unretain |
+| `/aux image locate <id> [--session <id>] [--json]` | Locate the image's latest message/call anchors |
+
+See [IMAGE-LIBRARY-CONTRACT.md](./IMAGE-LIBRARY-CONTRACT.md) and [IMAGE-LIBRARY-DESIGN.md](./IMAGE-LIBRARY-DESIGN.md) for the detailed contract and design.
+
 ## Settings & status panel
 
 ### Why look here first?
@@ -349,7 +377,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **Platform**: DSH 0.1.2-alpha.2 ~ 0.1.2-alpha.3 (verified on 0.1.2-alpha.2 / 0.1.2-alpha.3); Node ≥ 20.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are all official DSH packages (bundled with the platform); no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (348 tests); file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (359 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 

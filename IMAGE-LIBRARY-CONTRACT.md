@@ -43,9 +43,11 @@ interface ImageLibraryEntry {
   mtimeMs?: number;
   ownerSessions: string[];
   ownerLiveSessions: string[];
+  ownerArchivedSessions?: string[];
   referenceCount: number;
   shared: boolean;
   orphan: boolean;
+  archived?: boolean;
   retained: boolean;
   memories: Array<{
     sessionId: string;
@@ -68,6 +70,7 @@ interface ImageLibrarySnapshot {
   counts: {
     total: number;
     orphan: number;
+    archived: number;
     shared: number;
     retained: number;
     withMemory: number;
@@ -99,7 +102,7 @@ setRetained(attachmentId: string, retained: boolean): Promise<{ retained: boolea
 ```js
 collectImageLibrary(service): Promise<ImageLibrarySnapshot>
 collectImageLibraryEntries(service, opts?): Promise<ImageLibraryEntry[]>
-// opts: { filter?: 'all'|'orphan'|'shared'|'retained'|'withMemory'; query?: string; limit?: number; offset?: number; sessionId?: string }
+// opts: { filter?: 'all'|'orphan'|'archived'|'shared'|'retained'|'withMemory'; query?: string; limit?: number; offset?: number; sessionId?: string }
 deriveObjectPath(attachmentId): string | undefined  // sha256: -> objects/<2>/<hash>
 scanObjectFiles(root): Promise<Array<{ path, fileName, bytes, mtimeMs }>>
 ```
@@ -107,12 +110,14 @@ scanObjectFiles(root): Promise<Array<{ path, fileName, bytes, mtimeMs }>>
 聚合规则：
 - 从 `objects/` 扫描实际存在文件；每个 attachmentId 以去 `sha256:` 的 hash 为 identity。
 - ownerSessions 来自 `session-images.json`（含 live + persisted 全集）。
-- `ownerLiveSessions` 来自 `liveSessionIds(service)`。
+- `ownerLiveSessions` 来自 `liveSessionIds(service)`（归档会话视为非 live）。
+- `ownerArchivedSessions` 来自 workspace 归档集合。
 - `orphan = ownerSessions.length === 0`。
+- `archived = ownerSessions.length > 0 && ownerLiveSessions.length === 0 && ownerArchivedSessions.length > 0`。
 - `shared = referenceCount > 1`。
 - `retained` 来自 retention 集合。
 - `memories` 从 `image-memory.json` 按 attachmentId 聚合（保留最近最多 20 条）。
-- `readableBySessionId`：优先取 `ownerLiveSessions[0]`，否则 `ownerSessions[0]`；仅当该 session 仍存在/可绑定。
+- `readableBySessionId`：优先取 `ownerLiveSessions[0]`；仅归档/孤儿时不设置。
 - 搜索 `query` 匹配：`attachmentId` / `hash` / `fileName` / 任一 `memories[].question` / `memories[].summary` / owner session id。
 - `settings.imageRetentionDays` 默认 30；`imageAutoCleanEnabled` 默认 false（Phase 2 后接配置）。
 
@@ -143,7 +148,7 @@ removeFromOwnership(service, attachmentId): Promise<void>   // internal, 也可�
 
 ```text
 /aux images
-/aux images --json [--filter all|orphan|shared|retained|withMemory] [--query <q>] [--session <id>] [--limit N] [--offset N]
+/aux images --json [--filter all|orphan|archived|shared|retained|withMemory] [--query <q>] [--session <id>] [--limit N] [--offset N]
 /aux image delete <attachmentId> [--force]
 /aux image gc-orphans [--include-retained]
 /aux image retain <attachmentId>

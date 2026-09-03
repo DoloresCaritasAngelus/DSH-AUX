@@ -195,9 +195,11 @@ interface ImageLibraryEntry {
   // 归属
   ownerSessions: string[];
   ownerLiveSessions: string[]; // 仍存活的会话（可跳转）
+  ownerArchivedSessions?: string[]; // 已归档会话（存在引用但不在 UI 会话列表）
   referenceCount: number;      // ownerSessions.length
   shared: boolean;             // referenceCount > 1
   orphan: boolean;             // ownerSessions.length === 0
+  archived?: boolean;          // 有 owner 且无 live owner，且至少一个 owner 已归档
   retained: boolean;
   // 记忆
   memories: Array<{ sessionId, question, summary, at }>;
@@ -217,6 +219,7 @@ interface ImageLibrarySnapshot {
   counts: {
     total: number;
     orphan: number;
+    archived: number;
     shared: number;
     retained: number;
     withMemory: number;
