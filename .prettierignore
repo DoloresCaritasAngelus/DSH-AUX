@@ -1,0 +1,15 @@
+# 依赖与安装产物
+node_modules/
+package-lock.json
+
+# 补丁锚点:字节精确内容,严禁重排
+*.txt
+
+# 已退役的历史补丁脚本(保持冻结原样)
+bridge/retired/
+
+# 图片资源
+assets/
+
+# 文档:本次只格式化代码,md 不动
+*.md

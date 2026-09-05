@@ -11,7 +11,7 @@ export const TRUNCATED_MARKER = "\n[…truncated]";
 export function codePointCount(text) {
   const str = typeof text === "string" ? text : "";
   let count = 0;
-  for (let i = 0; i < str.length; ) {
+  for (let i = 0; i < str.length;) {
     const code = str.codePointAt(i);
     i += code > 0xffff ? 2 : 1;
     count += 1;
@@ -33,7 +33,7 @@ export function truncateByChars(text, maxChars) {
   if (total <= limit) return { text: str, chars: total, kept: total, truncated: false };
   let end = 0;
   let count = 0;
-  for (let i = 0; i < str.length && count < limit; ) {
+  for (let i = 0; i < str.length && count < limit;) {
     const code = str.codePointAt(i);
     i += code > 0xffff ? 2 : 1;
     count += 1;

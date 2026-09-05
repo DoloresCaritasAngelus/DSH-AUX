@@ -79,7 +79,7 @@ function relativeCandidates(pkg) {
     //   <root>/dsh work/aux/dsh-aux/src -> ../../../../node_modules (4 up)
     `../../../node_modules/@deepseek-ai/${pkg}/lib/index.js`,
     `../../../../node_modules/@deepseek-ai/${pkg}/lib/index.js`,
-    `../../../../../node_modules/@deepseek-ai/${pkg}/lib/index.js`
+    `../../../../../node_modules/@deepseek-ai/${pkg}/lib/index.js`,
   ];
   const paths = [];
   for (const rel of rels) {
@@ -98,7 +98,7 @@ function envCandidates(pkg) {
   if (!root) return [];
   const candidates = [
     join(root, "node_modules/@deepseek-ai", pkg, "lib/index.js"),
-    join(root, "@deepseek-ai", pkg, "lib/index.js")
+    join(root, "@deepseek-ai", pkg, "lib/index.js"),
   ];
   return candidates;
 }
@@ -148,9 +148,7 @@ export function packageFileCandidates(pkg) {
   // 仓库测试模式(仓库 cwd、无显式 DSH_ROOT)保留原有相对/require.resolve
   // 回退,以便测试使用仓库 node_modules 里的 DSH 官方依赖。
   const rootedAtRealDeployment =
-    detectedRoot !== void 0 &&
-    detectedRoot !== REPO_ROOT &&
-    (process.env.DSH_ROOT !== void 0 || !cwdIsRepo);
+    detectedRoot !== void 0 && detectedRoot !== REPO_ROOT && (process.env.DSH_ROOT !== void 0 || !cwdIsRepo);
   if (rootedAtRealDeployment) {
     return [join(detectedRoot, "node_modules/@deepseek-ai", pkg, "lib/index.js")];
   }

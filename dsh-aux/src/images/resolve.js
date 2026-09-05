@@ -89,7 +89,7 @@ export async function resolveImageRef(service, args, exec) {
     }
     const target = await fs.resolve(args.imagePath, {
       ...(exec.agent?.session?.header?.cwd !== void 0 ? { cwd: exec.agent.session.header.cwd } : {}),
-      signal: exec.signal
+      signal: exec.signal,
     });
     const info = await fs.stat(target, exec.signal);
     if (info === void 0) {
@@ -98,15 +98,15 @@ export async function resolveImageRef(service, args, exec) {
     if (info.type !== "file") {
       throw new Error(`vision_analyze: "${target.displayPath}" is not a regular file`);
     }
-    const byteCap = Math.min(
-      attachments.imageLimits.maxImageBytes,
-      attachments.imageLimits.maxMessageImageBytes
-    );
+    const byteCap = Math.min(attachments.imageLimits.maxImageBytes, attachments.imageLimits.maxMessageImageBytes);
     const data = await fs.readBytes(target, exec.signal, byteCap);
     try {
       return await attachments.saveImage({ data, mediaType, name: basename(target.displayPath) });
     } catch (error) {
-      throw new Error(`vision_analyze: cannot read "${target.displayPath}" as ${mediaType} — the bytes may use a different format`, { cause: error });
+      throw new Error(
+        `vision_analyze: cannot read "${target.displayPath}" as ${mediaType} — the bytes may use a different format`,
+        { cause: error },
+      );
     }
   }
   // imageUrl
@@ -116,10 +116,7 @@ export async function resolveImageRef(service, args, exec) {
     await response.body?.cancel().catch(() => {});
     throw new Error(`vision_analyze: fetching imageUrl failed with HTTP ${response.status}`);
   }
-  const byteCap = Math.min(
-    attachments.imageLimits.maxImageBytes,
-    attachments.imageLimits.maxMessageImageBytes
-  );
+  const byteCap = Math.min(attachments.imageLimits.maxImageBytes, attachments.imageLimits.maxMessageImageBytes);
   const data = await readBytesCapped(response, byteCap);
   const mediaType = mediaTypeFromContentType(response.headers.get("content-type"));
   if (mediaType === void 0) {

@@ -13,170 +13,170 @@
  *
  * @module @dolorescaritasangelus/dsh-aux
  */
-import { Context, Service } from '@deepseek-ai/cordis';
-import type { Agent } from '@deepseek-ai/dsh-agent';
-import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm';
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session';
+import { Context, Service } from "@deepseek-ai/cordis";
+import type { Agent } from "@deepseek-ai/dsh-agent";
+import type { Message, ToolSchema } from "@deepseek-ai/dsh-llm";
+import type { Session, SessionEvent } from "@deepseek-ai/dsh-session";
 
 /** The built-in auxiliary task keys. */
-export type AuxTaskKey = 'vision' | 'web_extract' | 'web_crawl' | 'compress' | 'compaction' | 'skill';
+export type AuxTaskKey = "vision" | "web_extract" | "web_crawl" | "compress" | "compaction" | "skill";
 
 /** A resolved provider/model route. */
 export interface AuxRoute {
-    provider: string;
-    model: string;
+  provider: string;
+  model: string;
 }
 
 /** One recorded auxiliary call (the `aux/llm-call` event payload). */
 export interface AuxCallRecord {
-    task: string;
-    provider: string;
-    model: string;
-    ok: boolean;
-    durationMs: number;
-    errorCode?: string;
-    fallbackUsed?: boolean;
-    inputChars?: number;
-    outputChars?: number;
-    purpose?: string;
-    enteredCooldown?: boolean;
+  task: string;
+  provider: string;
+  model: string;
+  ok: boolean;
+  durationMs: number;
+  errorCode?: string;
+  fallbackUsed?: boolean;
+  inputChars?: number;
+  outputChars?: number;
+  purpose?: string;
+  enteredCooldown?: boolean;
 }
 
 /** Wire value of the `aux-status` projection. */
 export interface AuxStatusProjection {
-    tasks: Record<string, AuxCallRecord>;
+  tasks: Record<string, AuxCallRecord>;
 }
 
 /** Per-task config entry (all fields optional; absent = inherit). */
 export interface AuxTaskConfigEntry {
-    provider?: string;
-    model?: string;
-    timeoutMs?: number;
-    maxConcurrency?: number;
-    /** web_extract page-text cap (code points); positive integer. */
-    maxChars?: number;
-    /**
-     * Task-level reasoning effort (opaque id from the model's
-     * `reasoning.efforts`). Absent = inherit provider/model default.
-     */
-    reasoningEffort?: string;
+  provider?: string;
+  model?: string;
+  timeoutMs?: number;
+  maxConcurrency?: number;
+  /** web_extract page-text cap (code points); positive integer. */
+  maxChars?: number;
+  /**
+   * Task-level reasoning effort (opaque id from the model's
+   * `reasoning.efforts`). Absent = inherit provider/model default.
+   */
+  reasoningEffort?: string;
 }
 
 /** Plugin config: optional per-task overrides. */
 export interface AuxConfig {
-    tasks?: Partial<Record<AuxTaskKey, AuxTaskConfigEntry>>;
-    /** User-supplied main-agent guide section (trusted plugin config). */
-    guideText?: string;
-    /** Opt-in to fetching loopback/private URLs (SSRF guard, default false). */
-    allowInternalUrls?: boolean;
+  tasks?: Partial<Record<AuxTaskKey, AuxTaskConfigEntry>>;
+  /** User-supplied main-agent guide section (trusted plugin config). */
+  guideText?: string;
+  /** Opt-in to fetching loopback/private URLs (SSRF guard, default false). */
+  allowInternalUrls?: boolean;
 }
 
 /** One auxiliary LLM request. */
 export interface AuxLlmRequest {
-    /** Ordered provider-facing messages (may include image blocks). */
-    messages: Message[];
-    /** System prompt text. */
-    system?: string;
-    /** Tool schemas forwarded to the LLM call (used by the compaction bridge). */
-    tools?: readonly ToolSchema[];
-    temperature?: number;
-    maxTokens?: number;
-    /**
-     * Per-call reasoning effort override (opaque id from the model's
-     * `reasoning.efforts`). Priority: this field > task config > omit
-     * (provider/model default).
-     */
-    reasoningEffort?: string;
-    /** Cancellation fused into the per-task deadline. */
-    signal?: AbortSignal;
-    /** The owning session; aux calls are logged here when present. */
-    session?: Session;
-    /** The owning agent, for main-model route resolution. */
-    agent?: Agent;
-    /** Input size in chars, recorded with the event. */
-    inputChars?: number;
-    /** Semantic tag recorded with the event. */
-    purpose?: string;
-    /** When false, do not fall back to the main model for this call (defaults to the global fallbackToMain setting). */
-    allowMainFallback?: boolean;
+  /** Ordered provider-facing messages (may include image blocks). */
+  messages: Message[];
+  /** System prompt text. */
+  system?: string;
+  /** Tool schemas forwarded to the LLM call (used by the compaction bridge). */
+  tools?: readonly ToolSchema[];
+  temperature?: number;
+  maxTokens?: number;
+  /**
+   * Per-call reasoning effort override (opaque id from the model's
+   * `reasoning.efforts`). Priority: this field > task config > omit
+   * (provider/model default).
+   */
+  reasoningEffort?: string;
+  /** Cancellation fused into the per-task deadline. */
+  signal?: AbortSignal;
+  /** The owning session; aux calls are logged here when present. */
+  session?: Session;
+  /** The owning agent, for main-model route resolution. */
+  agent?: Agent;
+  /** Input size in chars, recorded with the event. */
+  inputChars?: number;
+  /** Semantic tag recorded with the event. */
+  purpose?: string;
+  /** When false, do not fall back to the main model for this call (defaults to the global fallbackToMain setting). */
+  allowMainFallback?: boolean;
 }
 
 /** One auxiliary call outcome. */
 export interface AuxLlmResult {
-    text: string;
-    provider: string;
-    model: string;
+  text: string;
+  provider: string;
+  model: string;
 }
 
 /** A custom auxiliary task definition (extension point). */
 export interface AuxTaskDefinition {
-    key: string;
-    label?: string;
-    provider?: string;
-    model?: string;
-    timeoutMs?: number;
-    maxConcurrency?: number;
+  key: string;
+  label?: string;
+  provider?: string;
+  model?: string;
+  timeoutMs?: number;
+  maxConcurrency?: number;
 }
 
 /** Per-task routing status snapshot for UIs. */
 export interface AuxTaskStatus {
-    task: string;
-    label: string;
-    configured: boolean;
-    primary: AuxRoute | null;
-    timeoutMs: number;
-    maxConcurrency: number;
+  task: string;
+  label: string;
+  configured: boolean;
+  primary: AuxRoute | null;
+  timeoutMs: number;
+  maxConcurrency: number;
 }
 
-declare module '@deepseek-ai/dsh-session/types' {
-    interface SessionEventMap {
-        /**
-         * One auxiliary LLM call, logged after it settles (success or
-         * exhaustion). Log-only; the `aux-status` projection folds the latest
-         * record per task.
-         */
-        'aux/llm-call': AuxCallRecord;
-    }
+declare module "@deepseek-ai/dsh-session/types" {
+  interface SessionEventMap {
+    /**
+     * One auxiliary LLM call, logged after it settles (success or
+     * exhaustion). Log-only; the `aux-status` projection folds the latest
+     * record per task.
+     */
+    "aux/llm-call": AuxCallRecord;
+  }
 }
 
-declare module '@deepseek-ai/dsh-session-projection/types' {
-    interface SessionProjectionMap {
-        /**
-         * Latest auxiliary call record per task. Capability absence (plugin not
-         * composed) is the key's absence, never a value.
-         */
-        'aux-status': AuxStatusProjection;
-    }
+declare module "@deepseek-ai/dsh-session-projection/types" {
+  interface SessionProjectionMap {
+    /**
+     * Latest auxiliary call record per task. Capability absence (plugin not
+     * composed) is the key's absence, never a value.
+     */
+    "aux-status": AuxStatusProjection;
+  }
 
-    // DSH 0.1.1-rc.1 introduced a separate host fold-state table. The
-    // `aux-status` state equals its wire value (privacy-minimized view).
-    interface SessionProjectionStateMap {
-        'aux-status': AuxStatusProjection;
-    }
+  // DSH 0.1.1-rc.1 introduced a separate host fold-state table. The
+  // `aux-status` state equals its wire value (privacy-minimized view).
+  interface SessionProjectionStateMap {
+    "aux-status": AuxStatusProjection;
+  }
 }
 
-declare module '@deepseek-ai/cordis' {
-    interface Context {
-        auxLlm: AuxLlmService;
-    }
+declare module "@deepseek-ai/cordis" {
+  interface Context {
+    auxLlm: AuxLlmService;
+  }
 }
 
 /** Settings namespace carrying the aux configuration section. */
 export declare const AUX_SETTINGS_NAMESPACE: string;
 /** Timeout code stamped onto aux deadline timeouts. */
-export declare const AUX_TIMEOUT_CODE: 'AUX_TIMEOUT';
+export declare const AUX_TIMEOUT_CODE: "AUX_TIMEOUT";
 /** Session event type recording one auxiliary call. */
-export declare const AUX_CALL_EVENT: 'aux/llm-call';
+export declare const AUX_CALL_EVENT: "aux/llm-call";
 /** Projection key exposing the latest per-task aux call snapshot. */
-export declare const AUX_STATUS_KEY: 'aux-status';
+export declare const AUX_STATUS_KEY: "aux-status";
 
 /**
  * One auxiliary call outcome.
  */
 export declare class AuxCallError extends Error {
-    constructor(task: string, attempts: Array<{ provider: string; model: string; kind: string; error?: Error }>);
-    task: string;
-    attempts: Array<{ provider: string; model: string; kind: string; error?: Error }>;
+  constructor(task: string, attempts: Array<{ provider: string; model: string; kind: string; error?: Error }>);
+  task: string;
+  attempts: Array<{ provider: string; model: string; kind: string; error?: Error }>;
 }
 
 /**
@@ -191,30 +191,30 @@ export declare function sessionPatchCandidates(baseUrl: string | URL): URL[];
  * the `aux-status` projection.
  */
 export declare class AuxLlmService extends Service {
-    static inject: readonly ['llm', 'tools', 'settings', 'web', 'fs', 'systemPrompt'];
-    static Config: unknown;
-    /** Default auxiliary routes per task (explicit-config-independent). */
-    readonly taskDefaults: Record<string, AuxRoute>;
-    /** Live fallback switch from the settings section. */
-    fallbackToMain: boolean;
-    /** Whether the composer status chip is enabled (settings section). */
-    showStatusChip: boolean;
-    /** Whether loopback/private URL fetches are allowed (SSRF guard). */
-    allowInternalUrls: boolean;
-    constructor(ctx: Context, config?: AuxConfig);
-    /**
-     * Run one auxiliary LLM call. Route resolution per task: explicit config,
-     * then task default, then the session's main model as automatic fallback
-     * (configurable). Failures are classified; retryable classes fall back to
-     * the main model once; a route in cooldown is skipped.
-     */
-    call(task: string, request: AuxLlmRequest): Promise<AuxLlmResult>;
-    /**
-     * Register a custom auxiliary task (extension point for other plugins).
-     */
-    registerTask(definition: AuxTaskDefinition): void;
-    /** Current per-task routing status (for /aux status and UIs). */
-    describe(): AuxTaskStatus[];
+  static inject: readonly ["llm", "tools", "settings", "web", "fs", "systemPrompt"];
+  static Config: unknown;
+  /** Default auxiliary routes per task (explicit-config-independent). */
+  readonly taskDefaults: Record<string, AuxRoute>;
+  /** Live fallback switch from the settings section. */
+  fallbackToMain: boolean;
+  /** Whether the composer status chip is enabled (settings section). */
+  showStatusChip: boolean;
+  /** Whether loopback/private URL fetches are allowed (SSRF guard). */
+  allowInternalUrls: boolean;
+  constructor(ctx: Context, config?: AuxConfig);
+  /**
+   * Run one auxiliary LLM call. Route resolution per task: explicit config,
+   * then task default, then the session's main model as automatic fallback
+   * (configurable). Failures are classified; retryable classes fall back to
+   * the main model once; a route in cooldown is skipped.
+   */
+  call(task: string, request: AuxLlmRequest): Promise<AuxLlmResult>;
+  /**
+   * Register a custom auxiliary task (extension point for other plugins).
+   */
+  registerTask(definition: AuxTaskDefinition): void;
+  /** Current per-task routing status (for /aux status and UIs). */
+  describe(): AuxTaskStatus[];
 }
 
 /**

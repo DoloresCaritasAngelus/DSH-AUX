@@ -37,6 +37,5 @@ export function sessionEvents(session) {
  * @returns {boolean} True when `snapshotEvents()` is available.
  */
 export function hasSnapshotEvents(session) {
-  return session !== null && session !== void 0 &&
-    typeof session.snapshotEvents === "function";
+  return session !== null && session !== void 0 && typeof session.snapshotEvents === "function";
 }

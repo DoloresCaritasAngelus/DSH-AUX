@@ -78,7 +78,11 @@ function main() {
       } catch {
         ok = false;
       }
-      record(ok ? "OK" : "WARN", "symlink", ok ? "dsh-aux symlink 指向当前仓库" : `dsh-aux symlink 存在但指向异常: ${auxTarget}`);
+      record(
+        ok ? "OK" : "WARN",
+        "symlink",
+        ok ? "dsh-aux symlink 指向当前仓库" : `dsh-aux symlink 存在但指向异常: ${auxTarget}`,
+      );
     }
 
     // 2. profile patch
@@ -87,7 +91,11 @@ function main() {
       record("ERROR", "profile", `profile 补丁文件缺失: ${patchFile}`);
     } else {
       const patch = readFileSync(patchFile, "utf8");
-      record(patch.includes("id: aux") ? "OK" : "ERROR", "profile", patch.includes("id: aux") ? `profile ${PROFILE} 已注册 aux` : `profile ${PROFILE} 未注册 aux`);
+      record(
+        patch.includes("id: aux") ? "OK" : "ERROR",
+        "profile",
+        patch.includes("id: aux") ? `profile ${PROFILE} 已注册 aux` : `profile ${PROFILE} 未注册 aux`,
+      );
     }
 
     // 3. bridge patches dry-run
@@ -96,7 +104,7 @@ function main() {
       try {
         const out = execFileSync(process.execPath, [applyPatch, "--dry-run"], {
           encoding: "utf8",
-          stdio: ["ignore", "pipe", "pipe"]
+          stdio: ["ignore", "pipe", "pipe"],
         });
         if (/(版本不匹配|未找到已知代码块|可从 .* 升级)/.test(out)) {
           record("ERROR", "patches", "存在未打的 bridge 补丁或版本不匹配(见上方 apply-patch 输出)");
@@ -120,7 +128,13 @@ function main() {
     const sessionFile = join(root, "node_modules/@deepseek-ai/dsh-session/lib/index.js");
     if (existsSync(sessionFile)) {
       const src = readFileSync(sessionFile, "utf8");
-      record(src.includes("dsh-aux ignorable (local patch)") || src.includes("opts[1]?.ignorable") ? "OK" : "ERROR", "p7", src.includes("dsh-aux ignorable (local patch)") || src.includes("opts[1]?.ignorable") ? "P7 session ignorable 已打" : "P7 session ignorable 未打");
+      record(
+        src.includes("dsh-aux ignorable (local patch)") || src.includes("opts[1]?.ignorable") ? "OK" : "ERROR",
+        "p7",
+        src.includes("dsh-aux ignorable (local patch)") || src.includes("opts[1]?.ignorable")
+          ? "P7 session ignorable 已打"
+          : "P7 session ignorable 未打",
+      );
     } else {
       record("ERROR", "p7", `dsh-session 缺失: ${sessionFile}`);
     }
@@ -128,13 +142,22 @@ function main() {
     // 5. P8 whitelist
     const whitelistFiles = [
       join(root, "node_modules/@deepseek-ai/dsh-session/lib/index.js"),
-      join(root, "node_modules/@deepseek-ai/dsh-session/lib/types/known-event-types.js")
+      join(root, "node_modules/@deepseek-ai/dsh-session/lib/types/known-event-types.js"),
     ];
     for (const file of whitelistFiles) {
-      if (!existsSync(file)) { record("ERROR", "p8", `白名单文件缺失: ${file}`); continue; }
+      if (!existsSync(file)) {
+        record("ERROR", "p8", `白名单文件缺失: ${file}`);
+        continue;
+      }
       const src = readFileSync(file, "utf8");
       const hasAux = src.includes('"aux/llm-call"') || src.includes("'aux/llm-call'");
-      record(hasAux ? "OK" : "ERROR", "p8", hasAux ? `${file.split("/node_modules/")[1]} 含 aux/llm-call` : `${file.split("/node_modules/")[1]} 缺 aux/llm-call`);
+      record(
+        hasAux ? "OK" : "ERROR",
+        "p8",
+        hasAux
+          ? `${file.split("/node_modules/")[1]} 含 aux/llm-call`
+          : `${file.split("/node_modules/")[1]} 缺 aux/llm-call`,
+      );
     }
 
     // 6. start hook
@@ -143,14 +166,20 @@ function main() {
       record("WARN", "start-hook", `未找到 start-dsh.sh: ${startSh}`);
     } else {
       const src = readFileSync(startSh, "utf8");
-      record(src.includes("dsh-aux self-heal") ? "OK" : "WARN", "start-hook", src.includes("dsh-aux self-heal") ? "启动自愈 hook 已写入" : "启动自愈 hook 未写入(更新 DSH 后可能丢补丁)");
+      record(
+        src.includes("dsh-aux self-heal") ? "OK" : "WARN",
+        "start-hook",
+        src.includes("dsh-aux self-heal") ? "启动自愈 hook 已写入" : "启动自愈 hook 未写入(更新 DSH 后可能丢补丁)",
+      );
     }
 
     // 7. DSH version compatibility
     const dshVersion = readVersion(join(root, "node_modules/@deepseek-ai/dsh/package.json"));
     if (!dshVersion) {
       record("WARN", "version", "无法读取 @deepseek-ai/dsh 版本");
-    } else if (["0.1.2-alpha.2", "0.1.2-alpha.3", "0.1.2-alpha.4", "0.1.2-alpha.5", "0.1.2-rc.1"].includes(dshVersion)) {
+    } else if (
+      ["0.1.2-alpha.2", "0.1.2-alpha.3", "0.1.2-alpha.4", "0.1.2-alpha.5", "0.1.2-rc.1"].includes(dshVersion)
+    ) {
       record("OK", "version", `DSH ${dshVersion} 在支持范围(0.1.2-alpha.2 ~ 0.1.2-rc.1)`);
     } else {
       record("WARN", "version", `DSH ${dshVersion} 不在主支支持范围;旧版请使用 legacy 分支`);

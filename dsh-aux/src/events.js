@@ -11,7 +11,7 @@ import { readPackageFile } from "./bridge-locate.js";
 export class AuxCallError extends Error {
   constructor(task, attempts) {
     const lines = attempts.map(
-      (a) => `  - ${a.provider}/${a.model}: ${a.error?.message ?? String(a.error)} (${a.kind})`
+      (a) => `  - ${a.provider}/${a.model}: ${a.error?.message ?? String(a.error)} (${a.kind})`,
     );
     super(`aux task "${task}" failed after ${attempts.length} attempt(s):\n${lines.join("\n")}`);
     this.name = "AuxCallError";
@@ -26,9 +26,12 @@ export class AuxCallError extends Error {
  */
 export function finishError(finish) {
   switch (finish.kind) {
-    case "stop": return void 0;
-    case "max-tokens": return new Error("aux: output reached maxTokens");
-    case "tool-calls": return new Error("aux: model unexpectedly requested a tool");
+    case "stop":
+      return void 0;
+    case "max-tokens":
+      return new Error("aux: output reached maxTokens");
+    case "tool-calls":
+      return new Error("aux: model unexpectedly requested a tool");
     case "error":
     case "aborted": {
       const error = new Error(finish.failure.message);
@@ -37,7 +40,8 @@ export function finishError(finish) {
       error.failure = finish.failure;
       return error;
     }
-    default: return new Error("aux: unsupported finish reason " + String(finish.kind));
+    default:
+      return new Error("aux: unsupported finish reason " + String(finish.kind));
   }
 }
 
@@ -54,7 +58,7 @@ export function sessionPatchCandidates(baseUrl) {
     // realpath'd source tree: <root>/dsh work/aux/dsh-aux/src -> <root>/node_modules
     new URL("../../../node_modules/@deepseek-ai/dsh-session/lib/index.js", baseUrl),
     // DSH home layout fallback
-    new URL("../../../../node_modules/@deepseek-ai/dsh-session/lib/index.js", baseUrl)
+    new URL("../../../../node_modules/@deepseek-ai/dsh-session/lib/index.js", baseUrl),
   ];
 }
 
@@ -84,11 +88,11 @@ export async function sessionEventsSupported(service) {
  */
 export async function recordAuxEvent(service, session, data) {
   if (session === void 0) return;
-  if (!await sessionEventsSupported(service)) {
+  if (!(await sessionEventsSupported(service))) {
     if (!service._sessionEventsWarned) {
       service._sessionEventsWarned = true;
       service.ctx.logger.warn(
-        "dsh-aux: dsh-session ignorable patch not found — aux/llm-call events are NOT written to keep session logs compatible. Run bridge/patch-session-ignorable.mjs (or the repo install.sh) to enable event tracing."
+        "dsh-aux: dsh-session ignorable patch not found — aux/llm-call events are NOT written to keep session logs compatible. Run bridge/patch-session-ignorable.mjs (or the repo install.sh) to enable event tracing.",
       );
     }
     return;
@@ -110,7 +114,8 @@ export async function recordAuxEvent(service, session, data) {
 }
 
 /** Key names treated as sensitive when recording debug payloads. */
-const SECRET_KEY_RE = /\b(?:pass(?:word|phrase)?|secret|token|api[_-]?key|auth(?:orization)?|cookie|session[_-]?id|private[_-]?key|access[_-]?key|credential|pwd|bearer)\b/i;
+const SECRET_KEY_RE =
+  /\b(?:pass(?:word|phrase)?|secret|token|api[_-]?key|auth(?:orization)?|cookie|session[_-]?id|private[_-]?key|access[_-]?key|credential|pwd|bearer)\b/i;
 
 /** Common inline secret shapes found inside strings (JSON, headers, logs). */
 const SECRET_VALUE_PATTERNS = [
@@ -119,7 +124,7 @@ const SECRET_VALUE_PATTERNS = [
   /\bAKIA[0-9A-Z]{16}\b/g,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
   /("?(?:pass(?:word|phrase)?|secret|token|api[_-]?key|authorization|cookie|credential)"?\s*[=:]\s*")[^"]*/gi,
-  /(password|passwd|secret|token|api[_-]?key|authorization)(\s*[=:]\s*)[^\s,;]+/gi
+  /(password|passwd|secret|token|api[_-]?key|authorization)(\s*[=:]\s*)[^\s,;]+/gi,
 ];
 
 const REDACTED = "[REDACTED]";
@@ -133,9 +138,7 @@ function redactDebugValue(value, key) {
         if (prefix === void 0) return REDACTED;
         // For single-capture patterns the third callback argument is the match
         // offset (a number); for two-capture patterns it is the second capture.
-        return typeof separator === "string"
-          ? `${prefix}${separator}${REDACTED}`
-          : `${prefix}${REDACTED}`;
+        return typeof separator === "string" ? `${prefix}${separator}${REDACTED}` : `${prefix}${REDACTED}`;
       });
     }
     return out;
@@ -175,7 +178,7 @@ export function redactDebugData(data, enabled = true) {
  */
 export async function recordDebugEvent(service, session, data) {
   if (session === void 0) return;
-  if (!await sessionEventsSupported(service)) return;
+  if (!(await sessionEventsSupported(service))) return;
   try {
     const redacted = service?.debugConfig?.redactSecrets !== false ? redactDebugData(data) : data;
     const clean = {};
@@ -196,7 +199,7 @@ export async function recordDebugEvent(service, session, data) {
  */
 export async function recordPlatformEvent(service, session, data) {
   if (session === void 0) return;
-  if (!await sessionEventsSupported(service)) return;
+  if (!(await sessionEventsSupported(service))) return;
   try {
     const clean = {};
     for (const [key, value] of Object.entries(data)) {
@@ -215,7 +218,7 @@ export async function recordPlatformEvent(service, session, data) {
  */
 export async function recordImageLibraryEvent(service, session, data) {
   if (session === void 0) return;
-  if (!await sessionEventsSupported(service)) return;
+  if (!(await sessionEventsSupported(service))) return;
   try {
     const clean = {};
     for (const [key, value] of Object.entries(data)) {

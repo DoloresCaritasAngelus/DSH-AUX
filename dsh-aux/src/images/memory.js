@@ -16,7 +16,7 @@ export function imageMemoryPath() {
 /** Append one vision outcome to the memory journal (bounded, best-effort). */
 export function recordImageMemory(service, sessionId, attachmentId, question, summary) {
   service._memoryQueue = service._memoryQueue.then(() =>
-    recordImageMemoryCore(sessionId, attachmentId, question, summary)
+    recordImageMemoryCore(sessionId, attachmentId, question, summary),
   );
   return service._memoryQueue;
 }
@@ -55,7 +55,7 @@ async function recordImageMemoryCore(sessionId, attachmentId, question, summary)
       attachmentId,
       question: question.slice(0, 200),
       summary: summary.slice(0, 600),
-      at: Date.now()
+      at: Date.now(),
     });
     const trimmed = entries.slice(-200);
     const tmp = path + ".tmp";
@@ -80,7 +80,7 @@ export async function handleMemoryCommand(args) {
     const lines = ["最近图片分析记忆:"];
     for (const e of recent) {
       lines.push(
-        `  - [${new Date(e.at).toLocaleString()}] ${String(e.attachmentId).slice(0, 16)}… 问:${e.question.slice(0, 40)} → ${e.summary.slice(0, 80)}…`
+        `  - [${new Date(e.at).toLocaleString()}] ${String(e.attachmentId).slice(0, 16)}… 问:${e.question.slice(0, 40)} → ${e.summary.slice(0, 80)}…`,
       );
     }
     return { kind: "success", text: lines.join("\n") };

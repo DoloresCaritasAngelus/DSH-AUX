@@ -24,7 +24,7 @@ export const CRAWL_DEFAULTS = Object.freeze({
   maxPages: 10,
   maxDepth: 2,
   minIntervalMs: 250,
-  maxSeconds: 0
+  maxSeconds: 0,
 });
 
 /** Normalized URL used for link dedup (hash stripped). */
@@ -144,7 +144,7 @@ export async function crawlSite(service, rootUrl, opts = {}) {
     useSitemap = false,
     maxPagesPerHost = 0,
     signal,
-    label = "web_crawl"
+    label = "web_crawl",
   } = opts;
 
   const rootParsed = new URL(rootUrl);
@@ -301,14 +301,18 @@ export async function crawlSite(service, rootUrl, opts = {}) {
       isHtml: page.isHtml,
       rawHtml: page.rawHtml,
       text: page.text,
-      title: extractTitle(page.rawHtml ?? "")
+      title: extractTitle(page.rawHtml ?? ""),
     });
     totalChars += page.chars;
 
     if (depth < maxDepth && page.isHtml && pages.length < maxPages) {
       // Collect all http(s) document links first (extension filter applied),
       // then count scope-ineligible ones and queue the rest.
-      const rawLinks = extractPageLinksWhere(page.rawHtml ?? "", page.finalUrl, (u) => u.protocol === "http:" || u.protocol === "https:");
+      const rawLinks = extractPageLinksWhere(
+        page.rawHtml ?? "",
+        page.finalUrl,
+        (u) => u.protocol === "http:" || u.protocol === "https:",
+      );
       for (const link of rawLinks) {
         const key = normalizePageUrl(link);
         if (seen.has(key)) continue;
@@ -336,6 +340,6 @@ export async function crawlSite(service, rootUrl, opts = {}) {
     skippedByScope,
     skippedByHostCap,
     blocked,
-    challengeBlocks
+    challengeBlocks,
   };
 }

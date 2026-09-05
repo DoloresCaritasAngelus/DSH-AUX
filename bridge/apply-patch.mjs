@@ -43,26 +43,41 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // ── 目标文件 ────────────────────────────────────────────────────────────────
 // 不写死任何用户绝对路径:按部署形态相对解析(symlink / 源码树),并在读写前
 // 校验目标必须位于 node_modules/@deepseek-ai/.../lib/index.js。
-const AGENT_LOOP_FILE = guardTarget(deployedFile(
-  "../../../@deepseek-ai/dsh-agent-loop/lib/index.js",
-  "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js"
-), "dsh-image-bridge");
-const SUBAGENT_TOOL_FILE = guardTarget(deployedFile(
-  "../../../@deepseek-ai/dsh-tool-subagent/lib/index.js",
-  "../../../node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js"
-), "dsh-subagent-bridge");
-const WORKFLOW_ENGINE_FILE = guardTarget(deployedFile(
-  "../../../@deepseek-ai/dsh-workflow-worker-thread/lib/index.js",
-  "../../../node_modules/@deepseek-ai/dsh-workflow-worker-thread/lib/index.js"
-), "dsh-workflow-bridge");
-const SKILL_TOOL_FILE = guardTarget(deployedFile(
-  "../../../@deepseek-ai/dsh-tool-skill/lib/index.js",
-  "../../../node_modules/@deepseek-ai/dsh-tool-skill/lib/index.js"
-), "dsh-skill-bridge");
-const SESSION_CONTROLLER_FILE = guardTarget(deployedFile(
-  "../../../@deepseek-ai/dsh-api-session-controller/lib/index.js",
-  "../../../node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js"
-), "dsh-image-bridge-alpha2");
+const AGENT_LOOP_FILE = guardTarget(
+  deployedFile(
+    "../../../@deepseek-ai/dsh-agent-loop/lib/index.js",
+    "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js",
+  ),
+  "dsh-image-bridge",
+);
+const SUBAGENT_TOOL_FILE = guardTarget(
+  deployedFile(
+    "../../../@deepseek-ai/dsh-tool-subagent/lib/index.js",
+    "../../../node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js",
+  ),
+  "dsh-subagent-bridge",
+);
+const WORKFLOW_ENGINE_FILE = guardTarget(
+  deployedFile(
+    "../../../@deepseek-ai/dsh-workflow-worker-thread/lib/index.js",
+    "../../../node_modules/@deepseek-ai/dsh-workflow-worker-thread/lib/index.js",
+  ),
+  "dsh-workflow-bridge",
+);
+const SKILL_TOOL_FILE = guardTarget(
+  deployedFile(
+    "../../../@deepseek-ai/dsh-tool-skill/lib/index.js",
+    "../../../node_modules/@deepseek-ai/dsh-tool-skill/lib/index.js",
+  ),
+  "dsh-skill-bridge",
+);
+const SESSION_CONTROLLER_FILE = guardTarget(
+  deployedFile(
+    "../../../@deepseek-ai/dsh-api-session-controller/lib/index.js",
+    "../../../node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js",
+  ),
+  "dsh-image-bridge-alpha2",
+);
 
 const TARGETS = [
   {
@@ -70,19 +85,45 @@ const TARGETS = [
     file: AGENT_LOOP_FILE,
     mark: "image-bridge v2 (local patch)",
     states: [
-      { name: "v3", detect: (d) => d.includes("image-bridge v2 (local patch)") && d.includes("await this.bridgeImagesForModel(boundaryMessages") && d.includes("forceAuxVision"), action: "skip" },
-      { name: "v2", detect: (d) => d.includes("image-bridge v2 (local patch)") && d.includes("await this.bridgeImagesForModel(boundaryMessages") && !d.includes("forceAuxVision"), block: 'if (Array.isArray(modalities) && modalities.includes("image")) return messages;', replacement: 'let forceAuxVision = false;\n\t\t\ttry {\n\t\t\t\tconst aux = this.loopCtx?.get?.("auxLlm");\n\t\t\t\tforceAuxVision = aux?.forceAuxVision === true;\n\t\t\t} catch { /* auxLlm may be absent during early boot */ }\n\t\t\tif (!forceAuxVision && Array.isArray(modalities) && modalities.includes("image")) return messages;', action: "replace" },
-      { name: "half", detect: (d) => d.includes("image-bridge v2 (local patch)"), block: "messages: boundaryMessages,", replacement: "messages: await this.bridgeImagesForModel(boundaryMessages, config.provider, config.model, this.loopCtx.llm, signal),", action: "replace" },
+      {
+        name: "v3",
+        detect: (d) =>
+          d.includes("image-bridge v2 (local patch)") &&
+          d.includes("await this.bridgeImagesForModel(boundaryMessages") &&
+          d.includes("forceAuxVision"),
+        action: "skip",
+      },
+      {
+        name: "v2",
+        detect: (d) =>
+          d.includes("image-bridge v2 (local patch)") &&
+          d.includes("await this.bridgeImagesForModel(boundaryMessages") &&
+          !d.includes("forceAuxVision"),
+        block: 'if (Array.isArray(modalities) && modalities.includes("image")) return messages;',
+        replacement:
+          'let forceAuxVision = false;\n\t\t\ttry {\n\t\t\t\tconst aux = this.loopCtx?.get?.("auxLlm");\n\t\t\t\tforceAuxVision = aux?.forceAuxVision === true;\n\t\t\t} catch { /* auxLlm may be absent during early boot */ }\n\t\t\tif (!forceAuxVision && Array.isArray(modalities) && modalities.includes("image")) return messages;',
+        action: "replace",
+      },
+      {
+        name: "half",
+        detect: (d) => d.includes("image-bridge v2 (local patch)"),
+        block: "messages: boundaryMessages,",
+        replacement:
+          "messages: await this.bridgeImagesForModel(boundaryMessages, config.provider, config.model, this.loopCtx.llm, signal),",
+        action: "replace",
+      },
       {
         name: "original-alpha2",
-        detect: (d) => d.includes("Compose one frozen request and bind it to the adapter registration") && d.includes("startsRequestSeries, surfaceGeneration, signal"),
+        detect: (d) =>
+          d.includes("Compose one frozen request and bind it to the adapter registration") &&
+          d.includes("startsRequestSeries, surfaceGeneration, signal"),
         block: await readFile(join(HERE, "orig-agent-loop-alpha2-block.txt"), "utf8"),
         replacement: await readFile(join(HERE, "patched-agent-loop-alpha2-block.txt"), "utf8"),
-        action: "replace"
-      }
+        action: "replace",
+      },
     ],
     patched: await readFile(join(HERE, "patched-agent-loop-alpha2-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-"
+    backupPrefix: "index.js.bak-",
   },
   {
     label: "dsh-api-session-controller (prompt)",
@@ -92,14 +133,14 @@ const TARGETS = [
       { name: "patched", detect: (d) => d.includes("dsh-aux image bridge v3 (local patch)"), action: "skip" },
       {
         name: "original-alpha2",
-        detect: (d) => d.includes("Model \"${current.model}\" does not support image input."),
+        detect: (d) => d.includes('Model "${current.model}" does not support image input.'),
         block: await readFile(join(HERE, "orig-session-controller-prompt-block.txt"), "utf8"),
         replacement: await readFile(join(HERE, "patched-session-controller-prompt-block.txt"), "utf8"),
-        action: "replace"
-      }
+        action: "replace",
+      },
     ],
     patched: await readFile(join(HERE, "patched-session-controller-prompt-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-"
+    backupPrefix: "index.js.bak-",
   },
   {
     label: "dsh-tool-subagent (schema)",
@@ -109,42 +150,58 @@ const TARGETS = [
       { name: "patched", detect: (d) => d.includes("requires_vision:"), action: "skip" },
       {
         name: "original-alpha2",
-        detect: (d) => d.includes("Adapter-owned reasoning effort for the effective child route.") || d.includes("providerRouteDefaults !== void 0"),
+        detect: (d) =>
+          d.includes("Adapter-owned reasoning effort for the effective child route.") ||
+          d.includes("providerRouteDefaults !== void 0"),
         block: await readFile(join(HERE, "orig-subagent-schema-alpha2-block.txt"), "utf8"),
         replacement: await readFile(join(HERE, "patched-subagent-schema-alpha2-block.txt"), "utf8"),
-        action: "replace"
-      }
+        action: "replace",
+      },
     ],
     patched: await readFile(join(HERE, "patched-subagent-schema-alpha2-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-"
+    backupPrefix: "index.js.bak-",
   },
   {
     label: "dsh-tool-subagent (request)",
     file: SUBAGENT_TOOL_FILE,
     mark: 'ctx.get("auxLlm")',
     states: [
-      { name: "patched", detect: (d) => d.includes("ctx.get(\"auxLlm\")") && d.includes("subagentRoute"), action: "skip" },
+      {
+        name: "patched",
+        detect: (d) => d.includes('ctx.get("auxLlm")') && d.includes("subagentRoute"),
+        action: "skip",
+      },
       {
         name: "original-alpha2",
-        detect: (d) => d.includes("...requestedChildAgentOptions !== void 0 ? { agentOptions: requestedChildAgentOptions } : {}"),
+        detect: (d) =>
+          d.includes("...requestedChildAgentOptions !== void 0 ? { agentOptions: requestedChildAgentOptions } : {}"),
         block: await readFile(join(HERE, "orig-subagent-request-alpha2-block.txt"), "utf8"),
         replacement: await readFile(join(HERE, "patched-subagent-request-alpha2-block.txt"), "utf8"),
-        action: "replace"
-      }
+        action: "replace",
+      },
     ],
     patched: await readFile(join(HERE, "patched-subagent-request-alpha2-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-"
+    backupPrefix: "index.js.bak-",
   },
   {
     label: "dsh-workflow-worker-thread",
     file: WORKFLOW_ENGINE_FILE,
     mark: "subagentIncludeWorkflow",
     states: [
-      { name: "patched", detect: (d) => d.includes("subagentIncludeWorkflow") && d.includes("subagentRoute"), action: "skip" },
-      { name: "original", detect: (d) => d.includes("run = await this.subagents.start(this.provider, {"), block: await readFile(join(HERE, "orig-workflow-startchild-block.txt"), "utf8"), action: "replace" }
+      {
+        name: "patched",
+        detect: (d) => d.includes("subagentIncludeWorkflow") && d.includes("subagentRoute"),
+        action: "skip",
+      },
+      {
+        name: "original",
+        detect: (d) => d.includes("run = await this.subagents.start(this.provider, {"),
+        block: await readFile(join(HERE, "orig-workflow-startchild-block.txt"), "utf8"),
+        action: "replace",
+      },
     ],
     patched: await readFile(join(HERE, "patched-workflow-startchild-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-"
+    backupPrefix: "index.js.bak-",
   },
   {
     label: "dsh-tool-skill (schema)",
@@ -152,14 +209,21 @@ const TARGETS = [
     mark: "skill auditor",
     states: [
       { name: "patched", detect: (d) => d.includes("skill auditor"), action: "skip" },
-      { name: "original", detect: (d) => d.includes("parameters: { name: {"), block: await readFile(join(HERE, "orig-skill-tool-block.txt"), "utf8"), action: "replace" }
+      {
+        name: "original",
+        detect: (d) => d.includes("parameters: { name: {"),
+        block: await readFile(join(HERE, "orig-skill-tool-block.txt"), "utf8"),
+        action: "replace",
+      },
     ],
     patched: await readFile(join(HERE, "patched-skill-tool-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-"
-  }
+    backupPrefix: "index.js.bak-",
+  },
 ];
 
-function log(msg) { console.log(`[dsh-image-bridge] ${msg}`); }
+function log(msg) {
+  console.log(`[dsh-image-bridge] ${msg}`);
+}
 
 // Keep one backup per physical file for the lifetime of one apply-patch run.
 // dsh-host-apiproxy appears in multiple TARGETS; without this, the second
@@ -205,12 +269,21 @@ const rolledBackFiles = new Set();
 
 async function rollbackOne(target) {
   const file = target.file;
-  if (rolledBackFiles.has(file)) { log(`${target.label} 同文件已回滚,跳过: ${file}`); return; }
-  if (!existsSync(file)) { log(`${target.label} 不存在,跳过回滚`); return; }
+  if (rolledBackFiles.has(file)) {
+    log(`${target.label} 同文件已回滚,跳过: ${file}`);
+    return;
+  }
+  if (!existsSync(file)) {
+    log(`${target.label} 不存在,跳过回滚`);
+    return;
+  }
   const dir = dirname(file);
   const baks = (await readdir(dir)).filter((f) => f.startsWith(target.backupPrefix) && !f.includes(".node"));
   baks.sort().reverse();
-  if (baks.length === 0) { log(`${target.label} 无备份可回滚`); return; }
+  if (baks.length === 0) {
+    log(`${target.label} 无备份可回滚`);
+    return;
+  }
   const bak = join(dir, baks[0]);
   await copyFile(bak, file);
   rolledBackFiles.add(file);
@@ -220,7 +293,10 @@ async function rollbackOne(target) {
 
 async function applyOne(target, dryRun) {
   const file = target.file;
-  if (!existsSync(file)) { log(`${target.label} 未找到: ${file}`); return; }
+  if (!existsSync(file)) {
+    log(`${target.label} 未找到: ${file}`);
+    return;
+  }
   let data = await readFile(file, "utf8");
   let bak;
   let applied = 0;
@@ -250,7 +326,10 @@ async function applyOne(target, dryRun) {
       }
       return;
     }
-    if (dryRun) { log(`[dry-run] ${target.label} 可从 ${state.name} 升级: ${file}`); return; }
+    if (dryRun) {
+      log(`[dry-run] ${target.label} 可从 ${state.name} 升级: ${file}`);
+      return;
+    }
     if (bak === void 0) bak = await backupTarget(file, target.backupPrefix, target.label);
     const patched = data.replace(state.block.trim(), (state.replacement ?? target.patched).trim());
     if (patched === data) {

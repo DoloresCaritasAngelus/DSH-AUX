@@ -4,4 +4,4 @@
 # the profile's cordis.patch.yml.
 - insert:
     - id: aux
-      name: '@dolorescaritasangelus/dsh-aux'
+      name: "@dolorescaritasangelus/dsh-aux"

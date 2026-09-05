@@ -36,14 +36,18 @@ export async function runVision(service, args, exec) {
   const single = [
     args.attachmentId !== void 0 && args.attachmentId.length > 0,
     args.imagePath !== void 0 && args.imagePath.length > 0,
-    args.imageUrl !== void 0 && args.imageUrl.length > 0
+    args.imageUrl !== void 0 && args.imageUrl.length > 0,
   ].filter(Boolean).length;
   const images = Array.isArray(args.images) ? args.images : [];
   const itemCount = images.length + (single > 0 ? 1 : 0);
-  if (itemCount === 0) throw new Error("vision_analyze: provide one of attachmentId, imagePath, imageUrl, or an images array");
-  if (images.length > 0 && single > 0) throw new Error("vision_analyze: provide either the images array or a single image source, not both");
+  if (itemCount === 0)
+    throw new Error("vision_analyze: provide one of attachmentId, imagePath, imageUrl, or an images array");
+  if (images.length > 0 && single > 0)
+    throw new Error("vision_analyze: provide either the images array or a single image source, not both");
   if (images.length > 0 && images.some((item) => !validImageItem(item))) {
-    throw new Error("vision_analyze: each images entry must be an object with exactly one of attachmentId, imagePath, or imageUrl");
+    throw new Error(
+      "vision_analyze: each images entry must be an object with exactly one of attachmentId, imagePath, or imageUrl",
+    );
   }
   // Bound the batch size to the attachment service's per-message limit.
   let attachments;
@@ -62,10 +66,13 @@ export async function runVision(service, args, exec) {
     // not a generic caption. Refuse instead of silently degrading.
     throw new Error("vision_analyze: question is required — state what you need to know about the image");
   }
-  const items = images.length > 0
-    ? images
-    : [{ attachmentId: args.attachmentId, imagePath: args.imagePath, imageUrl: args.imageUrl }];
-  const settled = await mapWithConcurrency(items, Math.min(maxImages, 4), (item) => analyzeOne(service, item, question, exec));
+  const items =
+    images.length > 0
+      ? images
+      : [{ attachmentId: args.attachmentId, imagePath: args.imagePath, imageUrl: args.imageUrl }];
+  const settled = await mapWithConcurrency(items, Math.min(maxImages, 4), (item) =>
+    analyzeOne(service, item, question, exec),
+  );
   if (images.length === 0) {
     // Classic single-image shape: preserve the old throw-on-failure contract.
     if (settled[0].status === "rejected") throw settled[0].reason;
@@ -77,21 +84,23 @@ export async function runVision(service, args, exec) {
       : {
           analysis: `vision_analyze: image failed: ${entry.reason?.message ?? String(entry.reason)}`,
           provider: "",
-          model: ""
-        }
+          model: "",
+        },
   );
   const firstOk = results.find((r) => r.provider !== "");
   return {
     analyses: results,
     provider: firstOk?.provider ?? "",
-    model: firstOk?.model ?? ""
+    model: firstOk?.model ?? "",
   };
 }
 
 /** One `images` entry is valid when it names exactly one source. */
 export function validImageItem(item) {
   if (item === null || typeof item !== "object" || Array.isArray(item)) return false;
-  const keys = ["attachmentId", "imagePath", "imageUrl"].filter((k) => typeof item[k] === "string" && item[k].length > 0);
+  const keys = ["attachmentId", "imagePath", "imageUrl"].filter(
+    (k) => typeof item[k] === "string" && item[k].length > 0,
+  );
   return keys.length === 1;
 }
 
@@ -102,20 +111,22 @@ export async function analyzeOne(service, source, question, exec) {
   if (exec.agent?.session?.id !== void 0) {
     recordAttachmentOwnership(service, exec.agent.session.id, ref.attachmentId);
   }
-  const messages = [createUserMessage({
-    content: [
-      { type: "image", attachment: ref },
-      { type: "text", text: question }
-    ],
-    source: { kind: "plugin", plugin: "dsh-aux" }
-  })];
+  const messages = [
+    createUserMessage({
+      content: [
+        { type: "image", attachment: ref },
+        { type: "text", text: question },
+      ],
+      source: { kind: "plugin", plugin: "dsh-aux" },
+    }),
+  ];
   const result = await service.call("vision", {
     messages,
     system: visionSystemPrompt(),
     session: exec.agent?.session,
     agent: exec.agent,
     signal: exec.signal,
-    inputChars: question.length
+    inputChars: question.length,
   });
   // Image memory: persist a compact record so a restarted main session can
   // recall what was looked at without re-analyzing. Best-effort.

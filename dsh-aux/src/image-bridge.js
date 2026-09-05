@@ -22,7 +22,7 @@ import { readPackageFile } from "./bridge-locate.js";
 export async function imageBridgeStatus() {
   const [agent, controller] = await Promise.all([
     readPackageFile("dsh-agent-loop"),
-    readPackageFile("dsh-api-session-controller")
+    readPackageFile("dsh-api-session-controller"),
   ]);
   if (agent === void 0 || controller === void 0) return "unknown";
 

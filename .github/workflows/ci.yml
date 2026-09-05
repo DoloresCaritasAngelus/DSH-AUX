@@ -15,8 +15,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-      - name: 安装测试依赖(DSH 官方包)
+      - name: 安装测试依赖(DSH 官方包 + devDependencies)
         run: npm install --no-package-lock --no-audit --no-fund
+      - name: ESLint(recommended;0 error 门禁,warning 不阻塞)
+        run: npm run lint
+      - name: Prettier 格式检查
+        run: npm run format:check
       - name: 全量测试(零第三方运行时依赖)
         run: node --test tests/*.test.js
       - name: README 单一真相检查

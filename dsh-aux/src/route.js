@@ -43,9 +43,13 @@ export function route(provider, model) {
  */
 export function resolveConfig(config) {
   const source = config ?? {};
-  const unknown = Object.keys(source).filter((key) => key !== "tasks" && key !== "guideText" && key !== "allowInternalUrls");
+  const unknown = Object.keys(source).filter(
+    (key) => key !== "tasks" && key !== "guideText" && key !== "allowInternalUrls",
+  );
   if (unknown.length > 0) {
-    throw new Error(`AuxConfig has unknown key(s) ${unknown.join(", ")} — config is { tasks?, guideText?, allowInternalUrls? }`);
+    throw new Error(
+      `AuxConfig has unknown key(s) ${unknown.join(", ")} — config is { tasks?, guideText?, allowInternalUrls? }`,
+    );
   }
   const tasks = {};
   for (const task of AUX_TASKS) {
@@ -113,7 +117,7 @@ export function resolveConfig(config) {
   return {
     tasks,
     ...(source.guideText === void 0 ? {} : { guideText: source.guideText }),
-    ...(source.allowInternalUrls === void 0 ? {} : { allowInternalUrls: source.allowInternalUrls })
+    ...(source.allowInternalUrls === void 0 ? {} : { allowInternalUrls: source.allowInternalUrls }),
   };
 }
 
@@ -125,7 +129,7 @@ export function mergeTaskConfig(pluginEntry, settingsEntry) {
     timeoutMs: settingsEntry.timeoutMs ?? pluginEntry.timeoutMs,
     maxConcurrency: settingsEntry.maxConcurrency ?? pluginEntry.maxConcurrency,
     maxChars: settingsEntry.maxChars ?? pluginEntry.maxChars,
-    reasoningEffort: settingsEntry.reasoningEffort ?? pluginEntry.reasoningEffort
+    reasoningEffort: settingsEntry.reasoningEffort ?? pluginEntry.reasoningEffort,
   };
 }
 
@@ -189,7 +193,8 @@ export function classifyFailure(error, signal) {
   if (status === 402 || /402|credit|balance|insufficient.?funds|payment/i.test(lower)) return "payment";
   if (status === 401 || status === 403 || /unauthori[sz]ed|invalid api key|forbidden|auth/i.test(lower)) return "auth";
   if (status === 404 || /model.*not.?found|unknown model|no such model/i.test(lower)) return "model-not-found";
-  if (/fetch failed|econnrefused|econnreset|enetunreach|dns|socket|network|tls|certificate/i.test(lower)) return "connection";
+  if (/fetch failed|econnrefused|econnreset|enetunreach|dns|socket|network|tls|certificate/i.test(lower))
+    return "connection";
   if (code === "UNSUPPORTED_CONTENT" || /unsupported|does not support|cannot represent/i.test(lower)) return "content";
   return "other";
 }
@@ -261,7 +266,7 @@ export class FailureCooldown {
         model,
         failures: entry.failures,
         coolingDown: now < entry.until,
-        until: entry.until
+        until: entry.until,
       };
     }
     return out;

@@ -1,0 +1,15 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{js,mjs,json,yml,yaml,sh}]
+indent_style = space
+indent_size = 2
+
+# Markdown:行尾双空格是硬换行语法,不修剪
+[*.md]
+trim_trailing_whitespace = false

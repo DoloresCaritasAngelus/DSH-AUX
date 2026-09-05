@@ -18,7 +18,7 @@ import {
   extractKeyPoints,
   webExtractSystemPrompt,
   webExtractUserMessage,
-  webExtractUserMessageMulti
+  webExtractUserMessageMulti,
 } from "../prompt.js";
 import { fetchPage } from "../crawl/fetch-page.js";
 import { crawlSite } from "../crawl/queue.js";
@@ -40,10 +40,12 @@ export function resolveMaxChars(service, args) {
 
 /** Run one aux summarization call and return the raw result. */
 async function callSummarizer(service, userText, inputChars, exec) {
-  const messages = [createUserMessage({
-    content: [{ type: "text", text: userText }],
-    source: { kind: "plugin", plugin: "dsh-aux" }
-  })];
+  const messages = [
+    createUserMessage({
+      content: [{ type: "text", text: userText }],
+      source: { kind: "plugin", plugin: "dsh-aux" },
+    }),
+  ];
   return service.call("web_extract", {
     messages,
     system: webExtractSystemPrompt(),
@@ -51,7 +53,7 @@ async function callSummarizer(service, userText, inputChars, exec) {
     session: exec.agent?.session,
     agent: exec.agent,
     signal: exec.signal,
-    inputChars
+    inputChars,
   });
 }
 
@@ -67,7 +69,7 @@ export async function runWebExtract(service, args, exec) {
   const maxChars = resolveMaxChars(service, args);
   const followLinks = args.followLinks ?? "off";
   if (followLinks !== "off" && followLinks !== "same-origin") {
-    throw new Error("web_extract: followLinks must be \"off\" or \"same-origin\"");
+    throw new Error('web_extract: followLinks must be "off" or "same-origin"');
   }
   const effectiveMaxPages = args.maxPages ?? (followLinks === "same-origin" ? 3 : 1);
   if (!Number.isInteger(effectiveMaxPages) || effectiveMaxPages <= 0) {
@@ -92,10 +94,15 @@ export async function runWebExtract(service, args, exec) {
         summary: "该页为 JS-Challenge 拦截页,未获取到可用正文。",
         keyPoints: [],
         chars: page.chars,
-        truncated: false
+        truncated: false,
       };
     }
-    const result = await callSummarizer(service, webExtractUserMessage(page.text, page.finalUrl, args.question), page.chars, exec);
+    const result = await callSummarizer(
+      service,
+      webExtractUserMessage(page.text, page.finalUrl, args.question),
+      page.chars,
+      exec,
+    );
     const extracted = extractKeyPoints(result.text);
     return {
       url: page.finalUrl,
@@ -105,7 +112,7 @@ export async function runWebExtract(service, args, exec) {
       model: result.model,
       chars: page.chars,
       truncated: page.truncated,
-      ...(page.redirects > 0 ? { redirects: page.redirects } : {})
+      ...(page.redirects > 0 ? { redirects: page.redirects } : {}),
     };
   }
 
@@ -119,7 +126,7 @@ export async function runWebExtract(service, args, exec) {
     maxCharsPerPage: maxChars,
     maxTotalChars: maxChars,
     signal: exec.signal,
-    label: "web_extract"
+    label: "web_extract",
   });
   if (crawl.pages.length === 0) {
     if (crawl.challengeBlocks > 0) {
@@ -132,16 +139,19 @@ export async function runWebExtract(service, args, exec) {
         keyPoints: [],
         pages: [],
         totalChars: 0,
-        truncated: false
+        truncated: false,
       };
     }
     throw new Error("web_extract: no pages could be fetched");
   }
   const result = await callSummarizer(
     service,
-    webExtractUserMessageMulti(crawl.pages.map((p) => ({ url: p.url, text: p.text })), args.question),
+    webExtractUserMessageMulti(
+      crawl.pages.map((p) => ({ url: p.url, text: p.text })),
+      args.question,
+    ),
     crawl.totalChars,
-    exec
+    exec,
   );
   const extracted = extractKeyPoints(result.text);
   return {
@@ -152,6 +162,6 @@ export async function runWebExtract(service, args, exec) {
     summary: extracted.summary || result.text,
     keyPoints: extracted.keyPoints,
     provider: result.provider,
-    model: result.model
+    model: result.model,
   };
 }
