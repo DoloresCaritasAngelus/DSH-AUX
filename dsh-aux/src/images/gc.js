@@ -71,6 +71,6 @@ export async function gcImages(days) {
   }
   return {
     kind: "success",
-    text: `附件清理完成: 扫描 ${scanned} 个文件, 删除 ${removed} 个超过 ${days} 天的附件 (${(removedBytes / 1024 / 1024).toFixed(1)} MB)${failed > 0 ? `, ${failed} 个失败` : ""}。`
+    text: `附件清理完成: 扫描 ${scanned} 个文件, 删除 ${removed} 个超过 ${days} 天的附件 (${(removedBytes / 1024 / 1024).toFixed(1)} MB)${failed > 0 ? `, ${failed} 个失败` : ""}。`,
   };
 }

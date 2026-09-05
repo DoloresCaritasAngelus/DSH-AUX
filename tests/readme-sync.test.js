@@ -22,7 +22,7 @@ test("U1: 包内 README 与根 README 单一真相同步", async () => {
     assert.equal(
       isInSync(rootText, destText, p.banner),
       true,
-      `包内 README 与根不同步: ${p.dest}\n先跑 npm run gen-package-readme 再提交`
+      `包内 README 与根不同步: ${p.dest}\n先跑 npm run gen-package-readme 再提交`,
     );
   }
 });

@@ -25,18 +25,29 @@ const [startSh, repo] = process.argv.slice(2);
 const DRY = process.argv.includes("--dry-run");
 const MARK = "dsh-aux self-heal";
 
-function log(msg) { console.log(`[dsh-aux-install-start-hook] ${msg}`); }
+function log(msg) {
+  console.log(`[dsh-aux-install-start-hook] ${msg}`);
+}
 
 /** POSIX shell single-quote escaping; safe for paths containing quotes/$/etc. */
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-if (!startSh || !repo) { log("用法: node install-start-hook.mjs <start-dsh.sh> <repo> [--dry-run]"); process.exit(2); }
+if (!startSh || !repo) {
+  log("用法: node install-start-hook.mjs <start-dsh.sh> <repo> [--dry-run]");
+  process.exit(2);
+}
 
-if (!existsSync(startSh)) { log(`未找到 ${startSh},跳过(不会创建)`); process.exit(0); }
+if (!existsSync(startSh)) {
+  log(`未找到 ${startSh},跳过(不会创建)`);
+  process.exit(0);
+}
 const data = readFileSync(startSh, "utf8");
-if (data.includes(MARK)) { log("hook 已存在,跳过"); process.exit(0); }
+if (data.includes(MARK)) {
+  log("hook 已存在,跳过");
+  process.exit(0);
+}
 
 const LAUNCH_PATTERNS = [
   /exec\s+npx\s+@deepseek-ai\/dsh(?:\s+web)?/,
@@ -44,7 +55,7 @@ const LAUNCH_PATTERNS = [
   /exec\s+dsh(?:\s+web)?/,
   /npx\s+@deepseek-ai\/dsh(?:\s+web)?/,
   /pnpm\s+(?:--?\w+\s+)*dsh(?:\s+web)?/,
-  /(?:^|\s)dsh\s+web(?:\s|$)/
+  /(?:^|\s)dsh\s+web(?:\s|$)/,
 ];
 
 /** Find the last non-comment line that looks like the DSH launch command. */
@@ -67,14 +78,17 @@ if (launchIndex === -1) {
 
 const selfHealPath = join(repo, "bridge", "self-heal.mjs");
 const block =
-`\n# dsh-aux self-heal(幂等):npm 升级会清掉手工 symlink、本地补丁与自定义事件\n` +
-`# 白名单(aux/llm-call),启动前自动检查并重打;失败不阻塞启动。\n` +
-`AUX_SELF_HEAL=${shellQuote(selfHealPath)}\n` +
-`if [ -f "$AUX_SELF_HEAL" ]; then\n` +
-`  node "$AUX_SELF_HEAL" >> "$HOME/dsh/dsh-web.log" 2>&1 || echo "WARN: dsh-aux self-heal failed (non-fatal)"\n` +
-`fi\n`;
+  `\n# dsh-aux self-heal(幂等):npm 升级会清掉手工 symlink、本地补丁与自定义事件\n` +
+  `# 白名单(aux/llm-call),启动前自动检查并重打;失败不阻塞启动。\n` +
+  `AUX_SELF_HEAL=${shellQuote(selfHealPath)}\n` +
+  `if [ -f "$AUX_SELF_HEAL" ]; then\n` +
+  `  node "$AUX_SELF_HEAL" >> "$HOME/dsh/dsh-web.log" 2>&1 || echo "WARN: dsh-aux self-heal failed (non-fatal)"\n` +
+  `fi\n`;
 
-if (DRY) { log(`[dry-run] 将在 ${startSh} 的 exec 行前插入自愈 hook`); process.exit(0); }
+if (DRY) {
+  log(`[dry-run] 将在 ${startSh} 的 exec 行前插入自愈 hook`);
+  process.exit(0);
+}
 
 // 备份(仅首次,幂等)
 const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -82,9 +96,11 @@ const bak = `${startSh}.bak-${stamp}`;
 copyFileSync(startSh, bak);
 log(`备份: ${bak}`);
 
-const out = lines.slice(0, launchIndex).join("\n") +
+const out =
+  lines.slice(0, launchIndex).join("\n") +
   (launchIndex > 0 ? "\n" : "") +
-  block.trimEnd() + "\n" +
+  block.trimEnd() +
+  "\n" +
   lines.slice(launchIndex).join("\n");
 writeFileSync(startSh, out);
 log("已插入自愈 hook");

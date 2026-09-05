@@ -2,7 +2,7 @@
   "name": "dsh-aux-workspace",
   "private": true,
   "type": "module",
-  "description": "DSH-AUX \u4ed3\u5e93\u6839 package.json:\u4ec5\u4e3a CI \u63d0\u4f9b\u6d4b\u8bd5\u6240\u9700\u7684 DSH \u5b98\u65b9\u4f9d\u8d56(\u4e0d\u53c2\u4e0e\u8fd0\u884c\u65f6\u5b89\u88c5)",
+  "description": "DSH-AUX 仓库根 package.json:仅为 CI 提供测试所需的 DSH 官方依赖(不参与运行时安装)",
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-agent": "0.1.2-alpha.3",
@@ -18,7 +18,11 @@
     "@deepseek-ai/dsh-tool-web": "0.1.2-alpha.3",
     "@deepseek-ai/dsh-tools": "0.1.2-alpha.3",
     "@deepseek-ai/dsh-workflow-worker-thread": "0.1.2-alpha.3",
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.4",
+    "globals": "17.12.0",
+    "prettier": "3.9.6"
   },
   "overrides": {
     "@deepseek-ai/dsh-agent": "0.1.2-alpha.3",
@@ -80,5 +84,11 @@
     "@deepseek-ai/dsh-workflow": "0.1.2-alpha.3",
     "@deepseek-ai/dsh-workflow-worker-thread": "0.1.2-alpha.3",
     "@deepseek-ai/dsh-workspace": "0.1.2-alpha.3"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   }
 }

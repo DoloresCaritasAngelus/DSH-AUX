@@ -9,11 +9,7 @@
 /** AUX tools injected into routed subagents so the child can escalate to the
  * auxiliary model when its own capability is insufficient (e.g. a text-only
  * manual subagent needs vision → vision_analyze). */
-export const AUX_SUBAGENT_TOOL_NAMES = Object.freeze([
-  "vision_analyze",
-  "web_extract",
-  "compress_text",
-]);
+export const AUX_SUBAGENT_TOOL_NAMES = Object.freeze(["vision_analyze", "web_extract", "compress_text"]);
 
 /** Built-in keywords that hint a task needs vision capability. */
 export const DEFAULT_VISION_KEYWORDS = Object.freeze([
@@ -79,8 +75,10 @@ export function resolveSubagentRoute(settings, request = {}) {
   const group = mode === "manual" ? settings?.general : needsVision ? settings?.vision : settings?.general;
   if (
     group === void 0 ||
-    typeof group.provider !== "string" || group.provider.length === 0 ||
-    typeof group.model !== "string" || group.model.length === 0
+    typeof group.provider !== "string" ||
+    group.provider.length === 0 ||
+    typeof group.model !== "string" ||
+    group.model.length === 0
   ) {
     // Missing / half-configured route: run native (never silently misroute).
     return { settled: false };
@@ -102,20 +100,20 @@ export function resolveSubagentRoute(settings, request = {}) {
   if (settings?.prepareTools !== false && hasAllowFilter) {
     for (const name of AUX_SUBAGENT_TOOL_NAMES) allows.add(name);
   }
-  const deny = Array.isArray(request.existingDeny) && request.existingDeny.length > 0
-    ? [...request.existingDeny]
-    : void 0;
-  const toolFilter = hasAllowFilter || deny !== void 0
-    ? {
-        ...(allows.size > 0 ? { allow: [...allows] } : {}),
-        ...(deny !== void 0 ? { deny } : {})
-      }
-    : void 0;
+  const deny =
+    Array.isArray(request.existingDeny) && request.existingDeny.length > 0 ? [...request.existingDeny] : void 0;
+  const toolFilter =
+    hasAllowFilter || deny !== void 0
+      ? {
+          ...(allows.size > 0 ? { allow: [...allows] } : {}),
+          ...(deny !== void 0 ? { deny } : {}),
+        }
+      : void 0;
 
   return {
     settled: true,
     agentOptions,
     ...(toolFilter === void 0 ? {} : { toolFilter }),
-    needsVision
+    needsVision,
   };
 }

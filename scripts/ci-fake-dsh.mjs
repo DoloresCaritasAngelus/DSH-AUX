@@ -47,7 +47,7 @@ function run(label, scriptRel, extraArgs = []) {
   const res = spawnSync(process.execPath, [script, ...args2], {
     cwd: REPO,
     env: { ...process.env, DSH_ROOT: ROOT, HOME: FAKE_HOME },
-    encoding: "utf8"
+    encoding: "utf8",
   });
   console.log(`\n== ${label} ==`);
   if (res.stdout) process.stdout.write(res.stdout);
@@ -91,11 +91,11 @@ function setupFakeRoot() {
 }
 
 function runDoctor() {
-  const res = spawnSync(
-    process.execPath,
-    [join(REPO, "scripts/doctor.mjs"), "--dsh-root", ROOT, "--json"],
-    { cwd: REPO, env: { ...process.env, DSH_ROOT: ROOT, HOME: FAKE_HOME }, encoding: "utf8" }
-  );
+  const res = spawnSync(process.execPath, [join(REPO, "scripts/doctor.mjs"), "--dsh-root", ROOT, "--json"], {
+    cwd: REPO,
+    env: { ...process.env, DSH_ROOT: ROOT, HOME: FAKE_HOME },
+    encoding: "utf8",
+  });
   console.log("\n== doctor ==");
   if (res.stdout) process.stdout.write(res.stdout);
   if (res.stderr) process.stderr.write(res.stderr);

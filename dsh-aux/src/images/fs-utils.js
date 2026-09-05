@@ -54,7 +54,7 @@ export async function scanObjectFiles(root) {
           path: filePath,
           fileName: fileEnt.name,
           bytes: fileSt.size,
-          mtimeMs: fileSt.mtimeMs
+          mtimeMs: fileSt.mtimeMs,
         });
       } catch {
         // Best-effort scan: unreadable entries are skipped.

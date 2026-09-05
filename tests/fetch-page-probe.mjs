@@ -16,11 +16,11 @@
  *
  * @module tests/fetch-page-probe
  */
-import { fetchPage } from '../dsh-aux/src/crawl/fetch-page.js';
+import { fetchPage } from "../dsh-aux/src/crawl/fetch-page.js";
 
 function head(text, n = 900) {
-  if (typeof text !== 'string') return '(no text)';
-  const lines = text.split('\n').filter((l) => l.trim().length > 0);
+  if (typeof text !== "string") return "(no text)";
+  const lines = text.split("\n").filter((l) => l.trim().length > 0);
   let out = [];
   let len = 0;
   for (const line of lines) {
@@ -28,13 +28,13 @@ function head(text, n = 900) {
     out.push(line);
     len += line.length;
   }
-  return out.join('\n');
+  return out.join("\n");
 }
 
 const url = process.argv[2];
 const maxChars = Number.isInteger(Number(process.argv[3])) ? Number(process.argv[3]) : 32000;
 if (!url) {
-  console.error('usage: node tests/fetch-page-probe.mjs <url> [maxChars]');
+  console.error("usage: node tests/fetch-page-probe.mjs <url> [maxChars]");
   process.exit(2);
 }
 
@@ -42,12 +42,12 @@ if (!url) {
 // real DNS for the SSRF guard.
 const service = {
   allowInternalUrls: false,
-  ctx: {}
+  ctx: {},
 };
 
 const out = { url, maxChars };
 try {
-  const page = await fetchPage(service, url.trim(), { textCap: maxChars, rawCap: maxChars, label: 'web_extract' });
+  const page = await fetchPage(service, url.trim(), { textCap: maxChars, rawCap: maxChars, label: "web_extract" });
   out.finalUrl = page.finalUrl;
   out.redirects = page.redirects;
   out.truncated = page.truncated;
@@ -56,7 +56,7 @@ try {
   out.challenge = page.challenge;
   out.head = head(page.text);
 } catch (error) {
-  out.error = `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`;
+  out.error = `${error?.name ?? "Error"}: ${error?.message ?? String(error)}`;
   if (error?.httpStatus !== void 0) {
     out.httpStatus = error.httpStatus;
     out.rateLimited = error.rateLimited === true;

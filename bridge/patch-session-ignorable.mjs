@@ -30,10 +30,13 @@ import { deployedFile, guardTarget } from "./target.js";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 // 不写死用户绝对路径:按部署形态相对解析(symlink / 源码树),并在读写前校验。
-const TARGET = guardTarget(deployedFile(
-  "../../../@deepseek-ai/dsh-session/lib/index.js",
-  "../../../node_modules/@deepseek-ai/dsh-session/lib/index.js"
-), "dsh-session-ignorable");
+const TARGET = guardTarget(
+  deployedFile(
+    "../../../@deepseek-ai/dsh-session/lib/index.js",
+    "../../../node_modules/@deepseek-ai/dsh-session/lib/index.js",
+  ),
+  "dsh-session-ignorable",
+);
 const MARK = "dsh-aux ignorable (local patch)";
 /** dsh-aux session event name; also used as a fingerprint for rc.7+ clean packages. */
 const AUX_CALL_EVENT = "aux/llm-call";
@@ -46,11 +49,17 @@ async function block(name) {
 // entry, so select the original block that matches the deployed source.
 const APPEND_VARIANTS = [
   { name: "append-alpha3", origFile: "orig-session-append.txt", patchedFile: "patched-session-append.txt" },
-  { name: "append-alpha4", origFile: "orig-session-append-alpha4-block.txt", patchedFile: "patched-session-append-alpha4-block.txt" }
+  {
+    name: "append-alpha4",
+    origFile: "orig-session-append-alpha4-block.txt",
+    patchedFile: "patched-session-append-alpha4-block.txt",
+  },
 ];
 const WHITELIST_STEP = ["白名单", "orig-session-whitelist.txt", "patched-session-whitelist.txt"];
 
-function log(msg) { console.log("[dsh-session-ignorable] " + msg); }
+function log(msg) {
+  console.log("[dsh-session-ignorable] " + msg);
+}
 
 function syntaxCheck(file) {
   try {
@@ -66,10 +75,18 @@ const dryRun = process.argv.includes("--dry-run");
 const rollbackMode = process.argv.includes("--rollback");
 
 if (rollbackMode) {
-  try { await access(TARGET); } catch { log("目标不存在"); process.exit(1); }
+  try {
+    await access(TARGET);
+  } catch {
+    log("目标不存在");
+    process.exit(1);
+  }
   const baks = (await readdir(dirname(TARGET))).filter((f) => f.startsWith("index.js.bak-") && !f.includes(".node"));
   baks.sort().reverse();
-  if (baks.length === 0) { log("无备份可回滚"); process.exit(1); }
+  if (baks.length === 0) {
+    log("无备份可回滚");
+    process.exit(1);
+  }
   await copyFile(join(dirname(TARGET), baks[0]), TARGET);
   log("已回滚: " + baks[0]);
   syntaxCheck(TARGET);
@@ -77,7 +94,10 @@ if (rollbackMode) {
 }
 
 const data = await readFile(TARGET, "utf8");
-if (data.includes(MARK)) { log("已是补丁状态,跳过"); process.exit(0); }
+if (data.includes(MARK)) {
+  log("已是补丁状态,跳过");
+  process.exit(0);
+}
 const whitelistOrig = await block(WHITELIST_STEP[1]);
 const whitelistApplicable = data.includes(whitelistOrig);
 // rc.7+/干净 npm 包可能没有 thinking/language 白名单锚点;白名单统一由
@@ -92,7 +112,7 @@ for (const variant of APPEND_VARIANTS) {
   appendVariants.push({
     ...variant,
     origText: await block(variant.origFile),
-    patchedText: await block(variant.patchedFile)
+    patchedText: await block(variant.patchedFile),
   });
 }
 const appendVariant = appendVariants.find((variant) => data.includes(variant.origText));
@@ -104,7 +124,9 @@ const steps = [[appendVariant.name, appendVariant.origText, appendVariant.patche
 if (whitelistApplicable) steps.push(["白名单", await block(WHITELIST_STEP[1]), await block(WHITELIST_STEP[2])]);
 
 if (dryRun) {
-  log(`[dry-run] 可打补丁(${steps.length} 处${whitelistApplicable ? " + 白名单" : ";白名单跳过"}): ${appendVariant.name}`);
+  log(
+    `[dry-run] 可打补丁(${steps.length} 处${whitelistApplicable ? " + 白名单" : ";白名单跳过"}): ${appendVariant.name}`,
+  );
   process.exit(0);
 }
 
@@ -116,7 +138,11 @@ let patched = data;
 for (const [name, origText, patchedText] of steps) {
   patched = patched.replace(origText, patchedText);
 }
-if (!patched.includes(MARK)) { log("替换失败,回滚"); await copyFile(bak, TARGET); process.exit(1); }
+if (!patched.includes(MARK)) {
+  log("替换失败,回滚");
+  await copyFile(bak, TARGET);
+  process.exit(1);
+}
 await writeFile(TARGET, patched);
 log("已打补丁(" + steps.length + " 处): " + appendVariant.name);
 syntaxCheck(TARGET);

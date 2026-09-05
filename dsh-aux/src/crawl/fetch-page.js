@@ -72,7 +72,7 @@ function httpHint(label, status) {
  * ordinary "please enable JavaScript" fallbacks. */
 const CHALLENGE_SIGNALS = [
   { re: /cf-chl|challenge-platform|__cf_chl|cf_clearance|__cf_bm|__cfruid/i, provider: "cloudflare" },
-  { re: /Just a moment|Checking your browser|Pardon our interruption|Verify you are human/i, provider: "generic" }
+  { re: /Just a moment|Checking your browser|Pardon our interruption|Verify you are human/i, provider: "generic" },
 ];
 
 /** Detect whether a page body is actually a JS-challenge / bot-check shell. */
@@ -106,7 +106,10 @@ export function isSupportedCharsetLabel(label) {
 
 /** Sniff `<meta charset>` / `<meta http-equiv=content-type>` from latin-1-decoded head. */
 export function sniffMetaCharset(latin1Head) {
-  const m = (/(?:<meta\b[^>]*\bcharset\s*=\s*["']?\s*([a-z0-9._:-]+)|http-equiv\s*=\s*["']?content-type["']?[^>]*\bcharset\s*=\s*["']?\s*([a-z0-9._:-]+))/i).exec(latin1Head || "");
+  const m =
+    /(?:<meta\b[^>]*\bcharset\s*=\s*["']?\s*([a-z0-9._:-]+)|http-equiv\s*=\s*["']?content-type["']?[^>]*\bcharset\s*=\s*["']?\s*([a-z0-9._:-]+))/i.exec(
+      latin1Head || "",
+    );
   if (m === null) return null;
   return (m[1] ?? m[2] ?? "").toLowerCase() || null;
 }
@@ -203,7 +206,11 @@ async function readSniffedCapped(response, capChars) {
 async function readChallengeBody(response) {
   const reader = response.body?.getReader?.();
   if (reader === void 0) {
-    try { return typeof response.text === "function" ? await response.text() : ""; } catch { return ""; }
+    try {
+      return typeof response.text === "function" ? await response.text() : "";
+    } catch {
+      return "";
+    }
   }
   const decoder = new TextDecoder();
   let text = "";
@@ -215,7 +222,9 @@ async function readChallengeBody(response) {
       if (text.length >= 16_384) break;
     }
     await reader.cancel().catch(() => {});
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
   return text;
 }
 
@@ -225,14 +234,19 @@ async function readChallengeBody(response) {
  * never swallowed and misread as provider-availability fallbacks. */
 export function isProviderUnavailable(error) {
   const code = typeof error?.code === "string" ? error.code : "";
-  if (code === "WEB_PROVIDER_UNAVAILABLE" || code === "WEB_PROVIDER_CONFIGURED_MISSING" || code === "WEB_PROVIDER_AMBIGUOUS") {
+  if (
+    code === "WEB_PROVIDER_UNAVAILABLE" ||
+    code === "WEB_PROVIDER_CONFIGURED_MISSING" ||
+    code === "WEB_PROVIDER_AMBIGUOUS"
+  ) {
     return true;
   }
   const message = error?.message ?? String(error ?? "");
   return /no usable web provider/i.test(message);
 }
 
-const TRANSPORT_RE = /fetch failed|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|getaddrinfo|socket hang up|tls|network|timeout|UND_ERR/i;
+const TRANSPORT_RE =
+  /fetch failed|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|getaddrinfo|socket hang up|tls|network|timeout|UND_ERR/i;
 
 /** Whether a seam/provider failure is a transport problem — the local (env-
  * proxy-aware) path may still reach the host, so it is worth retrying there. */
@@ -251,12 +265,14 @@ export async function finishLocalFetch(response, finalUrl, { textCap, rawCap, la
         throw new HttpStatusError(
           `${label}: HTTP ${response.status} — 检测到 JS Challenge(${challenge.provider}),需浏览器渲染`,
           response.status,
-          { blocker: "js-challenge", browserRequired: true, challengeProvider: challenge.provider }
+          { blocker: "js-challenge", browserRequired: true, challengeProvider: challenge.provider },
         );
       }
     }
     await response.body?.cancel().catch(() => {});
-    throw new HttpStatusError(httpHint(label, response.status), response.status, { rateLimited: isRetryableStatus(response.status) });
+    throw new HttpStatusError(httpHint(label, response.status), response.status, {
+      rateLimited: isRetryableStatus(response.status),
+    });
   }
   const contentType = response.headers.get("content-type") ?? "";
   if (isBinaryContentType(contentType)) {
@@ -268,9 +284,10 @@ export async function finishLocalFetch(response, finalUrl, { textCap, rawCap, la
   const headerCharset = charsetFromContentType(contentType);
   // Stream with a header charset when known; otherwise sniff <meta charset>
   // from a bounded buffer (covers GBK/GB18030 without a header).
-  const raw = headerCharset && isSupportedCharsetLabel(headerCharset)
-    ? await readTextCapped(response, rawCap, { charset: headerCharset })
-    : await readSniffedCapped(response, rawCap);
+  const raw =
+    headerCharset && isSupportedCharsetLabel(headerCharset)
+      ? await readTextCapped(response, rawCap, { charset: headerCharset })
+      : await readSniffedCapped(response, rawCap);
   const rawHtml = isHtml ? raw.text : null;
   const cleaned = isHtml ? htmlToText(raw.text) : raw.text;
   const capped = truncateByChars(cleaned, textCap);
@@ -284,7 +301,7 @@ export async function finishLocalFetch(response, finalUrl, { textCap, rawCap, la
     rawHtml,
     challenge,
     redirects,
-    charset: raw.charset
+    charset: raw.charset,
   };
 }
 
@@ -318,17 +335,30 @@ export async function fetchPage(service, targetUrl, { textCap, rawCap = textCap,
         // per-hop SSRF checks so no internal hop is ever fetched.
         const from = typeof result.url === "string" && result.url.length > 0 ? result.url : targetUrl;
         const local = await fetchWithSsrf(service, from, label, signal);
-        return finishLocalFetch(local.response, local.finalUrl, { textCap, rawCap, label, redirects: (local.hops ?? 0) + 1 });
+        return finishLocalFetch(local.response, local.finalUrl, {
+          textCap,
+          rawCap,
+          label,
+          redirects: (local.hops ?? 0) + 1,
+        });
       }
       // Best-effort release of any provider-buffered body on the error paths.
       const releaseBody = () => {
-        try { if (typeof result?.body?.cancel === "function") result.body.cancel().catch(() => {}); } catch { /* best-effort */ }
+        try {
+          if (typeof result?.body?.cancel === "function") result.body.cancel().catch(() => {});
+        } catch {
+          /* best-effort */
+        }
       };
       if (statusCode >= 400) {
         const challenge = detectBrowserChallenge(typeof result?.body?.content === "string" ? result.body.content : "");
         if (challenge.browserRequired) {
           releaseBody();
-          throw new HttpStatusError(`${label}: HTTP ${statusCode} — 检测到 JS Challenge(${challenge.provider}),需浏览器渲染`, statusCode, { blocker: "js-challenge", browserRequired: true, challengeProvider: challenge.provider });
+          throw new HttpStatusError(
+            `${label}: HTTP ${statusCode} — 检测到 JS Challenge(${challenge.provider}),需浏览器渲染`,
+            statusCode,
+            { blocker: "js-challenge", browserRequired: true, challengeProvider: challenge.provider },
+          );
         }
         const rateLimited = isRetryableStatus(statusCode);
         releaseBody();
@@ -340,7 +370,12 @@ export async function fetchPage(service, targetUrl, { textCap, rawCap = textCap,
       }
       await assertSafeFetchUrlForService(service, result.url, label);
       const body = result.body;
-      if (body === null || typeof body !== "object" || (body.kind !== "html" && body.kind !== "text") || typeof body.content !== "string") {
+      if (
+        body === null ||
+        typeof body !== "object" ||
+        (body.kind !== "html" && body.kind !== "text") ||
+        typeof body.content !== "string"
+      ) {
         releaseBody();
         throw new Error(`${label}: web provider returned an unsupported body for ${targetUrl}`);
       }
@@ -362,7 +397,7 @@ export async function fetchPage(service, targetUrl, { textCap, rawCap = textCap,
         rawHtml,
         challenge,
         redirects: 0,
-        charset: void 0
+        charset: void 0,
       };
     } catch (error) {
       // Provider-availability AND transport failures fall through to the

@@ -30,7 +30,7 @@ function enqueueRetentionWrite(task) {
   const result = retentionWriteQueue.then(task);
   retentionWriteQueue = result.then(
     () => void 0,
-    () => void 0
+    () => void 0,
   );
   return result;
 }

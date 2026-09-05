@@ -45,10 +45,7 @@ export function deployedFile(symlinkRel, sourceRel) {
     const override = dshRootCandidate(symlinkRel) ?? dshRootCandidate(sourceRel);
     if (override) return override;
   }
-  const candidates = [
-    join(HERE, symlinkRel),
-    join(HERE, sourceRel)
-  ];
+  const candidates = [join(HERE, symlinkRel), join(HERE, sourceRel)];
   for (const candidate of candidates) {
     if (existsSync(candidate)) return candidate;
   }
@@ -66,14 +63,10 @@ export function assertSafeTarget(file) {
   const parts = normalized.split(sep);
   const nmIndex = parts.lastIndexOf("node_modules");
   if (nmIndex < 0 || parts[nmIndex + 1] !== "@deepseek-ai") {
-    throw new Error(
-      `unsafe patch target: resolved path is not inside node_modules/@deepseek-ai (${file})`
-    );
+    throw new Error(`unsafe patch target: resolved path is not inside node_modules/@deepseek-ai (${file})`);
   }
   if (!normalized.endsWith(`${sep}lib${sep}index.js`)) {
-    throw new Error(
-      `unsafe patch target: expected .../lib/index.js (${file})`
-    );
+    throw new Error(`unsafe patch target: expected .../lib/index.js (${file})`);
   }
   return file;
 }
@@ -90,15 +83,11 @@ export function assertSafePackageFile(file) {
   const parts = normalized.split(sep);
   const nmIndex = parts.lastIndexOf("node_modules");
   if (nmIndex < 0 || parts[nmIndex + 1] !== "@deepseek-ai") {
-    throw new Error(
-      `unsafe patch target: resolved path is not inside node_modules/@deepseek-ai (${file})`
-    );
+    throw new Error(`unsafe patch target: resolved path is not inside node_modules/@deepseek-ai (${file})`);
   }
   const libIndex = parts.indexOf("lib", nmIndex + 3);
   if (libIndex < 0 || !normalized.endsWith(".js")) {
-    throw new Error(
-      `unsafe patch target: expected .../lib/*.js (${file})`
-    );
+    throw new Error(`unsafe patch target: expected .../lib/*.js (${file})`);
   }
   return file;
 }

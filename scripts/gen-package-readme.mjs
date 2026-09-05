@@ -29,7 +29,7 @@ const PKG = join(ROOT, "dsh-aux"); // 包根(发布面)
 export const PAIRS = [
   { root: join(ROOT, "README.md"), dest: join(PKG, "README.md"), banner: "README.md" },
   { root: join(ROOT, "README.en.md"), dest: join(PKG, "README.en.md"), banner: "README.en.md" },
-  { root: join(ROOT, "CREDITS.md"), dest: join(PKG, "CREDITS.md"), banner: "CREDITS.md" }
+  { root: join(ROOT, "CREDITS.md"), dest: join(PKG, "CREDITS.md"), banner: "CREDITS.md" },
 ];
 
 /** 把根 README 文本变成包内副本:顶部加"生成快照"banner,正文原样。 */
@@ -40,7 +40,7 @@ export function buildPackageReadme(rootText, name) {
     "  DO NOT EDIT BY HAND. Regenerate with: npm run gen-package-readme",
     "  (runs automatically on prepack before npm pack/publish).",
     "-->",
-    ""
+    "",
   ].join("\n");
   return banner + rootText;
 }
@@ -56,7 +56,11 @@ export async function checkSync() {
   for (const p of PAIRS) {
     const rootText = await readFile(p.root, "utf8");
     let destText = null;
-    try { destText = await readFile(p.dest, "utf8"); } catch { destText = null; }
+    try {
+      destText = await readFile(p.dest, "utf8");
+    } catch {
+      destText = null;
+    }
     rows.push({ ...p, inSync: destText !== null && isInSync(rootText, destText, p.banner) });
   }
   return rows;
@@ -90,5 +94,8 @@ async function main() {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main().catch((error) => { console.error(error); process.exit(1); });
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
 }

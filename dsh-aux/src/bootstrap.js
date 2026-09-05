@@ -20,11 +20,12 @@ export function isMinimalPreset(agent) {
 /** Whether this agent runs a Minimal-like / Anchored Standard preset. */
 export function isBootstrapPreset(agent) {
   const preset = agent?.session?.header?.agentPreset;
-  return typeof preset === "string" && (
-    preset === "minimal" ||
-    preset === "anchored-standard" ||
-    preset === "zero-anchored-standard" ||
-    preset === "whoami-standard"
+  return (
+    typeof preset === "string" &&
+    (preset === "minimal" ||
+      preset === "anchored-standard" ||
+      preset === "zero-anchored-standard" ||
+      preset === "whoami-standard")
   );
 }
 

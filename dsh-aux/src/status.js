@@ -13,14 +13,8 @@ import { stat } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { resolvePackageFile, readPackageFile } from "./bridge-locate.js";
 import { imageBridgeStatus } from "./image-bridge.js";
-import {
-  subagentBridgeStatus,
-  workflowBridgeStatus
-} from "./subagent-bridge.js";
-import {
-  isCompactionBridgeInstalled,
-  isCompactionTaskConfigured
-} from "./compaction-bridge.js";
+import { subagentBridgeStatus, workflowBridgeStatus } from "./subagent-bridge.js";
+import { isCompactionBridgeInstalled, isCompactionTaskConfigured } from "./compaction-bridge.js";
 import { isSkillTaskConfigured, skillBridgeStatus } from "./skill-bridge.js";
 import { recordPlatformEvent, sessionEventsSupported } from "./events.js";
 
@@ -34,7 +28,7 @@ const PATCH_PACKAGES = [
   "dsh-tool-subagent",
   "dsh-workflow-worker-thread",
   "dsh-tool-skill",
-  "dsh-session"
+  "dsh-session",
 ];
 
 /**
@@ -57,57 +51,57 @@ const PATCH_LEDGER = [
     group: "P1-P6",
     pkg: "dsh-agent-loop",
     mark: "image-bridge v2 (local patch)",
-    description: "模型输入边界将图片改写为 vision_analyze 路径文本"
+    description: "模型输入边界将图片改写为 vision_analyze 路径文本",
   },
   {
     id: "bridge-session-controller",
     group: "P1-P6",
     pkg: "dsh-api-session-controller",
     mark: "dsh-aux image bridge v3 (local patch)",
-    description: "alpha.x session-controller 图片门控移除"
+    description: "alpha.x session-controller 图片门控移除",
   },
   {
     id: "bridge-subagent-schema",
     group: "P1-P6",
     pkg: "dsh-tool-subagent",
     mark: "requires_vision:",
-    description: "subagent 工具增加 requires_vision 可选参数"
+    description: "subagent 工具增加 requires_vision 可选参数",
   },
   {
     id: "bridge-subagent-request",
     group: "P1-P6",
     pkg: "dsh-tool-subagent",
     mark: 'ctx.get("auxLlm")',
-    description: "subagent execute 读取 auxLlm.subagentRoute 注入路由"
+    description: "subagent execute 读取 auxLlm.subagentRoute 注入路由",
   },
   {
     id: "bridge-workflow",
     group: "P1-P6",
     pkg: "dsh-workflow-worker-thread",
     mark: "subagentIncludeWorkflow",
-    description: "workflow agent() 子代理也走 AUX 路由"
+    description: "workflow agent() 子代理也走 AUX 路由",
   },
   {
     id: "bridge-skill",
     group: "P1-P6",
     pkg: "dsh-tool-skill",
     mark: "skill auditor",
-    description: "skill 工具增加可选 task 参数供预审桥接"
+    description: "skill 工具增加可选 task 参数供预审桥接",
   },
   {
     id: "session-ignorable",
     group: "P7",
     pkg: "dsh-session",
     mark: "dsh-aux ignorable (local patch)",
-    description: "session.append 支持 ignorable 自定义事件"
+    description: "session.append 支持 ignorable 自定义事件",
   },
   {
     id: "session-whitelist",
     group: "P8",
     pkg: "dsh-session",
     mark: "aux/llm-call",
-    description: "aux/llm-call 事件白名单"
-  }
+    description: "aux/llm-call 事件白名单",
+  },
 ];
 
 /** Read one patched package's lib source once, returning undefined if absent. */
@@ -147,7 +141,7 @@ export async function collectPatchLedger() {
       state,
       installed,
       required: true,
-      present
+      present,
     });
   }
   return rows;
@@ -191,7 +185,10 @@ function nextPlatformPublishSeq(service) {
 function enqueuePlatformPublish(service, task) {
   const previous = platformPublishQueues.get(service) ?? Promise.resolve();
   const run = previous.then(task, task);
-  platformPublishQueues.set(service, run.catch(() => {}));
+  platformPublishQueues.set(
+    service,
+    run.catch(() => {}),
+  );
   return run;
 }
 
@@ -236,7 +233,7 @@ function item(entry) {
     mode: entry.mode,
     state: entry.state,
     reason: entry.reason,
-    action: entry.action ?? "none"
+    action: entry.action ?? "none",
   };
   if (entry.patch !== void 0) out.patch = entry.patch;
   if (entry.detail !== void 0) out.detail = entry.detail;
@@ -265,23 +262,79 @@ function toolStatus(service, key) {
 function imageBridgeStatusItem(service, status) {
   const mode = service.toolBridgeMode("imageBridge");
   if (mode === "native") {
-    return item({ key: "imageBridge", kind: "bridge", mode, state: "disabled", reason: "mode-native", action: "none", patch: "not-applicable" });
+    return item({
+      key: "imageBridge",
+      kind: "bridge",
+      mode,
+      state: "disabled",
+      reason: "mode-native",
+      action: "none",
+      patch: "not-applicable",
+    });
   }
   if (mode === "compat") {
-    return item({ key: "imageBridge", kind: "bridge", mode, state: "unavailable", reason: "mode-compat", action: "none", patch: status });
+    return item({
+      key: "imageBridge",
+      kind: "bridge",
+      mode,
+      state: "unavailable",
+      reason: "mode-compat",
+      action: "none",
+      patch: status,
+    });
   }
   switch (status) {
     case "v3":
     case "v2":
-      return item({ key: "imageBridge", kind: "bridge", mode, state: "enabled", reason: "patch-ok", action: "none", patch: "installed" });
+      return item({
+        key: "imageBridge",
+        kind: "bridge",
+        mode,
+        state: "enabled",
+        reason: "patch-ok",
+        action: "none",
+        patch: "installed",
+      });
     case "v1":
-      return item({ key: "imageBridge", kind: "bridge", mode, state: "enabled", reason: "patch-v1", action: "patch", patch: "partial" });
+      return item({
+        key: "imageBridge",
+        kind: "bridge",
+        mode,
+        state: "enabled",
+        reason: "patch-v1",
+        action: "patch",
+        patch: "partial",
+      });
     case "partial":
-      return item({ key: "imageBridge", kind: "bridge", mode, state: "unavailable", reason: "patch-partial", action: "patch", patch: "partial" });
+      return item({
+        key: "imageBridge",
+        kind: "bridge",
+        mode,
+        state: "unavailable",
+        reason: "patch-partial",
+        action: "patch",
+        patch: "partial",
+      });
     case "missing":
-      return item({ key: "imageBridge", kind: "bridge", mode, state: "unavailable", reason: "patch-missing", action: "patch", patch: "missing" });
+      return item({
+        key: "imageBridge",
+        kind: "bridge",
+        mode,
+        state: "unavailable",
+        reason: "patch-missing",
+        action: "patch",
+        patch: "missing",
+      });
     default:
-      return item({ key: "imageBridge", kind: "bridge", mode, state: "unknown", reason: "patch-unknown", action: "none", patch: "unknown" });
+      return item({
+        key: "imageBridge",
+        kind: "bridge",
+        mode,
+        state: "unknown",
+        reason: "patch-unknown",
+        action: "none",
+        patch: "unknown",
+      });
   }
 }
 
@@ -291,18 +344,58 @@ function imageBridgeStatusItem(service, status) {
 function filePatchBridgeStatusItem(service, key, status) {
   const mode = service.toolBridgeMode(key);
   if (mode === "native") {
-    return item({ key, kind: "bridge", mode, state: "disabled", reason: "mode-native", action: "none", patch: "not-applicable" });
+    return item({
+      key,
+      kind: "bridge",
+      mode,
+      state: "disabled",
+      reason: "mode-native",
+      action: "none",
+      patch: "not-applicable",
+    });
   }
   if (mode === "compat") {
-    return item({ key, kind: "bridge", mode, state: "unavailable", reason: "mode-compat", action: "none", patch: status });
+    return item({
+      key,
+      kind: "bridge",
+      mode,
+      state: "unavailable",
+      reason: "mode-compat",
+      action: "none",
+      patch: status,
+    });
   }
   switch (status) {
     case "installed":
-      return item({ key, kind: "bridge", mode, state: "enabled", reason: "patch-ok", action: "none", patch: "installed" });
+      return item({
+        key,
+        kind: "bridge",
+        mode,
+        state: "enabled",
+        reason: "patch-ok",
+        action: "none",
+        patch: "installed",
+      });
     case "missing":
-      return item({ key, kind: "bridge", mode, state: "unavailable", reason: "patch-missing", action: "patch", patch: "missing" });
+      return item({
+        key,
+        kind: "bridge",
+        mode,
+        state: "unavailable",
+        reason: "patch-missing",
+        action: "patch",
+        patch: "missing",
+      });
     default:
-      return item({ key, kind: "bridge", mode, state: "unknown", reason: "patch-unknown", action: "none", patch: "unknown" });
+      return item({
+        key,
+        kind: "bridge",
+        mode,
+        state: "unknown",
+        reason: "patch-unknown",
+        action: "none",
+        patch: "unknown",
+      });
   }
 }
 
@@ -314,18 +407,58 @@ function filePatchBridgeStatusItem(service, key, status) {
 function compactionBridgeStatusItem(service) {
   const mode = service.toolBridgeMode("compactionBridge");
   if (mode === "native") {
-    return item({ key: "compactionBridge", kind: "bridge", mode, state: "disabled", reason: "mode-native", action: "none", patch: "not-applicable" });
+    return item({
+      key: "compactionBridge",
+      kind: "bridge",
+      mode,
+      state: "disabled",
+      reason: "mode-native",
+      action: "none",
+      patch: "not-applicable",
+    });
   }
   if (mode === "compat") {
-    return item({ key: "compactionBridge", kind: "bridge", mode, state: "unavailable", reason: "mode-compat", action: "none", patch: "not-applicable" });
+    return item({
+      key: "compactionBridge",
+      kind: "bridge",
+      mode,
+      state: "unavailable",
+      reason: "mode-compat",
+      action: "none",
+      patch: "not-applicable",
+    });
   }
   if (!isCompactionBridgeInstalled()) {
-    return item({ key: "compactionBridge", kind: "bridge", mode, state: "unavailable", reason: "dependency-missing", action: "none", patch: "missing" });
+    return item({
+      key: "compactionBridge",
+      kind: "bridge",
+      mode,
+      state: "unavailable",
+      reason: "dependency-missing",
+      action: "none",
+      patch: "missing",
+    });
   }
   if (!isCompactionTaskConfigured(service)) {
-    return item({ key: "compactionBridge", kind: "bridge", mode, state: "unavailable", reason: "config-missing", action: "configure", patch: "installed" });
+    return item({
+      key: "compactionBridge",
+      kind: "bridge",
+      mode,
+      state: "unavailable",
+      reason: "config-missing",
+      action: "configure",
+      patch: "installed",
+    });
   }
-  return item({ key: "compactionBridge", kind: "bridge", mode, state: "enabled", reason: "patch-ok", action: "none", patch: "installed" });
+  return item({
+    key: "compactionBridge",
+    kind: "bridge",
+    mode,
+    state: "enabled",
+    reason: "patch-ok",
+    action: "none",
+    patch: "installed",
+  });
 }
 
 /**
@@ -335,24 +468,80 @@ function compactionBridgeStatusItem(service) {
 function skillBridgeStatusItem(service, status) {
   const mode = service.toolBridgeMode("skillAudit");
   if (mode === "native") {
-    return item({ key: "skillAudit", kind: "bridge", mode, state: "disabled", reason: "mode-native", action: "none", patch: "not-applicable" });
+    return item({
+      key: "skillAudit",
+      kind: "bridge",
+      mode,
+      state: "disabled",
+      reason: "mode-native",
+      action: "none",
+      patch: "not-applicable",
+    });
   }
   if (mode === "compat") {
-    return item({ key: "skillAudit", kind: "bridge", mode, state: "unavailable", reason: "mode-compat", action: "none", patch: status });
+    return item({
+      key: "skillAudit",
+      kind: "bridge",
+      mode,
+      state: "unavailable",
+      reason: "mode-compat",
+      action: "none",
+      patch: status,
+    });
   }
   if (status === "unknown") {
-    return item({ key: "skillAudit", kind: "bridge", mode, state: "unknown", reason: "patch-unknown", action: "none", patch: "unknown" });
+    return item({
+      key: "skillAudit",
+      kind: "bridge",
+      mode,
+      state: "unknown",
+      reason: "patch-unknown",
+      action: "none",
+      patch: "unknown",
+    });
   }
   if (status !== "installed") {
-    return item({ key: "skillAudit", kind: "bridge", mode, state: "unavailable", reason: "patch-missing", action: "patch", patch: status });
+    return item({
+      key: "skillAudit",
+      kind: "bridge",
+      mode,
+      state: "unavailable",
+      reason: "patch-missing",
+      action: "patch",
+      patch: status,
+    });
   }
   if (service.skillMode === "native") {
-    return item({ key: "skillAudit", kind: "bridge", mode, state: "disabled", reason: "skill-mode-native", action: "none", patch: "installed" });
+    return item({
+      key: "skillAudit",
+      kind: "bridge",
+      mode,
+      state: "disabled",
+      reason: "skill-mode-native",
+      action: "none",
+      patch: "installed",
+    });
   }
   if (!isSkillTaskConfigured(service)) {
-    return item({ key: "skillAudit", kind: "bridge", mode, state: "unavailable", reason: "config-missing", action: "configure", patch: "installed" });
+    return item({
+      key: "skillAudit",
+      kind: "bridge",
+      mode,
+      state: "unavailable",
+      reason: "config-missing",
+      action: "configure",
+      patch: "installed",
+    });
   }
-  return item({ key: "skillAudit", kind: "bridge", mode, state: "enabled", reason: "patch-ok", action: "none", patch: "installed" });
+  return item({
+    key: "skillAudit",
+    kind: "bridge",
+    mode,
+    state: "enabled",
+    reason: "patch-ok",
+    action: "none",
+    patch: "installed",
+  });
 }
 
 /**
@@ -368,7 +557,7 @@ export async function collectPlatformStatus(service) {
     skillBridgeStatus(),
     sessionEventsSupported(service),
     anyPatchFileNewerThanProcessStart(),
-    collectPatchLedger()
+    collectPatchLedger(),
   ]);
   // A same-process patch is a hint, not a permanent override. If the mtime
   // check later says no patched file changed after boot (e.g. a rollback that
@@ -376,8 +565,7 @@ export async function collectPlatformStatus(service) {
   // restartRequired forever.
   const patchAppliedAt = service._patchAppliedThisSessionAt ?? Date.now();
   const patchAppliedHint =
-    service._patchAppliedThisSession === true &&
-    Date.now() - patchAppliedAt < PATCH_APPLIED_HINT_TOLERANCE_MS;
+    service._patchAppliedThisSession === true && Date.now() - patchAppliedAt < PATCH_APPLIED_HINT_TOLERANCE_MS;
   const restartRequired = fileRestartRequired || patchAppliedHint;
 
   const items = [];
@@ -413,7 +601,7 @@ export async function collectPlatformStatus(service) {
     warnings.push({
       code: "vision-disabled-image-bridge-enabled",
       keys: ["vision_analyze", "imageBridge"],
-      reason: "vision-disabled-image-bridge-enabled"
+      reason: "vision-disabled-image-bridge-enabled",
     });
   }
 
@@ -426,18 +614,13 @@ export async function collectPlatformStatus(service) {
     restartRequired,
     core: {
       count: 4,
-      protected: [
-        "image-lifecycle",
-        "session-image-safety",
-        "failure-cooldown",
-        "event-audit"
-      ]
+      protected: ["image-lifecycle", "session-image-safety", "failure-cooldown", "event-audit"],
     },
     eventsSupported: events,
     patchLedger,
     items,
     warnings,
-    issues
+    issues,
   };
 }
 
@@ -453,9 +636,7 @@ async function publishStatusSnapshot(service, sessions) {
   try {
     const status = await collectPlatformStatus(service);
     status.publishSeq = nextPlatformPublishSeq(service);
-    await Promise.all(
-      sessions.map((session) => recordPlatformEvent(service, session, status).catch(() => {}))
-    );
+    await Promise.all(sessions.map((session) => recordPlatformEvent(service, session, status).catch(() => {})));
   } catch {
     /* status publishing must never break session lifecycle */
   }

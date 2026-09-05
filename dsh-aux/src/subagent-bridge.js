@@ -16,11 +16,7 @@ import { readPackageFile } from "./bridge-locate.js";
 export async function subagentBridgeStatus() {
   const src = await readPackageFile("dsh-tool-subagent");
   if (src === void 0) return "unknown";
-  if (
-    src.includes("requires_vision:") &&
-    src.includes('ctx.get("auxLlm")') &&
-    src.includes("subagentRoute")
-  ) {
+  if (src.includes("requires_vision:") && src.includes('ctx.get("auxLlm")') && src.includes("subagentRoute")) {
     return "installed";
   }
   return "missing";
@@ -37,7 +33,7 @@ export async function workflowBridgeStatus() {
   if (
     src.includes("subagentIncludeWorkflow") &&
     src.includes("subagentRoute") &&
-    src.includes("this.ctx?.get?.(\"auxLlm\")")
+    src.includes('this.ctx?.get?.("auxLlm")')
   ) {
     return "installed";
   }

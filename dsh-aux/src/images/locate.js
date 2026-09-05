@@ -184,7 +184,7 @@ export async function locateImageAnchors(service, attachmentId, opts = {}) {
       sessionId,
       messageSeq: found.messageSeq,
       callId: found.callId,
-      callSeq: found.callSeq
+      callSeq: found.callSeq,
     });
   }
 
@@ -192,6 +192,6 @@ export async function locateImageAnchors(service, attachmentId, opts = {}) {
   return {
     attachmentId: targetAttachmentId,
     found: anchors.length > 0,
-    anchors
+    anchors,
   };
 }

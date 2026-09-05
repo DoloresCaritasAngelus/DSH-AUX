@@ -10,8 +10,7 @@ import { resolvePrimaryRoute } from "./route.js";
 export function compactionImagePlaceholder(ref) {
   const name = ref?.name ?? "";
   const media = ref?.mediaType ?? "image";
-  const size =
-    ref?.width !== void 0 && ref?.height !== void 0 ? `, ${ref.width}×${ref.height}` : "";
+  const size = ref?.width !== void 0 && ref?.height !== void 0 ? `, ${ref.width}×${ref.height}` : "";
   const label = name.length > 0 ? name : "未命名";
   return { type: "text", text: `[图片: ${label} (${media}${size}) — 未纳入压缩摘要]` };
 }
@@ -33,7 +32,7 @@ export function compactionImagePlaceholder(ref) {
  */
 export async function prepareCompactionMessages(service, messages, agent, signal) {
   const hasImage = messages.some(
-    (message) => Array.isArray(message?.content) && message.content.some((block) => block?.type === "image")
+    (message) => Array.isArray(message?.content) && message.content.some((block) => block?.type === "image"),
   );
   if (!hasImage) return messages;
 
@@ -57,10 +56,10 @@ export async function prepareCompactionMessages(service, messages, agent, signal
         ? {
             ...message,
             content: message.content.map((block) =>
-              block?.type === "image" ? compactionImagePlaceholder(block.attachment) : block
-            )
+              block?.type === "image" ? compactionImagePlaceholder(block.attachment) : block,
+            ),
           }
-        : message
+        : message,
     );
   }
 

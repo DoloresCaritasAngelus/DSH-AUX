@@ -16,15 +16,16 @@ export async function assertSafeFetchUrlForService(service, rawUrl, label = "web
   await assertSafeFetchUrl(rawUrl, {
     allowInternalUrls: service.allowInternalUrls === true,
     lookup: service._dnsLookup ?? dnsLookup,
-    label
+    label,
   });
 }
 
 /** Browser-like request headers sent on the local fetch path (proxy hygiene). */
 const BROWSER_HEADERS = Object.freeze({
-  "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "user-agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-  "accept-language": "en,zh-CN;q=0.9"
+  "accept-language": "en,zh-CN;q=0.9",
 });
 
 /** IPv4 CIDR match (dotted-quad + /prefix). */
@@ -69,14 +70,19 @@ export function proxyForUrl(url) {
   const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (matchesNoProxy(hostname, process.env.NO_PROXY ?? process.env.no_proxy)) return null;
   const isHttps = url.protocol === "https:";
-  const raw = process.env[isHttps ? "HTTPS_PROXY" : "HTTP_PROXY"]
-    ?? process.env[isHttps ? "https_proxy" : "http_proxy"]
-    ?? process.env.ALL_PROXY
-    ?? process.env.all_proxy;
+  const raw =
+    process.env[isHttps ? "HTTPS_PROXY" : "HTTP_PROXY"] ??
+    process.env[isHttps ? "https_proxy" : "http_proxy"] ??
+    process.env.ALL_PROXY ??
+    process.env.all_proxy;
   if (!raw) return null;
   try {
     const parsed = new URL(raw);
-    return { host: parsed.hostname, port: Number(parsed.port) || (parsed.protocol === "https:" ? 443 : 80), httpsProxy: parsed.protocol === "https:" };
+    return {
+      host: parsed.hostname,
+      port: Number(parsed.port) || (parsed.protocol === "https:" ? 443 : 80),
+      httpsProxy: parsed.protocol === "https:",
+    };
   } catch {
     return null;
   }
@@ -97,7 +103,7 @@ export async function fetchViaProxy(url, { headers = {}, signal, via = "auto" } 
   }
   const proxy = proxyForUrl(parsed);
   const isHttps = parsed.protocol === "https:";
-  const targetPort = parsed.port ? Number(parsed.port) : (isHttps ? 443 : 80);
+  const targetPort = parsed.port ? Number(parsed.port) : isHttps ? 443 : 80;
   const CONNECT_path = `${parsed.hostname}:${targetPort}`;
   const tunnel = await connectProxy(proxy, CONNECT_path, signal);
   const path = (parsed.pathname || "/") + parsed.search;
@@ -105,10 +111,12 @@ export async function fetchViaProxy(url, { headers = {}, signal, via = "auto" } 
     const out = (isHttps ? httpsRequest : httpRequest)({
       method: "GET",
       path,
-      ...(isHttps ? { hostname: parsed.hostname, port: 443, servername: parsed.hostname } : { hostname: parsed.hostname, port: 80 }),
+      ...(isHttps
+        ? { hostname: parsed.hostname, port: 443, servername: parsed.hostname }
+        : { hostname: parsed.hostname, port: 80 }),
       headers: mergedHeaders,
       createConnection: () => tunnel.socket,
-      signal
+      signal,
     });
     out.once("response", (msg) => resolve(msg));
     out.once("error", reject);
@@ -118,7 +126,7 @@ export async function fetchViaProxy(url, { headers = {}, signal, via = "auto" } 
   return new Response(Readable.toWeb(rawOut), {
     status: rawOut.statusCode ?? 200,
     statusText: rawOut.statusMessage ?? "",
-    headers: rawOut.headers
+    headers: rawOut.headers,
   });
 }
 
@@ -131,7 +139,7 @@ function connectProxy(proxy, CONNECT_path, signal) {
       method: "CONNECT",
       path: CONNECT_path,
       headers: { Host: CONNECT_path },
-      signal
+      signal,
     });
     req.on("connect", (res, socket, head) => {
       if (res.statusCode !== 200) {
@@ -145,7 +153,7 @@ function connectProxy(proxy, CONNECT_path, signal) {
         release() {
           socket.removeAllListeners("error");
           socket.on("error", () => {});
-        }
+        },
       });
     });
     req.on("error", reject);
@@ -154,7 +162,8 @@ function connectProxy(proxy, CONNECT_path, signal) {
 }
 
 /** Transport-level error regex (used to decide direct→proxy fallback). */
-const FETCH_TRANSPORT_RE = /fetch failed|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|getaddrinfo|socket hang up|UND_ERR|network|timeout/i;
+const FETCH_TRANSPORT_RE =
+  /fetch failed|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|getaddrinfo|socket hang up|UND_ERR|network|timeout/i;
 
 function isTransportLike(error) {
   const message = error?.message ?? String(error ?? "");
@@ -197,7 +206,11 @@ export async function fetchWithSsrf(service, rawUrl, label, signal) {
         throw new Error(`${label}: redirect response missing Location header`);
       }
       // Release the redirect body before following the next hop.
-      try { await response.body?.cancel(); } catch { /* best-effort */ }
+      try {
+        await response.body?.cancel();
+      } catch {
+        /* best-effort */
+      }
       currentUrl = new URL(location, currentUrl).href;
       hops += 1;
       continue;

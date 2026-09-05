@@ -14,9 +14,8 @@ import { AUX_TASKS } from "./route.js";
  * Old DSH exports `settingsNamespace("aux")`; 0.1.2-alpha.2 removed that
  * helper and accepts plain string namespaces directly.
  */
-export const AUX_SETTINGS_NAMESPACE = typeof dshSettings.settingsNamespace === "function"
-  ? dshSettings.settingsNamespace("aux")
-  : "aux";
+export const AUX_SETTINGS_NAMESPACE =
+  typeof dshSettings.settingsNamespace === "function" ? dshSettings.settingsNamespace("aux") : "aux";
 /** Timeout code stamped onto aux deadline timeouts. */
 export const AUX_TIMEOUT_CODE = "AUX_TIMEOUT";
 /** Session event type recording one auxiliary call. */
@@ -54,7 +53,7 @@ export const AUX_SETTINGS_SCHEMA = z.object({
       model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
-      reasoningEffort: z.string().min(1)
+      reasoningEffort: z.string().min(1),
     }),
     web_extract: z.object({
       provider: z.string().min(1),
@@ -62,7 +61,7 @@ export const AUX_SETTINGS_SCHEMA = z.object({
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       maxChars: z.number().step(1).min(1),
-      reasoningEffort: z.string().min(1)
+      reasoningEffort: z.string().min(1),
     }),
     web_crawl: z.object({
       provider: z.string().min(1),
@@ -70,29 +69,29 @@ export const AUX_SETTINGS_SCHEMA = z.object({
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       maxChars: z.number().step(1).min(1),
-      reasoningEffort: z.string().min(1)
+      reasoningEffort: z.string().min(1),
     }),
     compress: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
-      reasoningEffort: z.string().min(1)
+      reasoningEffort: z.string().min(1),
     }),
     compaction: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
-      reasoningEffort: z.string().min(1)
+      reasoningEffort: z.string().min(1),
     }),
     skill: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
-      reasoningEffort: z.string().min(1)
-    })
+      reasoningEffort: z.string().min(1),
+    }),
   }),
   subagent: z.object({
     mode: z.union([z.const("native"), z.const("manual"), z.const("vision-aware")]).default("native"),
@@ -100,16 +99,16 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     general: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
-      reasoningEffort: z.string().min(1)
+      reasoningEffort: z.string().min(1),
     }),
     vision: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
-      reasoningEffort: z.string().min(1)
+      reasoningEffort: z.string().min(1),
     }),
     prepareTools: z.boolean().default(true),
     retryVisionWithAux: z.boolean().default(false),
-    visionKeywords: z.array(z.string()).default([])
+    visionKeywords: z.array(z.string()).default([]),
   }),
   enabled: z.object({
     vision_analyze: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
@@ -120,17 +119,19 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     subagentBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
     workflowBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
     compactionBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
-    skillAudit: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux")
+    skillAudit: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
   }),
   skill: z.object({
-    mode: z.union([z.const("native"), z.const("audit"), z.const("report"), z.const("report-ondemand"), z.const("auto")]).default("audit")
+    mode: z
+      .union([z.const("native"), z.const("audit"), z.const("report"), z.const("report-ondemand"), z.const("auto")])
+      .default("audit"),
   }),
   debug: z.object({
     fullToolTrace: z.boolean().default(false),
     maxDebugEventBytes: z.number().step(1).min(1024).default(65536),
     debugEventsInHistory: z.boolean().default(false),
-    redactSecrets: z.boolean().default(true)
-  })
+    redactSecrets: z.boolean().default(true),
+  }),
 });
 
 /**
@@ -151,7 +152,9 @@ export function projectSettings(settings) {
       ...(raw.timeoutMs !== void 0 ? { timeoutMs: raw.timeoutMs } : {}),
       ...(raw.maxConcurrency !== void 0 ? { maxConcurrency: raw.maxConcurrency } : {}),
       ...(raw.reasoningEffort !== void 0 ? { reasoningEffort: raw.reasoningEffort } : {}),
-      ...((task === "web_extract" || task === "web_crawl") && raw.maxChars !== void 0 ? { maxChars: raw.maxChars } : {})
+      ...((task === "web_extract" || task === "web_crawl") && raw.maxChars !== void 0
+        ? { maxChars: raw.maxChars }
+        : {}),
     };
   }
   const rawSub = settings?.subagent ?? {};
@@ -166,7 +169,7 @@ export function projectSettings(settings) {
       : {}),
     ...(rawSub.vision !== void 0 && (rawSub.vision.provider !== void 0 || rawSub.vision.model !== void 0)
       ? { vision: { ...rawSub.vision } }
-      : {})
+      : {}),
   };
   const defaultEnabled = {
     vision_analyze: "aux",
@@ -177,21 +180,31 @@ export function projectSettings(settings) {
     subagentBridge: "aux",
     workflowBridge: "aux",
     compactionBridge: "aux",
-    skillAudit: "aux"
+    skillAudit: "aux",
   };
   const rawEnabled = settings?.enabled ?? {};
   const enabled = { ...defaultEnabled, ...rawEnabled };
   const skill = {
-    mode: settings?.skill?.mode ?? "audit"
+    mode: settings?.skill?.mode ?? "audit",
   };
   const rawDebug = settings?.debug ?? {};
   const debug = {
     fullToolTrace: rawDebug.fullToolTrace ?? false,
     maxDebugEventBytes: rawDebug.maxDebugEventBytes ?? 65536,
     debugEventsInHistory: rawDebug.debugEventsInHistory ?? false,
-    redactSecrets: rawDebug.redactSecrets ?? true
+    redactSecrets: rawDebug.redactSecrets ?? true,
   };
-  return { fallbackToMain, forceAuxVision, visionFallbackToMain, showStatusChip, tasks, subagent, enabled, skill, debug };
+  return {
+    fallbackToMain,
+    forceAuxVision,
+    visionFallbackToMain,
+    showStatusChip,
+    tasks,
+    subagent,
+    enabled,
+    skill,
+    debug,
+  };
 }
 
 /**
@@ -206,9 +219,7 @@ export function validateAuxSettings(value) {
     const hasProvider = entry?.provider !== void 0;
     const hasModel = entry?.model !== void 0;
     if (hasProvider !== hasModel) {
-      throw new Error(
-        `aux settings: tasks.${task} provider and model must be supplied together`
-      );
+      throw new Error(`aux settings: tasks.${task} provider and model must be supplied together`);
     }
   }
   for (const group of ["general", "vision"]) {
@@ -216,14 +227,10 @@ export function validateAuxSettings(value) {
     const hasProvider = entry?.provider !== void 0;
     const hasModel = entry?.model !== void 0;
     if (hasProvider !== hasModel) {
-      throw new Error(
-        `aux settings: subagent.${group} provider and model must be supplied together`
-      );
+      throw new Error(`aux settings: subagent.${group} provider and model must be supplied together`);
     }
     if (!hasProvider && entry?.reasoningEffort !== void 0) {
-      throw new Error(
-        `aux settings: subagent.${group} reasoningEffort requires provider and model`
-      );
+      throw new Error(`aux settings: subagent.${group} reasoningEffort requires provider and model`);
     }
   }
 }
@@ -235,5 +242,5 @@ export const TASK_LABELS = Object.freeze({
   web_crawl: "站点抓取",
   compress: "文本压缩",
   compaction: "会话压缩",
-  skill: "技能预审"
+  skill: "技能预审",
 });

@@ -17,7 +17,7 @@ const EXTENSION_MEDIA_TYPES = Object.freeze({
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   webp: "image/webp",
-  gif: "image/gif"
+  gif: "image/gif",
 });
 
 /** Resolve the DSH home used by AUX attachment paths. */
@@ -90,7 +90,7 @@ function buildMemoriesByAttachment(memoryEntries) {
       sessionId: memory.sessionId,
       question: memory.question,
       summary: memory.summary,
-      at: memory.at
+      at: memory.at,
     });
   }
   for (const list of byAttachment.values()) {
@@ -122,8 +122,18 @@ function entryMatchesQuery(entry, query) {
     if (String(owner).toLowerCase().includes(needle)) return true;
   }
   for (const memory of entry.memories) {
-    if (String(memory.question ?? "").toLowerCase().includes(needle)) return true;
-    if (String(memory.summary ?? "").toLowerCase().includes(needle)) return true;
+    if (
+      String(memory.question ?? "")
+        .toLowerCase()
+        .includes(needle)
+    )
+      return true;
+    if (
+      String(memory.summary ?? "")
+        .toLowerCase()
+        .includes(needle)
+    )
+      return true;
   }
   return false;
 }
@@ -137,7 +147,7 @@ async function buildImageLibraryEntries(service) {
     loadArchivedSessionIds().catch(() => new Set()),
     readImageMemoryEntries(),
     loadRetained(),
-    home === void 0 ? [] : scanObjectFiles(home + "/attachments/v1/objects")
+    home === void 0 ? [] : scanObjectFiles(home + "/attachments/v1/objects"),
   ]);
   // Archived sessions are hidden from UI surfaces but their logs still appear
   // in persistence listings. For image-library readability/classification we
@@ -162,7 +172,7 @@ async function buildImageLibraryEntries(service) {
         bytes: void 0,
         mtimeMs: void 0,
         fileName: void 0,
-        mediaType: void 0
+        mediaType: void 0,
       };
       byHash.set(hash, draft);
     }
@@ -206,10 +216,8 @@ async function buildImageLibraryEntries(service) {
       archived,
       retained: retainedSet.has(attachmentId),
       memories,
-      ...(ownerLiveSessions.length > 0
-        ? { readableBySessionId: ownerLiveSessions[0] }
-        : {}),
-      ...(draft.fileName !== void 0 ? { fileName: draft.fileName } : {})
+      ...(ownerLiveSessions.length > 0 ? { readableBySessionId: ownerLiveSessions[0] } : {}),
+      ...(draft.fileName !== void 0 ? { fileName: draft.fileName } : {}),
     });
   }
 
@@ -229,7 +237,7 @@ export async function collectImageLibrary(service) {
     generatedAt: Date.now(),
     settings: {
       imageRetentionDays: 30,
-      imageAutoCleanEnabled: false
+      imageAutoCleanEnabled: false,
     },
     counts: {
       total: entries.length,
@@ -237,9 +245,9 @@ export async function collectImageLibrary(service) {
       archived: entries.filter((entry) => entry.archived).length,
       shared: entries.filter((entry) => entry.shared).length,
       retained: entries.filter((entry) => entry.retained).length,
-      withMemory: entries.filter((entry) => entry.memories.length > 0).length
+      withMemory: entries.filter((entry) => entry.memories.length > 0).length,
     },
-    entries
+    entries,
   };
 }
 
@@ -259,9 +267,7 @@ export async function collectImageLibrary(service) {
  */
 export async function collectImageLibraryEntries(service, opts = {}, prebuiltEntries) {
   const options = opts || {};
-  let result = Array.isArray(prebuiltEntries)
-    ? prebuiltEntries
-    : await buildImageLibraryEntries(service);
+  let result = Array.isArray(prebuiltEntries) ? prebuiltEntries : await buildImageLibraryEntries(service);
 
   if (options.sessionId !== void 0 && options.sessionId !== null && options.sessionId !== "") {
     const sessionId = String(options.sessionId);

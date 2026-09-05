@@ -38,7 +38,7 @@ const IPV4_BLOCKED = [
   (o) => o[0] === 203 && o[1] === 0 && o[2] === 113,
   // multicast / reserved / broadcast
   (o) => o[0] >= 224,
-  (o) => o[0] === 255
+  (o) => o[0] === 255,
 ];
 
 /** Parse an IPv4 dotted-quad string into octets, or null. */
@@ -80,8 +80,10 @@ export function isPrivateIpv6(ip) {
   const value = normalizeIpv6(ip);
   if (value === "::" || value === "::1") return true;
   if (value.startsWith("fc") || value.startsWith("fd")) return true; // fc00::/7 ULA
-  if (value.startsWith("fe8") || value.startsWith("fe9") || value.startsWith("fea") || value.startsWith("feb")) return true; // fe80::/10 link-local
-  if (value.startsWith("fec") || value.startsWith("fed") || value.startsWith("fee") || value.startsWith("fef")) return true; // fec0::/10 site-local (deprecated)
+  if (value.startsWith("fe8") || value.startsWith("fe9") || value.startsWith("fea") || value.startsWith("feb"))
+    return true; // fe80::/10 link-local
+  if (value.startsWith("fec") || value.startsWith("fed") || value.startsWith("fee") || value.startsWith("fef"))
+    return true; // fec0::/10 site-local (deprecated)
   if (value.startsWith("ff")) return true; // multicast
   // IPv4-mapped IPv6 (::ffff:a.b.c.d or ::ffff:xxxx:xxxx) — check the embedded IPv4.
   // Handle non-canonical spellings like ::ffff:0:7f00:1 too.
@@ -145,7 +147,10 @@ function expandIpv6(ip) {
   const doubleColon = ip.indexOf("::");
   if (doubleColon !== -1) {
     const head = ip.slice(0, doubleColon).split(":").filter(Boolean);
-    const tail = ip.slice(doubleColon + 2).split(":").filter(Boolean);
+    const tail = ip
+      .slice(doubleColon + 2)
+      .split(":")
+      .filter(Boolean);
     const missing = Math.max(0, 8 - head.length - tail.length);
     return [...head, ...Array(missing).fill("0"), ...tail].join(":");
   }
@@ -225,15 +230,16 @@ export async function assertSafeFetchUrl(rawUrl, options = {}) {
     resolved = await options.lookup(hostname, { all: true, verbatim: true });
   } catch (error) {
     throw new Error(
-      `${label}: cannot resolve hostname "${hostname}" for SSRF check` +
-      (error?.message ? ` (${error.message})` : "")
+      `${label}: cannot resolve hostname "${hostname}" for SSRF check` + (error?.message ? ` (${error.message})` : ""),
     );
   }
   const addresses = Array.isArray(resolved) ? resolved : [resolved];
   for (const entry of addresses) {
     const address = typeof entry === "string" ? entry : entry?.address;
     if (typeof address === "string" && isPrivateIp(address)) {
-      throw new Error(`${label}: hostname "${hostname}" resolves to internal/private address "${address}" and is blocked by default`);
+      throw new Error(
+        `${label}: hostname "${hostname}" resolves to internal/private address "${address}" and is blocked by default`,
+      );
     }
   }
   return parsed;

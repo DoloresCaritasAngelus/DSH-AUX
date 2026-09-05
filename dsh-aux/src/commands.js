@@ -27,31 +27,34 @@ import { sessionEvents } from "./session-utils.js";
 
 /** Human-readable reason text for a status item/issue. */
 function statusReasonText(reason) {
-  return {
-    "mode-native": "当前为 native",
-    "mode-aux": "使用 AUX",
-    "mode-compat": "compat 预留",
-    "patch-ok": "补丁已装",
-    "patch-missing": "补丁未装",
-    "patch-partial": "补丁部分安装",
-    "patch-v1": "旧版 v1 补丁,建议升级",
-    "patch-unknown": "无法检测补丁状态,请运行 install.sh 或确认安装方式",
-    "config-missing": "需配置任务模型",
-    "dependency-missing": "缺少依赖",
-    "skill-mode-native": "SKILL 模式为 native",
-    "vision-disabled-image-bridge-enabled": "vision 关闭但 imageBridge 开启"
-  }[reason] ?? reason;
+  return (
+    {
+      "mode-native": "当前为 native",
+      "mode-aux": "使用 AUX",
+      "mode-compat": "compat 预留",
+      "patch-ok": "补丁已装",
+      "patch-missing": "补丁未装",
+      "patch-partial": "补丁部分安装",
+      "patch-v1": "旧版 v1 补丁,建议升级",
+      "patch-unknown": "无法检测补丁状态,请运行 install.sh 或确认安装方式",
+      "config-missing": "需配置任务模型",
+      "dependency-missing": "缺少依赖",
+      "skill-mode-native": "SKILL 模式为 native",
+      "vision-disabled-image-bridge-enabled": "vision 关闭但 imageBridge 开启",
+    }[reason] ?? reason
+  );
 }
 
 /** Format one structured platform status item as a human-readable line. */
 function formatStatusItem(entry) {
-  const stateText = {
-    enabled: "已启用",
-    disabled: "未使用(原生)",
-    unavailable: "不可用",
-    fixing: "修复中",
-    unknown: "无法检测"
-  }[entry.state] ?? entry.state;
+  const stateText =
+    {
+      enabled: "已启用",
+      disabled: "未使用(原生)",
+      unavailable: "不可用",
+      fixing: "修复中",
+      unknown: "无法检测",
+    }[entry.state] ?? entry.state;
   const reason = statusReasonText(entry.reason);
   const mode = entry.mode ?? "aux";
   const patch = entry.patch ? ` [${entry.patch}]` : "";
@@ -103,20 +106,24 @@ export async function handleImagesCommand(service, args) {
   const sessionId = opts.session === true ? void 0 : String(opts.session ?? "");
 
   const snapshot = await collectImageLibrary(service);
-  const entries = await collectImageLibraryEntries(service, {
-    filter,
-    query: query === "" ? void 0 : query,
-    limit,
-    offset,
-    sessionId: sessionId === "" ? void 0 : sessionId
-  }, snapshot.entries);
+  const entries = await collectImageLibraryEntries(
+    service,
+    {
+      filter,
+      query: query === "" ? void 0 : query,
+      limit,
+      offset,
+      sessionId: sessionId === "" ? void 0 : sessionId,
+    },
+    snapshot.entries,
+  );
 
   if (json) {
     return { kind: "success", text: JSON.stringify({ ...snapshot, entries }) };
   }
   const lines = [
     `图片库: 共 ${snapshot.counts.total} 张(共享 ${snapshot.counts.shared}, 孤儿 ${snapshot.counts.orphan}, 已归档 ${snapshot.counts.archived ?? 0}, 固化 ${snapshot.counts.retained}, 有记忆 ${snapshot.counts.withMemory})`,
-    ...entries.map(formatImageEntry)
+    ...entries.map(formatImageEntry),
   ];
   return { kind: "success", text: lines.join("\n") };
 }
@@ -138,14 +145,17 @@ export async function handleImageCommand(service, args, agent) {
       if (id === void 0) return error("用法: /aux image delete <attachmentId> [--force]", "USAGE");
       const result = await deleteImage(service, id, { force });
       if (json) return { kind: "success", text: JSON.stringify(result) };
-      return { kind: "success", text: `已删除图片 ${result.deleted}${result.freedBytes ? ` (释放 ${result.freedBytes} bytes)` : ""}` };
+      return {
+        kind: "success",
+        text: `已删除图片 ${result.deleted}${result.freedBytes ? ` (释放 ${result.freedBytes} bytes)` : ""}`,
+      };
     }
     if (action === "gc-orphans" || action === "reclaim") {
       const result = await deleteOrphans(service, { includeRetained });
       if (json) return { kind: "success", text: JSON.stringify(result) };
       return {
         kind: "success",
-        text: `孤儿回收完成: 删除 ${result.deleted.length} 张, 跳过 ${result.skipped.length} 张${result.freedBytes ? ` (释放 ${result.freedBytes} bytes)` : ""}`
+        text: `孤儿回收完成: 删除 ${result.deleted.length} 张, 跳过 ${result.skipped.length} 张${result.freedBytes ? ` (释放 ${result.freedBytes} bytes)` : ""}`,
       };
     }
     if (action === "retain" || action === "unretain") {
@@ -153,7 +163,8 @@ export async function handleImageCommand(service, args, agent) {
       if (id === void 0) return error(`用法: /aux image ${action} <attachmentId>`, "USAGE");
       const retained = action === "retain";
       const result = await setRetained(id, retained);
-      if (json) return { kind: "success", text: JSON.stringify({ ok: true, attachmentId: id, retained: result.retained }) };
+      if (json)
+        return { kind: "success", text: JSON.stringify({ ok: true, attachmentId: id, retained: result.retained }) };
       return { kind: "success", text: retained ? `已固化图片 ${id}` : `已取消固化图片 ${id}` };
     }
     if (action === "locate") {
@@ -162,20 +173,19 @@ export async function handleImageCommand(service, args, agent) {
       const sessionEquals = rest.find((arg) => arg.startsWith("--session="))?.slice("--session=".length);
       const sessionIndex = rest.indexOf("--session");
       const sessionNext = sessionIndex >= 0 ? rest[sessionIndex + 1] : void 0;
-      const sessionArg = sessionEquals ??
-        (typeof sessionNext === "string" && !sessionNext.startsWith("--") ? sessionNext : void 0);
+      const sessionArg =
+        sessionEquals ?? (typeof sessionNext === "string" && !sessionNext.startsWith("--") ? sessionNext : void 0);
       const result = await locateImageAnchors(service, id, {
         ...(agent?.session !== void 0 ? { liveSession: agent.session } : {}),
-        ...(typeof sessionArg === "string" && sessionArg.length > 0 ? { sessionId: sessionArg } : {})
+        ...(typeof sessionArg === "string" && sessionArg.length > 0 ? { sessionId: sessionArg } : {}),
       });
       if (!result.found) return error("未找到图片的会话/消息引用", "NOT_FOUND");
       if (json) return { kind: "success", text: JSON.stringify(result) };
       const lines = [`图片定位: ${result.attachmentId}`];
       for (const anchor of result.anchors) {
         const messageText = anchor.messageSeq === null ? "无消息引用" : `消息 seq ${anchor.messageSeq}`;
-        const visionText = anchor.callId === null
-          ? "无 vision 调用"
-          : `vision 调用 ${anchor.callId} (seq ${anchor.callSeq})`;
+        const visionText =
+          anchor.callId === null ? "无 vision 调用" : `vision 调用 ${anchor.callId} (seq ${anchor.callSeq})`;
         lines.push(`  ${anchor.sessionId} → ${messageText}, ${visionText}`);
       }
       return { kind: "success", text: lines.join("\n") };
@@ -183,7 +193,10 @@ export async function handleImageCommand(service, args, agent) {
     if (action === "list" || action === "ls" || action === "") {
       return handleImagesCommand(service, args);
     }
-    return error("用法: /aux image delete|gc-orphans|retain|unretain|locate <attachmentId> [--session <id>] [--json]", "USAGE");
+    return error(
+      "用法: /aux image delete|gc-orphans|retain|unretain|locate <attachmentId> [--session <id>] [--json]",
+      "USAGE",
+    );
   } catch (err) {
     const code = err?.code || "ERROR";
     return error(err?.message ?? String(err), code);
@@ -242,25 +255,29 @@ export async function handleAuxCommand(service, agent, rawInput) {
     }
     const status = await collectPlatformStatus(service);
     const lines = ["辅助模型系统状态:"];
-    lines.push(`  🔒 核心保护:${status.core?.count ?? 0} 项已生效(图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计,不可关闭)`);
+    lines.push(
+      `  🔒 核心保护:${status.core?.count ?? 0} 项已生效(图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计,不可关闭)`,
+    );
     if (status.restartRequired === true) {
       lines.push("  ⚠️ 补丁已写入,重启 DSH 后生效");
     }
     lines.push(`  - forceAuxVision: ${service.forceAuxVision ? "开启(原生图片也走 AUX 视觉)" : "关闭"}`);
-    lines.push(`  - visionFallbackToMain: ${service.visionFallbackToMain ? "开启(失败回退主模型)" : "关闭(视觉失败直接失败)"}`);
+    lines.push(
+      `  - visionFallbackToMain: ${service.visionFallbackToMain ? "开启(失败回退主模型)" : "关闭(视觉失败直接失败)"}`,
+    );
     for (const entry of status.items ?? []) {
       lines.push("  - " + formatStatusItem(entry));
     }
     lines.push(
       "  - 会话事件记录: " +
-        (status.eventsSupported ? "已启用(ignorable 补丁已装)" : "已停用(缺 dsh-session ignorable 补丁,运行 bridge/patch-session-ignorable.mjs 或 install.sh 启用)")
+        (status.eventsSupported
+          ? "已启用(ignorable 补丁已装)"
+          : "已停用(缺 dsh-session ignorable 补丁,运行 bridge/patch-session-ignorable.mjs 或 install.sh 启用)"),
     );
     for (const entry of service.describe()) {
-      const primary = entry.primary
-        ? `${entry.primary.provider}/${entry.primary.model}`
-        : "(未配置 → 主模型)";
+      const primary = entry.primary ? `${entry.primary.provider}/${entry.primary.model}` : "(未配置 → 主模型)";
       lines.push(
-        `  - ${entry.label}(${entry.task}): ${primary} | timeout ${entry.timeoutMs}ms | 并发 ${entry.maxConcurrency}`
+        `  - ${entry.label}(${entry.task}): ${primary} | timeout ${entry.timeoutMs}ms | 并发 ${entry.maxConcurrency}`,
       );
     }
     const recent = recentCalls(agent);
@@ -272,7 +289,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
         const fallback = call.fallbackUsed ? " (已降级)" : "";
         const error = call.ok ? "" : ` [${call.errorCode ?? "error"}]`;
         lines.push(
-          `  - ${call.task}: ${call.provider}/${call.model} ${callState}${fallback}${error} ${call.durationMs}ms`
+          `  - ${call.task}: ${call.provider}/${call.model} ${callState}${fallback}${error} ${call.durationMs}ms`,
         );
       }
     }
@@ -280,17 +297,19 @@ export async function handleAuxCommand(service, agent, rawInput) {
     // 用户运行 ./update.sh,而不是只靠分散的小字。
     const patchIssues = (status.issues ?? []).filter((issue) => issue.action === "patch");
     if (patchIssues.length > 0) {
-      lines.splice(1, 0,
+      lines.splice(
+        1,
+        0,
         "",
         "⚠️ 检测到 dsh-aux 补丁缺失/版本不匹配,请运行 ./update.sh 或更新 dsh-aux:",
-        ...patchIssues.map((issue) => `  - ${issue.key}: ${statusReasonText(issue.reason)}`)
+        ...patchIssues.map((issue) => `  - ${issue.key}: ${statusReasonText(issue.reason)}`),
       );
     }
     return { kind: "success", text: lines.join("\n") };
   }
   return {
     kind: "error",
-    text: "用法: /aux status [--json] — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux debug [N] — 查看内容真相; /aux patch — 重打补丁; /aux model <task> [provider/model] — 查看或设置任务的辅助模型"
+    text: "用法: /aux status [--json] — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux debug [N] — 查看内容真相; /aux patch — 重打补丁; /aux model <task> [provider/model] — 查看或设置任务的辅助模型",
   };
 }
 
@@ -311,14 +330,13 @@ export function handleHistoryCommand(service, agent, args) {
     }
   }
   const includeDebug = service?.debugConfig?.debugEventsInHistory === true;
-  const events = sessionEvents(agent?.session).filter((event) =>
-    event?.type === AUX_CALL_EVENT ||
-    (includeDebug && event?.type === AUX_DEBUG_EVENT)
+  const events = sessionEvents(agent?.session).filter(
+    (event) => event?.type === AUX_CALL_EVENT || (includeDebug && event?.type === AUX_DEBUG_EVENT),
   );
   if (events.length === 0) {
     return {
       kind: "success",
-      text: `${full ? "全部溯源" : "简要溯源"}:本会话暂无辅助调用记录。\n提示:事件溯源需要 dsh-session ignorable 补丁(见 /aux status 的\u201C会话事件记录\u201D)。`
+      text: `${full ? "全部溯源" : "简要溯源"}:本会话暂无辅助调用记录。\n提示:事件溯源需要 dsh-session ignorable 补丁(见 /aux status 的\u201C会话事件记录\u201D)。`,
     };
   }
   const rows = events.map((event, index) => {
@@ -335,12 +353,19 @@ export function handleHistoryCommand(service, agent, args) {
     }
     const parts = [`#${seq} ${d.task}`, `路由 ${provider}/${model}`, d.ok ? "成功" : "失败", duration];
     if (!d.ok && d.errorCode !== void 0) parts.push(`error=${d.errorCode}`);
-    if (!d.ok && d.error !== void 0) parts.push(`error=${typeof d.error === "string" ? d.error : JSON.stringify(d.error)}`);
+    if (!d.ok && d.error !== void 0)
+      parts.push(`error=${typeof d.error === "string" ? d.error : JSON.stringify(d.error)}`);
     if (d.fallbackUsed) parts.push("已降级");
     if (typeof d.inputChars === "number") parts.push(`输入 ${d.inputChars} chars`);
     if (typeof d.outputChars === "number") parts.push(`输出 ${d.outputChars} chars`);
-    if (d.input !== void 0) parts.push(`input=${typeof d.input === "string" ? d.input.slice(0, 200) : JSON.stringify(d.input).slice(0, 200)}`);
-    if (d.output !== void 0) parts.push(`output=${typeof d.output === "string" ? d.output.slice(0, 200) : JSON.stringify(d.output).slice(0, 200)}`);
+    if (d.input !== void 0)
+      parts.push(
+        `input=${typeof d.input === "string" ? d.input.slice(0, 200) : JSON.stringify(d.input).slice(0, 200)}`,
+      );
+    if (d.output !== void 0)
+      parts.push(
+        `output=${typeof d.output === "string" ? d.output.slice(0, 200) : JSON.stringify(d.output).slice(0, 200)}`,
+      );
     if (d.purpose !== void 0) parts.push(`purpose=${d.purpose}`);
     return `  ${parts.join(" | ")}`;
   });
@@ -391,12 +416,24 @@ async function resolveDebugTarget(service, raw, currentId) {
   const idMatches = headers.filter((h) => h.id.startsWith(token));
   if (idMatches.length === 1) return { id: idMatches[0].id, label: idMatches[0].id };
   if (idMatches.length > 1) {
-    return { error: { kind: "error", text: `目标不唯一,匹配 ${idMatches.length} 个会话: ${idMatches.map((m) => m.id).join(", ")}` } };
+    return {
+      error: {
+        kind: "error",
+        text: `目标不唯一,匹配 ${idMatches.length} 个会话: ${idMatches.map((m) => m.id).join(", ")}`,
+      },
+    };
   }
-  const cwdMatches = headers.filter((h) => typeof h.cwd === "string" && h.cwd.toLowerCase().includes(token.toLowerCase()));
+  const cwdMatches = headers.filter(
+    (h) => typeof h.cwd === "string" && h.cwd.toLowerCase().includes(token.toLowerCase()),
+  );
   if (cwdMatches.length === 1) return { id: cwdMatches[0].id, label: `${cwdMatches[0].id} (${cwdMatches[0].cwd})` };
   if (cwdMatches.length > 1) {
-    return { error: { kind: "error", text: `目标不唯一,匹配 ${cwdMatches.length} 个会话: ${cwdMatches.map((m) => m.id).join(", ")}` } };
+    return {
+      error: {
+        kind: "error",
+        text: `目标不唯一,匹配 ${cwdMatches.length} 个会话: ${cwdMatches.map((m) => m.id).join(", ")}`,
+      },
+    };
   }
   return { error: { kind: "error", text: `未找到会话: ${raw}` } };
 }
@@ -411,8 +448,14 @@ function formatDebugEvents(events) {
     if (typeof d.durationMs === "number") parts.push(`${d.durationMs}ms`);
     if (d.error !== void 0) parts.push(`error=${typeof d.error === "string" ? d.error : JSON.stringify(d.error)}`);
     if (d.purpose !== void 0) parts.push(`purpose=${d.purpose}`);
-    if (d.input !== void 0) parts.push(`input=${typeof d.input === "string" ? d.input.slice(0, 200) : JSON.stringify(d.input).slice(0, 200)}`);
-    if (d.output !== void 0) parts.push(`output=${typeof d.output === "string" ? d.output.slice(0, 200) : JSON.stringify(d.output).slice(0, 200)}`);
+    if (d.input !== void 0)
+      parts.push(
+        `input=${typeof d.input === "string" ? d.input.slice(0, 200) : JSON.stringify(d.input).slice(0, 200)}`,
+      );
+    if (d.output !== void 0)
+      parts.push(
+        `output=${typeof d.output === "string" ? d.output.slice(0, 200) : JSON.stringify(d.output).slice(0, 200)}`,
+      );
     return `  ${parts.filter(Boolean).join(" | ")}`;
   });
 }
@@ -467,12 +510,17 @@ export async function handleDebugCommand(service, agent, args) {
   if (debugEvents.length === 0) {
     return {
       kind: "success",
-      text: `${targetLabel} 暂无 AUX debug 事件。开启 aux.debug.fullToolTrace 后,后续辅助调用会记录内容真相。`
+      text: `${targetLabel} 暂无 AUX debug 事件。开启 aux.debug.fullToolTrace 后,后续辅助调用会记录内容真相。`,
     };
   }
   const rows = formatDebugEvents(debugEvents);
   const chosen = Number.isFinite(limit) ? (limit === 0 ? [] : rows.slice(-limit)) : rows;
-  return { kind: "success", text: [`AUX debug(${targetLabel},共 ${rows.length} 条,显示最近 ${chosen.length} 条):`, ...chosen.reverse()].join("\n") };
+  return {
+    kind: "success",
+    text: [`AUX debug(${targetLabel},共 ${rows.length} 条,显示最近 ${chosen.length} 条):`, ...chosen.reverse()].join(
+      "\n",
+    ),
+  };
 }
 
 /**
@@ -496,7 +544,7 @@ export async function handlePatchCommand(service, json = false) {
   const patchCwd = dshRoot;
   const stepDefs = [
     ["apply-patch", [join(repo, "bridge/apply-patch.mjs")]],
-    ["self-heal", [join(repo, "bridge/self-heal.mjs")]]
+    ["self-heal", [join(repo, "bridge/self-heal.mjs")]],
   ];
   const output = [];
   const steps = [];
@@ -505,7 +553,7 @@ export async function handlePatchCommand(service, json = false) {
     try {
       const { stdout, stderr } = await execFileAsync(process.execPath, args, {
         cwd: patchCwd,
-        env: { ...process.env, DSH_ROOT: dshRoot }
+        env: { ...process.env, DSH_ROOT: dshRoot },
       });
       record.output = `${stdout}${stderr}`;
       record.ok = true;
@@ -565,7 +613,7 @@ export async function handlePatchCommand(service, json = false) {
     }
     return {
       kind: "success",
-      text: JSON.stringify({ ok, restartRequired: changed, steps, remaining })
+      text: JSON.stringify({ ok, restartRequired: changed, steps, remaining }),
     };
   }
   if (!ok) {
@@ -584,7 +632,7 @@ export async function handleModelCommand(service, args) {
   if (!isBuiltin && custom === void 0) {
     return {
       kind: "error",
-      text: `用法: /aux model <task> [provider/model] — task ∈ {${AUX_TASKS.join(", ")}}`
+      text: `用法: /aux model <task> [provider/model] — task ∈ {${AUX_TASKS.join(", ")}}`,
     };
   }
   // Custom tasks are view-only through /aux model; their route is fixed by
@@ -592,14 +640,10 @@ export async function handleModelCommand(service, args) {
   if (!isBuiltin && args.length >= 2) {
     return { kind: "error", text: "custom tasks are not configurable via /aux model" };
   }
-  const definition = isBuiltin
-    ? { task, ...(service._merged[task] ?? {}) }
-    : { task, ...custom };
+  const definition = isBuiltin ? { task, ...(service._merged[task] ?? {}) } : { task, ...custom };
   const primary = resolvePrimaryRoute(definition, service.taskDefaults);
   if (args.length < 2) {
-    const current = primary
-      ? `${primary.provider}/${primary.model}`
-      : "(未配置 → 主模型)";
+    const current = primary ? `${primary.provider}/${primary.model}` : "(未配置 → 主模型)";
     return { kind: "success", text: `辅助模型 [${task}]: ${current}` };
   }
   const target = args[1];
@@ -654,12 +698,15 @@ export async function handleVisionCommand(service, agent, args) {
   }
   const exec = {
     agent,
-    signal: new AbortController().signal
+    signal: new AbortController().signal,
   };
   try {
     const value = await runVision(service, { imagePath: path, question }, exec);
-    return { kind: "success", text: `[辅助视觉 ${value.model}]
-${value.analysis}` };
+    return {
+      kind: "success",
+      text: `[辅助视觉 ${value.model}]
+${value.analysis}`,
+    };
   } catch (error) {
     return { kind: "error", text: `vision_analyze 失败: ${error?.message ?? String(error)}` };
   }
@@ -680,22 +727,25 @@ export async function handleTestCommand(service, agent, args) {
     if (task === "compress") {
       const value = await runCompress(
         service,
-        { text: "2026-08-14 15:00:00 INFO boot ok provider=opencode-go model=deepseek-v4-flash session=s-001 duration=1234ms", instruction: "保留所有时间戳、provider、model 和数字" },
-        { agent, signal: new AbortController().signal }
+        {
+          text: "2026-08-14 15:00:00 INFO boot ok provider=opencode-go model=deepseek-v4-flash session=s-001 duration=1234ms",
+          instruction: "保留所有时间戳、provider、model 和数字",
+        },
+        { agent, signal: new AbortController().signal },
       );
       text = `压缩成功: ${value.originalChars} -> ${value.compressedChars} chars (ratio ${value.ratio})`;
     } else if (task === "web_extract") {
       const value = await runWebExtract(
         service,
         { url: "https://example.com", maxChars: 2000 },
-        { agent, signal: new AbortController().signal }
+        { agent, signal: new AbortController().signal },
       );
       text = `抓取成功: ${value.url} | 摘要 ${value.summary.slice(0, 80)}...`;
     } else if (task === "web_crawl") {
       const value = await runWebCrawl(
         service,
         { url: "https://example.com", maxPages: 1, maxDepth: 0 },
-        { agent, signal: new AbortController().signal }
+        { agent, signal: new AbortController().signal },
       );
       text = `站点抓取成功: ${value.fetched} 页 | 摘要 ${value.summary.slice(0, 80)}...`;
     } else if (task === "compaction") {
@@ -705,13 +755,13 @@ export async function handleTestCommand(service, agent, args) {
             role: "user",
             content: [{ type: "text", text: "Test compaction route. Keep this summary short." }],
             id: "aux-compaction-test",
-            source: { kind: "plugin", plugin: "dsh-aux" }
-          }
+            source: { kind: "plugin", plugin: "dsh-aux" },
+          },
         ],
         session: agent?.session,
         agent,
         signal: new AbortController().signal,
-        purpose: "compaction"
+        purpose: "compaction",
       });
       text = `会话压缩路由成功: ${result.provider}/${result.model}`;
     } else if (task === "skill") {
@@ -721,13 +771,13 @@ export async function handleTestCommand(service, agent, args) {
             role: "user",
             content: [{ type: "text", text: "Test skill audit route. Reply with a short report." }],
             id: "aux-skill-test",
-            source: { kind: "plugin", plugin: "dsh-aux" }
-          }
+            source: { kind: "plugin", plugin: "dsh-aux" },
+          },
         ],
         session: agent?.session,
         agent,
         signal: new AbortController().signal,
-        purpose: "skill-audit"
+        purpose: "skill-audit",
       });
       text = `技能预审路由成功: ${result.provider}/${result.model}`;
     } else {

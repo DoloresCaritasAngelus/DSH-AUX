@@ -4,17 +4,26 @@
  * @module @dolorescaritasangelus/dsh-aux/projection
  */
 import { z as zodz } from "zod";
-import { AUX_CALL_EVENT, AUX_PLATFORM_EVENT, AUX_PLATFORM_KEY, AUX_STATUS_KEY, AUX_IMAGE_LIBRARY_EVENT, AUX_IMAGE_LIBRARY_KEY } from "./config.js";
+import {
+  AUX_CALL_EVENT,
+  AUX_PLATFORM_EVENT,
+  AUX_PLATFORM_KEY,
+  AUX_STATUS_KEY,
+  AUX_IMAGE_LIBRARY_EVENT,
+  AUX_IMAGE_LIBRARY_KEY,
+} from "./config.js";
 import { recordImageLibraryEvent } from "./events.js";
 import { collectImageLibrary } from "./images/image-library.js";
 
 const AUX_STATUS_SCHEMA = zodz.object({
-  tasks: zodz.record(zodz.object({
-    task: zodz.string(),
-    ok: zodz.boolean(),
-    fallbackUsed: zodz.boolean(),
-    durationMs: zodz.number()
-  }))
+  tasks: zodz.record(
+    zodz.object({
+      task: zodz.string(),
+      ok: zodz.boolean(),
+      fallbackUsed: zodz.boolean(),
+      durationMs: zodz.number(),
+    }),
+  ),
 });
 
 function applyAuxStatus(state, event) {
@@ -30,8 +39,8 @@ function applyAuxStatus(state, event) {
         task: data.task,
         ok: data.ok === true,
         fallbackUsed: data.fallbackUsed === true,
-        durationMs: data.durationMs
-      }
+        durationMs: data.durationMs,
+      },
     };
     return { tasks };
   }
@@ -49,20 +58,20 @@ function createAuxStatusProjectionDefinition(registry) {
     key: AUX_STATUS_KEY,
     init: () => ({ tasks: {} }),
     apply: applyAuxStatus,
-    stateVersion: 1
+    stateVersion: 1,
   };
   const isNewProjectionApi = typeof registry?.stateOf === "function";
   if (isNewProjectionApi) {
     return {
       ...base,
       stateSchema: AUX_STATUS_SCHEMA,
-      wire: { viewSchema: AUX_STATUS_SCHEMA, view: (state) => state }
+      wire: { viewSchema: AUX_STATUS_SCHEMA, view: (state) => state },
     };
   }
   return {
     ...base,
     schema: AUX_STATUS_SCHEMA,
-    view: (state) => state
+    view: (state) => state,
   };
 }
 
@@ -86,20 +95,20 @@ function createAuxPlatformProjectionDefinition(registry) {
     key: AUX_PLATFORM_KEY,
     init: () => ({}),
     apply: applyAuxPlatform,
-    stateVersion: 1
+    stateVersion: 1,
   };
   const isNewProjectionApi = typeof registry?.stateOf === "function";
   if (isNewProjectionApi) {
     return {
       ...base,
       stateSchema: AUX_PLATFORM_SCHEMA,
-      wire: { viewSchema: AUX_PLATFORM_SCHEMA, view: (state) => state }
+      wire: { viewSchema: AUX_PLATFORM_SCHEMA, view: (state) => state },
     };
   }
   return {
     ...base,
     schema: AUX_PLATFORM_SCHEMA,
-    view: (state) => state
+    view: (state) => state,
   };
 }
 
@@ -112,7 +121,7 @@ export function syncAuxPlatformProjection(service) {
   if (service._projectionCtx === void 0) return;
   if (service._auxPlatformProjectionDispose === void 0) {
     service._auxPlatformProjectionDispose = service._projectionCtx.sessionProjections.register(
-      createAuxPlatformProjectionDefinition(service._projectionCtx.sessionProjections)
+      createAuxPlatformProjectionDefinition(service._projectionCtx.sessionProjections),
     );
   }
 }
@@ -136,20 +145,20 @@ function createAuxImageLibraryProjectionDefinition(registry) {
     key: AUX_IMAGE_LIBRARY_KEY,
     init: () => ({}),
     apply: applyAuxImageLibrary,
-    stateVersion: 1
+    stateVersion: 1,
   };
   const isNewProjectionApi = typeof registry?.stateOf === "function";
   if (isNewProjectionApi) {
     return {
       ...base,
       stateSchema: AUX_IMAGE_LIBRARY_SCHEMA,
-      wire: { viewSchema: AUX_IMAGE_LIBRARY_SCHEMA, view: (state) => state }
+      wire: { viewSchema: AUX_IMAGE_LIBRARY_SCHEMA, view: (state) => state },
     };
   }
   return {
     ...base,
     schema: AUX_IMAGE_LIBRARY_SCHEMA,
-    view: (state) => state
+    view: (state) => state,
   };
 }
 
@@ -162,7 +171,7 @@ export function syncAuxImageLibraryProjection(service) {
   if (service._projectionCtx === void 0) return;
   if (service._auxImageLibraryProjectionDispose === void 0) {
     service._auxImageLibraryProjectionDispose = service._projectionCtx.sessionProjections.register(
-      createAuxImageLibraryProjectionDefinition(service._projectionCtx.sessionProjections)
+      createAuxImageLibraryProjectionDefinition(service._projectionCtx.sessionProjections),
     );
   }
 }
@@ -179,7 +188,7 @@ export function syncAuxStatusProjection(service) {
   const enabled = service.showStatusChip !== false;
   if (enabled && service._auxStatusProjectionDispose === void 0) {
     service._auxStatusProjectionDispose = service._projectionCtx.sessionProjections.register(
-      createAuxStatusProjectionDefinition(service._projectionCtx.sessionProjections)
+      createAuxStatusProjectionDefinition(service._projectionCtx.sessionProjections),
     );
   } else if (!enabled && service._auxStatusProjectionDispose !== void 0) {
     service._auxStatusProjectionDispose();
@@ -203,7 +212,10 @@ function nextImageLibraryPublishSeq(service) {
 function enqueueImageLibraryPublish(service, task) {
   const previous = imageLibraryPublishQueues.get(service) ?? Promise.resolve();
   const run = previous.then(task, task);
-  imageLibraryPublishQueues.set(service, run.catch(() => {}));
+  imageLibraryPublishQueues.set(
+    service,
+    run.catch(() => {}),
+  );
   return run;
 }
 
@@ -235,8 +247,6 @@ export function publishImageLibraryToSession(service, session) {
 export function publishImageLibrary(service) {
   return enqueueImageLibraryPublish(service, () => {
     const sessions = service.ctx?.sessions?.list?.() ?? [];
-    return Promise.all(
-      sessions.map((session) => publishImageLibrarySnapshot(service, session).catch(() => {}))
-    );
+    return Promise.all(sessions.map((session) => publishImageLibrarySnapshot(service, session).catch(() => {})));
   });
 }

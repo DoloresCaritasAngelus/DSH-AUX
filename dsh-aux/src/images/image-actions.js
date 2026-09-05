@@ -4,11 +4,7 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/images/image-actions
  */
-import {
-  lstat as lstatFile,
-  readdir,
-  unlink as unlinkFile
-} from "node:fs/promises";
+import { lstat as lstatFile, readdir, unlink as unlinkFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { ensureSessionImagesLoaded, loadSessionImages, saveSessionImages } from "./ownership.js";
 import { loadRetained, setRetained } from "./retention.js";
@@ -43,9 +39,7 @@ function notFoundError(attachmentId) {
 
 /** Build a REFERENCED error carrying the machine-readable `.code`. */
 function referencedError(attachmentId, refs) {
-  const error = new Error(
-    `image attachment is referenced by session(s): ${refs.join(", ")}`
-  );
+  const error = new Error(`image attachment is referenced by session(s): ${refs.join(", ")}`);
   error.code = "REFERENCED";
   return error;
 }
@@ -229,7 +223,7 @@ export async function deleteOrphans(service, opts = {}) {
   let freedBytes = 0;
 
   const ordered = [...hashes.values()].sort((a, b) =>
-    a.attachmentId < b.attachmentId ? -1 : a.attachmentId > b.attachmentId ? 1 : 0
+    a.attachmentId < b.attachmentId ? -1 : a.attachmentId > b.attachmentId ? 1 : 0,
   );
   for (const { attachmentId } of ordered) {
     const refs = await referencesFor(service, attachmentId);

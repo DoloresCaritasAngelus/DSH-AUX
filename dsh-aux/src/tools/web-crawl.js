@@ -10,7 +10,12 @@
  * @module @dolorescaritasangelus/dsh-aux/tools/web-crawl
  */
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
-import { extractKeyPoints, webExtractSystemPrompt, webExtractUserMessage, webExtractUserMessageMulti } from "../prompt.js";
+import {
+  extractKeyPoints,
+  webExtractSystemPrompt,
+  webExtractUserMessage,
+  webExtractUserMessageMulti,
+} from "../prompt.js";
 import { CRAWL_DEFAULTS, crawlSite } from "../crawl/queue.js";
 import { codePointCount } from "../crawl/text.js";
 import { assertSafeFetchUrlForService } from "../fetch.js";
@@ -34,15 +39,22 @@ function coerceNonNegInt(value, name, fallback, label) {
 
 /** Resolve the per-page char budget: call arg > per-task config > default. */
 function resolvePerPageChars(service, args) {
-  return coercePositiveInt(args?.maxCharsPerPage, "maxCharsPerPage", service?._merged?.web_crawl?.maxChars ?? DEFAULT_MAX_CHARS, "web_crawl");
+  return coercePositiveInt(
+    args?.maxCharsPerPage,
+    "maxCharsPerPage",
+    service?._merged?.web_crawl?.maxChars ?? DEFAULT_MAX_CHARS,
+    "web_crawl",
+  );
 }
 
 /** One aux summarization call across all crawled pages (mode A). */
 async function callCrawlSummarizer(service, userText, inputChars, exec) {
-  const messages = [createUserMessage({
-    content: [{ type: "text", text: userText }],
-    source: { kind: "plugin", plugin: "dsh-aux" }
-  })];
+  const messages = [
+    createUserMessage({
+      content: [{ type: "text", text: userText }],
+      source: { kind: "plugin", plugin: "dsh-aux" },
+    }),
+  ];
   return service.call("web_crawl", {
     messages,
     system: webExtractSystemPrompt(),
@@ -50,7 +62,7 @@ async function callCrawlSummarizer(service, userText, inputChars, exec) {
     session: exec.agent?.session,
     agent: exec.agent,
     signal: exec.signal,
-    inputChars
+    inputChars,
   });
 }
 
@@ -91,7 +103,7 @@ export async function runWebCrawl(service, args, exec) {
 
   const scope = args.scope ?? "same-origin";
   if (scope !== "same-origin" && scope !== "hosts") {
-    throw new Error("web_crawl: scope must be \"same-origin\" or \"hosts\" (domain not enabled in v1)");
+    throw new Error('web_crawl: scope must be "same-origin" or "hosts" (domain not enabled in v1)');
   }
   const hosts = Array.isArray(args.hosts) ? args.hosts : [];
   for (const host of hosts) {
@@ -136,7 +148,7 @@ export async function runWebCrawl(service, args, exec) {
     useSitemap,
     maxPagesPerHost,
     signal: exec.signal,
-    label
+    label,
   });
   if (crawl.pages.length === 0) {
     if (crawl.challengeBlocks > 0) {
@@ -154,7 +166,7 @@ export async function runWebCrawl(service, args, exec) {
         blocked: crawl.challengeBlocks,
         totalChars: 0,
         truncated: false,
-        perPage: []
+        perPage: [],
       };
     }
     throw new Error("web_crawl: no pages could be fetched (check scope/hosts, robots.txt, or budget)");
@@ -164,7 +176,8 @@ export async function runWebCrawl(service, args, exec) {
   if (crawl.skippedByRobots > 0) warnings.push(`${crawl.skippedByRobots} 个路径被 robots.txt Disallow 跳过`);
   if (crawl.skippedByScope > 0) warnings.push(`${crawl.skippedByScope} 个链接超出 scope 被跳过`);
   if (crawl.skippedByHostCap > 0) warnings.push(`${crawl.skippedByHostCap} 个页面超过 maxPagesPerHost 被跳过`);
-  if (crawl.challengeBlocks > 0) warnings.push(`${crawl.challengeBlocks} 个页面为 JS Challenge 拦截页,需浏览器渲染,已跳过`);
+  if (crawl.challengeBlocks > 0)
+    warnings.push(`${crawl.challengeBlocks} 个页面为 JS Challenge 拦截页,需浏览器渲染,已跳过`);
   if (crawl.blocked > 0) warnings.push(`${crawl.blocked} 个请求失败或被 SSRF 拒绝`);
 
   let summary;
@@ -180,7 +193,7 @@ export async function runWebCrawl(service, args, exec) {
         service,
         webExtractUserMessage(page.text, page.url, args.question),
         page.chars,
-        exec
+        exec,
       );
       const extracted = extractKeyPoints(single.text);
       return { url: page.url, summary: extracted.summary || single.text, keyPoints: extracted.keyPoints };
@@ -188,9 +201,12 @@ export async function runWebCrawl(service, args, exec) {
     const aggChars = perPage.reduce((sum, p) => sum + codePointCount(p.summary), 0);
     const aggregated = await callCrawlSummarizer(
       service,
-      webExtractUserMessageMulti(perPage.map((p) => ({ url: p.url, text: p.summary })), args.question),
+      webExtractUserMessageMulti(
+        perPage.map((p) => ({ url: p.url, text: p.summary })),
+        args.question,
+      ),
       aggChars,
-      exec
+      exec,
     );
     const extracted = extractKeyPoints(aggregated.text);
     summary = extracted.summary || aggregated.text;
@@ -201,9 +217,12 @@ export async function runWebCrawl(service, args, exec) {
     // Mode A: one auxiliary call over all page texts.
     const result = await callCrawlSummarizer(
       service,
-      webExtractUserMessageMulti(crawl.pages.map((p) => ({ url: p.url, text: p.text })), args.question),
+      webExtractUserMessageMulti(
+        crawl.pages.map((p) => ({ url: p.url, text: p.text })),
+        args.question,
+      ),
       crawl.totalChars,
-      exec
+      exec,
     );
     const extracted = extractKeyPoints(result.text);
     summary = extracted.summary || result.text;
@@ -219,7 +238,7 @@ export async function runWebCrawl(service, args, exec) {
       url: p.url,
       chars: p.chars,
       truncated: p.truncated,
-      ...(p.title ? { title: p.title } : {})
+      ...(p.title ? { title: p.title } : {}),
     })),
     fetched: crawl.fetched,
     skipped: crawl.skippedByRobots + crawl.skippedByScope + crawl.skippedByHostCap,
@@ -232,6 +251,6 @@ export async function runWebCrawl(service, args, exec) {
     provider,
     model,
     mode: perPageSummaries ? "per-page" : "aggregate",
-    ...(warnings.length > 0 ? { warnings } : {})
+    ...(warnings.length > 0 ? { warnings } : {}),
   };
 }

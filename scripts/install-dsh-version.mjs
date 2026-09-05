@@ -50,7 +50,7 @@ const DSH_VERSIONED_PACKAGES = [
   "dsh-tool-subagent",
   "dsh-tool-web",
   "dsh-tools",
-  "dsh-workflow-worker-thread"
+  "dsh-workflow-worker-thread",
 ];
 
 // Packages that must be present in the temporary package.json for each DSH
@@ -62,7 +62,7 @@ const EXTRA_DEV_PACKAGES = {
   "0.1.2-alpha.3": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
   "0.1.2-alpha.4": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
   "0.1.2-alpha.5": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
-  "0.1.2-rc.1": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"]
+  "0.1.2-rc.1": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
 };
 
 // Alpha lines no longer include dsh-host-apiproxy; the workspace devDependencies
@@ -131,16 +131,12 @@ const DSH_OVERRIDE_PACKAGES = [
   "dsh-web",
   "dsh-workflow",
   "dsh-workflow-worker-thread",
-  "dsh-workspace"
+  "dsh-workspace",
 ];
 
 // Representative packages spanning entrypoint, bridge targets and transitive
 // surface; install success plus overrides are verified across all of them.
-const VERIFY_PACKAGES = [
-  "dsh-agent",
-  "dsh-session",
-  "dsh-tool-skill"
-];
+const VERIFY_PACKAGES = ["dsh-agent", "dsh-session", "dsh-tool-skill"];
 
 const pkg = JSON.parse(ORIGINAL);
 const devDeps = pkg.devDependencies ?? {};
@@ -171,11 +167,13 @@ for (const name of DSH_OVERRIDE_PACKAGES) {
 pkg.overrides = overrides;
 
 writeFileSync(PKG_PATH, JSON.stringify(pkg, null, 2) + "\n");
-console.log(`[install-dsh-version] 临时写入 DSH 版本 ${version} 到 ${changed} 个 devDependencies + ${DSH_OVERRIDE_PACKAGES.length} 个 overrides`);
+console.log(
+  `[install-dsh-version] 临时写入 DSH 版本 ${version} 到 ${changed} 个 devDependencies + ${DSH_OVERRIDE_PACKAGES.length} 个 overrides`,
+);
 
 const result = spawnSync("npm", ["install", "--no-package-lock", "--no-audit", "--no-fund"], {
   cwd: ROOT,
-  stdio: "inherit"
+  stdio: "inherit",
 });
 
 if (!keep) {
@@ -192,9 +190,7 @@ if (result.status !== 0) {
 // not just one, so a partial override failure is caught.
 try {
   for (const name of VERIFY_PACKAGES) {
-    const pkgJson = JSON.parse(
-      readFileSync(join(ROOT, "node_modules/@deepseek-ai", name, "package.json"), "utf8")
-    );
+    const pkgJson = JSON.parse(readFileSync(join(ROOT, "node_modules/@deepseek-ai", name, "package.json"), "utf8"));
     const installed = pkgJson.version;
     console.log(`[install-dsh-version] 已安装 @deepseek-ai/${name}@${installed}`);
     if (installed !== version) {

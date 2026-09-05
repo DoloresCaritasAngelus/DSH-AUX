@@ -34,7 +34,7 @@ import {
   route,
   shouldFallback,
   taskConcurrency,
-  taskTimeoutMs
+  taskTimeoutMs,
 } from "./route.js";
 import { resolveSubagentRoute } from "./subagent-route.js";
 import { stripThinkBlocks } from "./prompt.js";
@@ -46,10 +46,24 @@ import {
   SESSION_IMAGE_RECONCILE_INTERVAL_MS,
   TASK_LABELS,
   projectSettings,
-  validateAuxSettings
+  validateAuxSettings,
 } from "./config.js";
-import { AuxCallError, finishError, recordAuxEvent, recordDebugEvent, redactDebugData, sessionPatchCandidates, recordImageLibraryEvent } from "./events.js";
-import { syncAuxPlatformProjection, syncAuxStatusProjection, syncAuxImageLibraryProjection, publishImageLibrary, publishImageLibraryToSession } from "./projection.js";
+import {
+  AuxCallError,
+  finishError,
+  recordAuxEvent,
+  recordDebugEvent,
+  redactDebugData,
+  sessionPatchCandidates,
+  recordImageLibraryEvent,
+} from "./events.js";
+import {
+  syncAuxPlatformProjection,
+  syncAuxStatusProjection,
+  syncAuxImageLibraryProjection,
+  publishImageLibrary,
+  publishImageLibraryToSession,
+} from "./projection.js";
 import { publishPlatformStatus, publishPlatformStatusToSession } from "./status.js";
 import { collectImageLibrary } from "./images/image-library.js";
 import {
@@ -57,7 +71,7 @@ import {
   auxToolsGuide,
   isAuxGuidePromoted,
   isMinimalPreset,
-  shouldUsePreStepAuxGuide
+  shouldUsePreStepAuxGuide,
 } from "./bootstrap.js";
 import { registerAuxTools } from "./tools/register.js";
 import { onSessionDisposed, reconcileSessionImages } from "./images/ownership.js";
@@ -65,7 +79,13 @@ import { handleAuxCommand } from "./commands.js";
 import { prepareCompactionMessages } from "./compaction-messages.js";
 import { attachSkillBridge } from "./skill-bridge.js";
 
-export { AUX_SETTINGS_NAMESPACE, AUX_TIMEOUT_CODE, AUX_CALL_EVENT, AUX_STATUS_KEY, validateAuxSettings } from "./config.js";
+export {
+  AUX_SETTINGS_NAMESPACE,
+  AUX_TIMEOUT_CODE,
+  AUX_CALL_EVENT,
+  AUX_STATUS_KEY,
+  validateAuxSettings,
+} from "./config.js";
 export { AuxCallError, sessionPatchCandidates } from "./events.js";
 
 /** Recursively freeze an options object (replaces `deepFreeze` removed from dsh-llm). */
@@ -132,39 +152,39 @@ export class AuxLlmService extends Service {
         provider: z.string(),
         model: z.string(),
         timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-        maxConcurrency: z.number().step(1).min(1)
+        maxConcurrency: z.number().step(1).min(1),
       }),
       web_extract: z.object({
         provider: z.string(),
         model: z.string(),
         timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-        maxConcurrency: z.number().step(1).min(1)
+        maxConcurrency: z.number().step(1).min(1),
       }),
       web_crawl: z.object({
         provider: z.string(),
         model: z.string(),
         timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-        maxConcurrency: z.number().step(1).min(1)
+        maxConcurrency: z.number().step(1).min(1),
       }),
       compress: z.object({
         provider: z.string(),
         model: z.string(),
         timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-        maxConcurrency: z.number().step(1).min(1)
+        maxConcurrency: z.number().step(1).min(1),
       }),
       compaction: z.object({
         provider: z.string(),
         model: z.string(),
         timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-        maxConcurrency: z.number().step(1).min(1)
+        maxConcurrency: z.number().step(1).min(1),
       }),
       skill: z.object({
         provider: z.string(),
         model: z.string(),
         timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
-        maxConcurrency: z.number().step(1).min(1)
-      })
-    })
+        maxConcurrency: z.number().step(1).min(1),
+      }),
+    }),
   });
 
   /** Default auxiliary routes per task (explicit-config-independent). */
@@ -227,7 +247,7 @@ export class AuxLlmService extends Service {
       ctx.systemPrompt.section({
         name: "aux:tools-guide",
         order: 110,
-        text: (context) => auxToolsGuide(this, context)
+        text: (context) => auxToolsGuide(this, context),
       });
     }
     const settingsHooks = {
@@ -242,7 +262,7 @@ export class AuxLlmService extends Service {
         syncAuxStatusProjection(this);
         publishPlatformStatus(this).catch(() => {});
       },
-      validate: validateAuxSettings
+      validate: validateAuxSettings,
     };
     if (typeof dshSettings.installSettingsSection === "function") {
       // Old DSH API (rc.6 / rc.7 / rc.8 / 0.1.1-rc.x)
@@ -251,7 +271,7 @@ export class AuxLlmService extends Service {
         // The settings page is a first-class capability of this plugin:
         // declare the namespace exposed to the Web configuration client.
         // Alpha line is native; legacy used rc.6 dynamic-expose patch (retired).
-        exposedToWeb: true
+        exposedToWeb: true,
       });
     } else if (typeof ctx.inject === "function") {
       // 0.1.2-alpha.x: settings service may only be available through
@@ -261,13 +281,19 @@ export class AuxLlmService extends Service {
         const installSection = settingsService?.installSection?.bind(settingsService);
         if (typeof installSection === "function") {
           installSection(ctx, AUX_SETTINGS_NAMESPACE, AUX_SETTINGS_SCHEMA, projectSettings({}), settingsHooks);
-        } else if (typeof dshSettings.SettingsProvider === "function" && settingsService instanceof dshSettings.SettingsProvider) {
+        } else if (
+          typeof dshSettings.SettingsProvider === "function" &&
+          settingsService instanceof dshSettings.SettingsProvider
+        ) {
           throw new Error("dsh-aux: unsupported DSH settings API (no installSection on SettingsProvider)");
         }
         // Otherwise the host/test context does not provide a settings service;
         // skip registration rather than crashing (matches old test stubs).
       });
-    } else if (typeof dshSettings.SettingsProvider === "function" && ctx.settings instanceof dshSettings.SettingsProvider) {
+    } else if (
+      typeof dshSettings.SettingsProvider === "function" &&
+      ctx.settings instanceof dshSettings.SettingsProvider
+    ) {
       throw new Error("dsh-aux: unsupported DSH settings API (no installSection on SettingsProvider)");
     }
     // If no settings service is available at all, skip registration.
@@ -331,9 +357,9 @@ export class AuxLlmService extends Service {
         // actually run. Mirror of how official /goal /plan /preset /echo
         // register their argument-taking commands.
         input: {
-          hint: "status [--json] | history [N] | history full [N] | debug [N] | patch [--json] | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory | images [--json] | image delete|gc-orphans|retain|unretain|locate <attachmentId> [--session <id>] [--json]"
+          hint: "status [--json] | history [N] | history full [N] | debug [N] | patch [--json] | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory | images [--json] | image delete|gc-orphans|retain|unretain|locate <attachmentId> [--session <id>] [--json]",
         },
-        handler: ({ agent, rawInput }) => handleAuxCommand(this, agent, rawInput)
+        handler: ({ agent, rawInput }) => handleAuxCommand(this, agent, rawInput),
       });
     });
     // Minimal preset must keep its exact two-tool surface during the bootstrap
@@ -369,7 +395,7 @@ export class AuxLlmService extends Service {
       this._auxGuideInjectedSessions.add(sessionId);
       const reminder = createUserMessage({
         content: [{ type: "text", text: auxPreStepReminderText(agent) }],
-        source: { kind: "aux-guide" }
+        source: { kind: "aux-guide" },
       });
       return { ...decision, messages: [...decision.messages, reminder] };
     });
@@ -377,13 +403,17 @@ export class AuxLlmService extends Service {
 
   /** Recomputed merged task config from the live settings source. */
   _recomputeMerged() {
-    const settings = this._source?.() ?? { fallbackToMain: true, forceAuxVision: false, visionFallbackToMain: true, showStatusChip: true, tasks: {}, subagent: {} };
+    const settings = this._source?.() ?? {
+      fallbackToMain: true,
+      forceAuxVision: false,
+      visionFallbackToMain: true,
+      showStatusChip: true,
+      tasks: {},
+      subagent: {},
+    };
     const merged = {};
     for (const task of AUX_TASKS) {
-      merged[task] = mergeTaskConfig(
-        this.pluginTasks[task] ?? {},
-        settings.tasks?.[task] ?? {}
-      );
+      merged[task] = mergeTaskConfig(this.pluginTasks[task] ?? {}, settings.tasks?.[task] ?? {});
     }
     this._merged = merged;
     this._subagentSettings = settings.subagent ?? {};
@@ -400,20 +430,20 @@ export class AuxLlmService extends Service {
       subagentBridge: "aux",
       workflowBridge: "aux",
       compactionBridge: "aux",
-      skillAudit: "aux"
+      skillAudit: "aux",
     };
     this._enabled = { ...defaultEnabled, ...(settings.enabled ?? {}) };
-    this.subagentMode = this._enabled.subagentBridge === "native"
-      ? "native"
-      : (this._subagentSettings.mode ?? "native");
+    this.subagentMode =
+      this._enabled.subagentBridge === "native" ? "native" : (this._subagentSettings.mode ?? "native");
     this.subagentPrepareTools = this._subagentSettings.prepareTools !== false;
-    this.subagentIncludeWorkflow = this._enabled.workflowBridge !== "native" && this._subagentSettings.includeWorkflow !== false;
+    this.subagentIncludeWorkflow =
+      this._enabled.workflowBridge !== "native" && this._subagentSettings.includeWorkflow !== false;
     this.skillMode = settings.skill?.mode ?? "audit";
     this.debugConfig = {
       fullToolTrace: settings.debug?.fullToolTrace ?? false,
       maxDebugEventBytes: settings.debug?.maxDebugEventBytes ?? 65536,
       debugEventsInHistory: settings.debug?.debugEventsInHistory ?? false,
-      redactSecrets: settings.debug?.redactSecrets ?? true
+      redactSecrets: settings.debug?.redactSecrets ?? true,
     };
     if (this._toolsInitialized) this.syncTools();
   }
@@ -494,7 +524,7 @@ export class AuxLlmService extends Service {
           durationMs: Date.now() - startedAt,
           errorCode: "no-route",
           fallbackUsed: false,
-          purpose: request.purpose
+          purpose: request.purpose,
         });
         throw new Error(`aux task "${task}": no route configured and no main model available`);
       }
@@ -521,7 +551,7 @@ export class AuxLlmService extends Service {
             fallbackUsed: attempts.length > 0,
             inputChars: request.inputChars,
             outputChars: output.length,
-            purpose: request.purpose
+            purpose: request.purpose,
           });
           if (this.debugConfig?.fullToolTrace === true) {
             const max = this.debugConfig.maxDebugEventBytes ?? 65536;
@@ -535,7 +565,7 @@ export class AuxLlmService extends Service {
               output: debugField(this, output, max),
               purpose: request.purpose,
               reasoningEffort: request.reasoningEffort ?? definition.reasoningEffort,
-              durationMs: Date.now() - startedAt
+              durationMs: Date.now() - startedAt,
             });
           }
           return { text: output, provider: candidate.provider, model: candidate.model };
@@ -561,7 +591,7 @@ export class AuxLlmService extends Service {
         durationMs: Date.now() - startedAt,
         errorCode: attempts.map((a) => a.kind).join(","),
         fallbackUsed: attempts.length > 1,
-        purpose: request.purpose
+        purpose: request.purpose,
       });
       if (this.debugConfig?.fullToolTrace === true) {
         const max = this.debugConfig.maxDebugEventBytes ?? 65536;
@@ -573,10 +603,14 @@ export class AuxLlmService extends Service {
           model: attempts[0]?.model ?? "",
           input: debugField(this, request.messages, max),
           error: debugField(this, lastError?.message ?? String(lastError ?? ""), max),
-          attempts: debugField(this, attempts.map((a) => ({ provider: a.provider, model: a.model, kind: a.kind, error: a.error?.message })), max),
+          attempts: debugField(
+            this,
+            attempts.map((a) => ({ provider: a.provider, model: a.model, kind: a.kind, error: a.error?.message })),
+            max,
+          ),
           purpose: request.purpose,
           reasoningEffort: request.reasoningEffort ?? definition.reasoningEffort,
-          durationMs: Date.now() - startedAt
+          durationMs: Date.now() - startedAt,
         });
       }
       throw new AuxCallError(task, attempts);
@@ -606,7 +640,7 @@ export class AuxLlmService extends Service {
       ...merged,
       fallbackToMain: true,
       timeoutMs: taskTimeoutMs(merged),
-      maxConcurrency: taskConcurrency(merged)
+      maxConcurrency: taskConcurrency(merged),
     };
   }
 
@@ -671,15 +705,13 @@ export class AuxLlmService extends Service {
       // (classified as "content" → automatic main-model fallback) instead of
       // burning a call the adapter will reject. Unknown capability (no
       // resolveModelInfo answer) passes through — the provider decides.
-      const hasImage = request.messages.some((message) =>
-        message.content?.some((block) => block.type === "image") ?? false
+      const hasImage = request.messages.some(
+        (message) => message.content?.some((block) => block.type === "image") ?? false,
       );
       if (hasImage) {
         const capability = await this._resolveImageCapability(target, callDeadline.signal);
         if (capability === false) {
-          const error = new Error(
-            `aux: model "${target.model}" does not declare image input for ${task} task`
-          );
+          const error = new Error(`aux: model "${target.model}" does not declare image input for ${task} task`);
           error.failure = { code: "UNSUPPORTED_CONTENT", message: error.message };
           throw error;
         }
@@ -699,7 +731,7 @@ export class AuxLlmService extends Service {
       ...(request.maxTokens !== void 0 ? { maxTokens: request.maxTokens } : {}),
       ...(reasoningEffort !== void 0 ? { reasoningEffort } : {}),
       sessionId: request.session?.id,
-      signal: callDeadline.signal
+      signal: callDeadline.signal,
     });
     try {
       const assembler = new BlockAssembler();
@@ -718,7 +750,7 @@ export class AuxLlmService extends Service {
         blocks
           .filter((block) => block.type === "text" || block.type === "reasoning")
           .map((block) => block.text)
-          .join(" ")
+          .join(" "),
       );
       if (text.length === 0) throw new Error("aux: task model produced no text");
       return text;
@@ -765,7 +797,7 @@ export class AuxLlmService extends Service {
         configured: definition?.provider !== void 0,
         primary: primary ?? null,
         timeoutMs: taskTimeoutMs(definition),
-        maxConcurrency: taskConcurrency(definition)
+        maxConcurrency: taskConcurrency(definition),
       });
     }
     // Custom tasks registered via registerTask/registerAuxTask also appear in
@@ -779,7 +811,7 @@ export class AuxLlmService extends Service {
         configured: definition?.provider !== void 0,
         primary: primary ?? null,
         timeoutMs: taskTimeoutMs(customDef),
-        maxConcurrency: taskConcurrency(customDef)
+        maxConcurrency: taskConcurrency(customDef),
       });
     }
     return out;

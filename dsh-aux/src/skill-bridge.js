@@ -59,7 +59,7 @@ export function skillAuditSystemPrompt() {
     "- 已知坑/旧断言标注: flag assertions that look stale, version-specific, environment-specific, or experience-based; mark them with 🔻易腐烂. For engineering norms (工程规范: conventions, style, process rules), state that they can be accepted directly.",
     "- 执行建议: what to do — follow as-is, skip parts, verify specific claims first, or reject.",
     "- 置信度: high/medium/low with a one-line reason.",
-    "Do not include the full SKILL.md in your report; reference sections by name. Be direct and specific."
+    "Do not include the full SKILL.md in your report; reference sections by name. Be direct and specific.",
   ].join("\n");
 }
 
@@ -104,7 +104,7 @@ export function formatAuditContext(
   messages,
   maxMessages = SKILL_AUDIT_CONTEXT_MESSAGES,
   maxMessageChars = SKILL_AUDIT_MAX_MESSAGE_CHARS,
-  maxTotalChars = SKILL_AUDIT_MAX_TOTAL_CHARS
+  maxTotalChars = SKILL_AUDIT_MAX_TOTAL_CHARS,
 ) {
   const source = Array.isArray(messages) ? messages.slice(-maxMessages) : [];
   const lines = [];
@@ -137,7 +137,9 @@ export function renderRawSkillForAudit(skill) {
   } else if (base?.kind === "opaque" && typeof base.description === "string") {
     resourceLines.push(`Resources for this skill: ${base.description}`);
   } else {
-    resourceLines.push(`Resources for this skill are managed by provider "${typeof skill.provider === "string" ? skill.provider : "unknown"}".`);
+    resourceLines.push(
+      `Resources for this skill are managed by provider "${typeof skill.provider === "string" ? skill.provider : "unknown"}".`,
+    );
   }
   return [
     `<skill_content name="${name}">`,
@@ -148,7 +150,7 @@ export function renderRawSkillForAudit(skill) {
     "<skill_instructions>",
     content,
     "</skill_instructions>",
-    "</skill_content>"
+    "</skill_content>",
   ].join("\n");
 }
 
@@ -182,7 +184,7 @@ export function buildSkillAuditUserMessage({ skill, task, contextMessages }) {
   parts.push("Produce the pre-audit report now.");
   return createUserMessage({
     content: [{ type: "text", text: parts.join("\n\n") }],
-    source: { kind: "plugin", plugin: "dsh-aux" }
+    source: { kind: "plugin", plugin: "dsh-aux" },
   });
 }
 
@@ -210,9 +212,7 @@ export function attachSkillBridge(service) {
       const value = result.value;
       if (value === null || typeof value !== "object" || typeof value.content !== "string") return decision;
       const task =
-        typeof exec.arguments?.task === "string" && exec.arguments.task.length > 0
-          ? exec.arguments.task
-          : void 0;
+        typeof exec.arguments?.task === "string" && exec.arguments.task.length > 0 ? exec.arguments.task : void 0;
       let contextMessages = [];
       try {
         contextMessages = exec.agent?.session?.deriveMessages?.() ?? [];
@@ -237,32 +237,32 @@ export function attachSkillBridge(service) {
           // Skill audit is specifically an auxiliary-model duty: never fall
           // back to the main model to "audit itself". On failure the native
           // SKILL.md result is returned instead.
-          allowMainFallback: false
+          allowMainFallback: false,
         });
-        const reportText = output.text + (mode === "report" || mode === "report-ondemand"
-          ? "\n\n如需核对原文,请用 skill(name, { includeOriginal: true })。"
-          : "");
+        const reportText =
+          output.text +
+          (mode === "report" || mode === "report-ondemand"
+            ? "\n\n如需核对原文,请用 skill(name, { includeOriginal: true })。"
+            : "");
         let finalText;
         if (mode === "report") {
           finalText = reportText;
         } else if (mode === "report-ondemand") {
-          finalText = exec.arguments?.includeOriginal === true
-            ? renderRawSkillForAudit(value)
-            : reportText;
+          finalText = exec.arguments?.includeOriginal === true ? renderRawSkillForAudit(value) : reportText;
         } else {
           finalText = renderRawSkillForAudit(value) + "\n\n" + output.text;
         }
         return {
           ...decision,
-          content: [{ type: "text", text: finalText }]
+          content: [{ type: "text", text: finalText }],
         };
       } catch (error) {
         service.ctx.logger?.warn?.(
-          `skill-bridge: audit failed, returning native result: ${error?.message ?? String(error)}`
+          `skill-bridge: audit failed, returning native result: ${error?.message ?? String(error)}`,
         );
         return decision;
       }
     },
-    { prepend: true }
+    { prepend: true },
   );
 }

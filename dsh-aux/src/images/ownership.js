@@ -4,7 +4,12 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/images/ownership
  */
-import { readFile as readFileText, rename as renameFile, unlink as unlinkFile, writeFile as writeFileText } from "node:fs/promises";
+import {
+  readFile as readFileText,
+  rename as renameFile,
+  unlink as unlinkFile,
+  writeFile as writeFileText,
+} from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 
 /** Path to the workspace registry state (archive set). */
@@ -162,7 +167,9 @@ function enqueueSessionImagesWrite(service, write) {
   if (!service._sessionImagesWriteQueue) service._sessionImagesWriteQueue = Promise.resolve();
   service._sessionImagesWriteQueue = service._sessionImagesWriteQueue
     .then(() => write())
-    .catch(() => { /* best-effort: ownership recording must never break vision calls */ });
+    .catch(() => {
+      /* best-effort: ownership recording must never break vision calls */
+    });
   return service._sessionImagesWriteQueue;
 }
 
@@ -172,7 +179,9 @@ export async function saveSessionImages(service) {
     if (sessionImagesPath() === void 0) return;
     try {
       await writeSessionImagesAtomically(toOwnershipObject(service));
-    } catch { /* best-effort: ownership recording must never break vision calls */ }
+    } catch {
+      /* best-effort: ownership recording must never break vision calls */
+    }
   });
 }
 
@@ -236,7 +245,9 @@ export async function liveSessionIds(service) {
     if (sessions !== void 0 && typeof sessions.list === "function") {
       for (const session of sessions.list()) ids.add(session.id);
     }
-  } catch { /* service absent */ }
+  } catch {
+    /* service absent */
+  }
   try {
     const persistence = service.ctx.get("sessionPersistence");
     if (persistence !== void 0 && typeof persistence.listSnapshots === "function") {
@@ -245,7 +256,9 @@ export async function liveSessionIds(service) {
         if (id !== void 0) ids.add(String(id));
       }
     }
-  } catch { /* persistence absent or unreadable */ }
+  } catch {
+    /* persistence absent or unreadable */
+  }
   return ids;
 }
 
@@ -350,7 +363,9 @@ export async function cleanupSessionImages(service, sessionId) {
       if (diskMine !== void 0 || merged.size !== map.size) {
         try {
           await writeSessionImagesAtomically(mapToOwnershipObject(merged));
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
       }
       return;
     }
@@ -367,13 +382,17 @@ export async function cleanupSessionImages(service, sessionId) {
       const real = objectsRoot + "/" + hash.slice(0, 2) + "/" + hash;
       try {
         await unlinkFile(real);
-      } catch { /* already gone */ }
+      } catch {
+        /* already gone */
+      }
       // Companion .ext hardlink from the image bridge, if present.
       const extensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
       for (const ext of extensions) {
         try {
           await unlinkFile(real + ext);
-        } catch { /* absent */ }
+        } catch {
+          /* absent */
+        }
       }
       removed += 1;
     }
@@ -383,6 +402,8 @@ export async function cleanupSessionImages(service, sessionId) {
     service._sessionImages.delete(sessionId);
     try {
       await writeSessionImagesAtomically(mapToOwnershipObject(merged));
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   });
 }
