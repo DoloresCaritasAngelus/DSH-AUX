@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -11,8 +14,10 @@ jobs:
       matrix:
         node-version: [20, 22]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: 提交信息规范检查(Conventional Commits)
+        run: node scripts/ci-commit-lint.mjs
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: ${{ matrix.node-version }}
       - name: 安装测试依赖(DSH 官方包 + devDependencies)
@@ -29,6 +34,8 @@ jobs:
         run: node scripts/gen-package-readme.mjs --check
       - name: 全仓语法检查
         run: node scripts/ci-syntax-check.mjs
+      - name: npm 发布内容断言
+        run: node scripts/ci-pack-check.mjs
       - name: shell 脚本语法检查
         run: bash -n install.sh update.sh
       - name: Bridge 补丁 dry-run(当前 DSH)
@@ -44,8 +51,8 @@ jobs:
       matrix:
         dsh-version: [0.1.2-alpha.2, 0.1.2-alpha.3, 0.1.2-alpha.4, 0.1.2-alpha.5, 0.1.2-rc.1]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: 20
       - name: 切换到 DSH ${{ matrix.dsh-version }}
@@ -64,11 +71,26 @@ jobs:
   patch-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: 20
       - name: 安装测试依赖
         run: npm install --no-package-lock --no-audit --no-fund
       - name: 实际补丁 + self-heal + doctor(fake DSH 根)
         run: node scripts/ci-fake-dsh.mjs --apply
+
+  # 安装路径端到端冒烟:在临时 fake 部署根里真跑 install.sh / doctor / update.sh,
+  # 验证「用户从 GitHub 下载仓库后一条命令装好 + 更新幂等」的完整路径。
+  # 与 patch-smoke 互补:那个验证补丁本体,本 job 验证用户安装脚本。
+  install-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: 20
+      - name: 安装测试依赖(DSH 官方包 + devDependencies)
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: 安装/更新路径端到端冒烟(fake DSH 根)
+        run: node scripts/ci-install-smoke.mjs
