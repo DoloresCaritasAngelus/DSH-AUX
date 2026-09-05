@@ -5,8 +5,7 @@
  *
  * 背景/契约:dsh-aux 是仓库的子目录包,npm 发布取 dsh-aux/README.md。为避免
  * "第二份 README 漂移"(文档债),包内 README 是根 README 的**生成快照**+生成
- * banner;`prepack` 在 `npm pack`/`npm publish` 前自动再生成(U1,蓝图 §5#9,
- * `aux-notes/06-u1-readme-single-source.md`)。
+ * banner;`prepack` 在 `npm pack`/`npm publish` 前自动再生成(README 单一真相契约)。
  *
  * 用法:
  *   node scripts/gen-package-readme.mjs          # 写副本

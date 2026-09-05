@@ -15,10 +15,10 @@ user-invocable: false
    `# pass/# fail` 为准,别把 319 当硬事实**。改后必须 0 fail。
 2. 若进程因挂起定时器不自动退出(测试类),以 `# pass / # fail` 计数为准。
 
-## 新契约必带回归断言(蓝图 §5#8)
+## 新契约必带回归断言
 3. 每个"新契约/修复"配一个回归断言的先例:
    - `commands[0].input.hint` 含 status/model → 锁住命令注册契约(A3-4);
-   - `tests/readme-sync.test.js` → 锁住 README 单一真相(U1);
+   - `tests/readme-sync.test.js` → 锁住 README 单一真相;
    - `/aux history` 简述/全量/空记录 → 锁住溯源视图语义;
    - `tests/skill-bridge.test.js` 的 `buildSkillAuditUserMessage` / `attachSkillBridge`
      → 锁住技能预审的上下文构造与 post-execute 拦截/失败回退。

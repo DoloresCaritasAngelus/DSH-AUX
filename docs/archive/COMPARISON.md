@@ -1,7 +1,7 @@
 # dsh-aux vs 社区视觉插件(最终结论)
 
 > 本文档是设计定稿后的对比结论。研究过程的中间发现不在此保留;
-> 每项借鉴的落地情况见 [CONTRIBUTIONS.md](./CONTRIBUTIONS.md)。
+> 每项借鉴的落地情况见 [CREDITS.md](../../CREDITS.md)。
 
 对比对象:
 - [dsh-vision](https://github.com/william-jin-cmu/dsh-vision)(轻量:1 个工具 view_image)
@@ -34,7 +34,7 @@
 - **粘贴图片**:toolkit 用自带 Web 路由(免补丁),我们选择集成组件
   image-bridge v3(UI 保留图片 + 模型输入边界按模态改写 + 含图会话可切纯文本模型),与插件一起安装。
 
-## 3. 借鉴与落地(详见 CONTRIBUTIONS.md)
+## 3. 借鉴与落地(详见 CREDITS.md)
 
 | 借鉴来源 | 内容 | 落地状态 |
 |---|---|---|

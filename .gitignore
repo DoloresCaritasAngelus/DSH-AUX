@@ -24,6 +24,9 @@ tmp-*.mjs
 
 # 维护者专用(过程性内容,不进 GitHub —— 成品仓库只放用户触达的内容)
 .local/
+# 补丁台账:放在仓库内便于工具/会话按相对路径引用,但内容属维护者私密
+# 工作区,禁止入库(与 aux-notes 脱密纪律一致)
+aux-notes/
 # 保留 scripts/ 下的开发脚本但排除构建依赖:gen-package-readme 是 prepack 与
 # tests/readme-sync.test.js 的运行依赖,必须随仓库版本走(非过程性残留)。
 scripts/*
@@ -32,3 +35,4 @@ scripts/*
 !scripts/install-dsh-version.mjs
 !scripts/ci-fake-dsh.mjs
 !scripts/ci-syntax-check.mjs
+!scripts/ci-doc-hygiene.mjs

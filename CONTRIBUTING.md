@@ -58,14 +58,16 @@ git commit -m "fix(bridge): 修正 rc.9 锚点检测"
 git commit -m "docs(workflow): 补充 GitHub 管理流程"
 ```
 
-## 测试
+## 测试与静态检查
 
 ```sh
 cd <仓库路径>
-node --test tests/*.test.js
+node --test tests/*.test.js   # 全量测试(零依赖、无网络)
+npm run lint                  # ESLint(0 error 门禁,warning 不阻塞)
+npm run format:check          # Prettier 格式检查
 ```
 
-测试零依赖、无网络。改动请保持测试全绿。
+改动请保持测试全绿、lint 无 error。格式化直接跑 `npm run format`。
 
 ## 文档同步
 
@@ -73,7 +75,7 @@ node --test tests/*.test.js
 - 改完根 README / CREDITS 后运行 `cd dsh-aux && npm run gen-package-readme`；
 - 行为/命令/设置变化同步 `CHANGELOG.md` 与 `TESTING.md`；
 - 专项设计文档放 `docs/design/`,v0.1 时代过程文档在 `docs/archive/`(勿再往根目录堆文档)；
-- 补丁类改动同步 `aux-notes/02-patch-ledger.md`(工作区台账,非 git)。
+- 补丁类改动同步补丁台账 `aux-notes/02-patch-ledger.md`(维护者私有台账:随仓库存在但已 gitignore,不随仓库分发;外部贡献者可跳过此项)。
 
 ## Pull Request 流程
 
@@ -82,7 +84,7 @@ node --test tests/*.test.js
 3. 使用 PR 模板填写背景/改动/测试/影响面;
 4. 自审清单:
    - [ ] diff 只包含本 PR 意图内的文件
-   - [ ] 本地全量测试通过
+   - [ ] 本地全量测试通过;`npm run lint` 与 `npm run format:check` 通过
    - [ ] 无本地绝对路径(`/home/...`)
    - [ ] README / README.en / CHANGELOG / TESTING 已同步
    - [ ] `git status` 干净
@@ -91,18 +93,25 @@ node --test tests/*.test.js
 
 ## 发布流程
 
-1. 从最新 `main` 开 `release/vX.Y.Z`(或直接在 main 上操作);
+1. 从最新 `main` 开 `release/vX.Y.Z` 分支;
 2. 更新 `dsh-aux/package.json` 版本;
-3. 更新 `CHANGELOG.md`,按需更新 README 版本/徽章;
-4. 跑全量测试;
-5. 提交 `chore(release): vX.Y.Z`;
-6. 若开了 release 分支,先合入 main;
-7. 打 tag `vX.Y.Z` 并推送;
-8. 创建 GitHub Release。
+3. 更新 `CHANGELOG.md`,按需更新 README 版本/徽章/测试数;
+4. 跑全量测试与 `npm run lint`;
+5. 提交 `chore(release): vX.Y.Z` 并推送,开 PR;
+6. CI 全绿后 Squash and merge(发布也走 PR,不直接推 main);
+7. 在合并后的 `main` 上打 tag `vX.Y.Z` 并推送;
+8. 创建 GitHub Release(标题 = tag 名;正文 = 摘要 + 新功能 / 修复 / 兼容性 / 安装说明)。
+
+### 版本与命名约定
+
+- 主线版本:`vX.Y.Z`(tag 与 Release 标题统一 `v` 前缀 + 语义版本);
+- 补丁修订:`vX.Y.Z-fix.N`(历史写法 `FIX1` 不再新增);
+- 旧版支持线:`legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 永久分支,tag 后缀 `-legacy`(如 `v0.4.1-legacy`);
+- `main` = 实验线(随时可安装),legacy = 旧版稳定线;`main` 不承诺对旧 DSH 的兼容。
 
 ## 禁止事项
 
-- 禁止直接推 `main`;
+- 禁止直接推 `main`(分支保护已强制:要求 PR + CI + 线性历史,禁 force-push);
 - 禁止 force-push 已推送历史;
 - 禁止跳过测试合入;
 - 禁止发版不改版本号/CHANGELOG。

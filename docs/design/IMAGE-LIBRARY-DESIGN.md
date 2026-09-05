@@ -12,9 +12,7 @@
 
 ## 0. 执行上下文（压缩后必读）
 
-- 仓库根：`/home/ehekatl/dsh/dsh work/aux`
-- 当前工作分支：`feat/dsh-0.1.2-rc1-compat`（本地未推送）
-- 当前 main 已完成的基线：
+- 基线：
   - DSH 支持范围：`0.1.2-alpha.2` ~ `0.1.2-rc.1`（支持 0.1.2 alpha/rc 线）
   - 补丁已瘦身，旧补丁在 `bridge/retired/`
   - 已有 `patchLedger`、`/aux patch` 部署根修复、`PROJECT.md` / `PROJECT.AI.md`
@@ -645,5 +643,5 @@ README.md / README.en.md / CHANGELOG.md / TESTING.md / PROJECT*.md
 1. 先看本文件 + `dsh-aux/src/images/ownership.js` / `memory.js` / `gc.js` / `projection.js` / `client.js`。
 2. 从 Phase 1 开始，小步提交；每步跑 `node --test tests/*.test.js`。
 3. 使用真实 DSH_HOME 时可只读不写；测试用临时 `DSH_HOME`。
-4. 如需确认 API，查 `/home/ehekatl/dsh/node_modules/@deepseek-ai/*/lib/types/**/*.d.ts`。
-5. 不要改动 `bridge/`（除非补丁相关）；不要推送到远端，等用户指示。
+4. 如需确认 API，查 DSH 部署目录下的 `node_modules/@deepseek-ai/*/lib/types/**/*.d.ts`。
+5. 不要改动 `bridge/`（除非补丁相关）；改动经 PR 流程合入。

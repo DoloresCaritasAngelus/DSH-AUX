@@ -1,5 +1,7 @@
 # docs/archive — 过程文档存档
 
+> 收录两类:v0.1 时代(2026-08 上旬)的过程文档,以及已执行完毕的实施计划。
+
 > 本目录存放 v0.1 时代(2026-08 上旬)的过程性文档:早期设计规格、评审记录、
 > 已失效的上游提案。它们记录了项目当时的意图与决策过程,有史料价值,
 > 但**描述的行为可能已与当前版本不符**——现状以根 [README](../../README.md)、
@@ -12,5 +14,6 @@
 | [COMPARISON.md](./COMPARISON.md) | 与同类插件的做法对比 | 所比对象与结论停留在 2026-08-17 快照 |
 | [DESIGN-COMPLIANCE-REVIEW.md](./DESIGN-COMPLIANCE-REVIEW.md) | 设计意图符合度审计 | 审计对象是 v0.1 时代设计,后续版本已多次演进 |
 | [WEB-EXTRACT-REVIEW.md](./WEB-EXTRACT-REVIEW.md) | web_extract 多轮评审 | 评审已闭环,修复已合入并有测试基线(tests/web-extract-fixes.test.js) |
+| [IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md](./IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md) | 图库实施计划(2026-09-03,Phase 分解/并行任务/审核关卡) | 执行型过程文档;功能已随 0.4.2 发布,执行记录见 CHANGELOG 与测试基线 |
 
 > 归档时间:2026-09-06(文档分层重构)。这些文件自 2026-08-18 起未再更新。

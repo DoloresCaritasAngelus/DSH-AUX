@@ -100,8 +100,10 @@ DSH 迭代很快，尤其是 0.1.2-alpha.x 后：
 | [TESTING.md](./TESTING.md) | 测试清单与基线 |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 贡献指南 |
 | [CREDITS.md](./CREDITS.md) | 借鉴来源与致谢 |
-| [docs/design/](./docs/design/) | 专项设计：图库 DESIGN/PLAN/CONTRACT、SUBAGENT-BRIDGE、WORKFLOW-BRIDGE、WEB-CRAWL-DESIGN、VISION-AGENT、SESSION-ATTACHMENT-GC |
+| [docs/design/](./docs/design/) | 专项设计：图库 DESIGN/CONTRACT、SUBAGENT-BRIDGE、WORKFLOW-BRIDGE、WEB-CRAWL-DESIGN、VISION-AGENT、SESSION-ATTACHMENT-GC |
 | [docs/archive/](./docs/archive/) | v0.1 时代过程存档：PRD、UPSTREAM-PR、COMPARISON、设计符合度/web_extract 评审 |
+| [docs/known-issues.md](./docs/known-issues.md) | 已知问题公开清单（修复后移入 CHANGELOG） |
+| [SECURITY.md](./SECURITY.md) / [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) | 安全报告渠道 / 行为准则 |
 | [dsh-aux/AI.md](./dsh-aux/AI.md) | AI 安装/验证指南 |
 | [bridge/README.md](./bridge/README.md) | 补丁/桥接组件说明 |
 

@@ -9,7 +9,7 @@ user-invocable: false
 > 🔻**易腐烂标注**:**input.hint 契约、四处一致、返回形态**是稳定规则;**子命令全集
 > 枚举、提交号**是快照,新增子命令后用 `src/commands.js` 当前全集为准。
 
-## 硬契约(蓝图 §5#1)
+## 硬契约
 1. **带参命令必须声明 `input: { hint }`**。否则 DSH 客户端 `matchEnter`(官方
    ui-commands)对"无 input 且非裸行"的 `/aux status` 这类整行**落回普通聊天**,
    指令被当消息发给主模型 —— 踩坑实证(🔻易腐烂·提交号 *bd4eb89*,历史事实,
@@ -28,7 +28,7 @@ user-invocable: false
 `status` · `history [N]` · `history full [N]` · `model <task> [provider/model]` ·
 `vision <path> <question...>` · `test <task>` · `memory [n]` · `gc-images [days]`。
 **以 `src/commands.js` `handleAuxCommand` 当前分支为准;新增子命令必须同步更新
-本枚举、`input.hint`、README 命令表与 `04-glossary`。**
+本枚举、`input.hint`、README 命令表。**
 
 ## 返回形态
 5. handler 返回 `{ kind: "success"|"error", text }`;错误必须非空字符串。

@@ -119,7 +119,7 @@ try {
 if (data.includes(MARK_V2)) { log("已是 v2,跳过"); process.exit(0); }
 // rc.7+ 原生动态暴露:h-api 直接 settings.describe() 暴露所有已注册命名空间,
 // WEB_SETTINGS_NAMESPACES 白名单常量已删除 → 本补丁(以及动态 expose 补丁)
-// 在 rc.7+ 不再需要;rc.6 仍由本补丁兜底(版本检测 + 动态补丁,蓝图 §2.3)。
+// 在 rc.7+ 不再需要;rc.6 仍由本补丁兜底(版本检测 + 动态补丁)。
 if (!data.includes("WEB_SETTINGS_NAMESPACES")) {
   log("检测到 rc.7+ 原生动态设置暴露(WEB_SETTINGS_NAMESPACES 已移除),跳过本补丁");
   process.exit(0);

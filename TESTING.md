@@ -48,7 +48,7 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/image-commands.test.js` | `/aux images` 与 `/aux image` 命令层 |
 | `tests/image-locate.test.js` | 图片定位:最近 user/message seq 与 vision_analyze callId/callSeq |
 | `tests/session-compat.test.js` | Session API 兼容:旧 `.events` / 新 `snapshotEvents()` 覆盖 bootstrap/history/debug/locate/resolve |
-| `tests/readme-sync.test.js` | U1:包内 README == 根 README 生成快照(防漂移) |
+| `tests/readme-sync.test.js` | 单一真相:包内 README == 根 README 生成快照(防漂移) |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
 | `tests/subagent-route.test.js` | subagent 路由判定(native/manual/vision-aware) |
 | `tests/web-crawl.test.js` | web_crawl(robots/范围/hosts/seed/模式/预算) |

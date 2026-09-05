@@ -16,9 +16,11 @@ user-invocable: false
 3. 提交信息必须遵循 **Conventional Commits**:
    `<type>(<scope>): <subject>`,破坏性变更用 `!` 或 `BREAKING CHANGE` footer。
 4. 每个 PR 对应**一个逻辑变更**;PR 要小、聚焦、可独立 review。
-5. **CI 全绿前不得合入**;合入使用 **Squash and merge**,合入后删除分支。
-6. 发布必须走:**版本号 + CHANGELOG + tag + GitHub Release**。
+5. **CI 全绿前不得合入**;合入使用 **Squash and merge**,合入后删除分支
+   (仓库已启用 merge 后自动删远程分支,本地仍需 `git branch -d <branch>`)。
+6. 发布必须走:**版本号 + CHANGELOG + tag + GitHub Release**;发布本身也走 `release/vX.Y.Z` 分支 + PR。
 7. 改动涉及文档/README/CHANGELOG 时必须同步,禁止只改代码。
+8. **main 受分支保护**(要求 PR + CI + 线性历史,禁 force-push/删除):直推 main 会被 GitHub 拒绝,这不是纪律提醒而是硬约束。
 
 ## Token / 凭据纪律
 1. **token 不写进命令参数、输出、commit、日志、被跟踪文件**。
@@ -62,6 +64,9 @@ user-invocable: false
 
 ## 开发中
 - [ ] 小步提交,每个提交是一个完整、可回退的变更。
+- [ ] **提交信息只写变更语义**(what/why,产品事实,且能被该提交的 diff 印证);
+      工作过程(会话讨论、私有文件路径、内部状态如「本地未推送」)写进 aux-notes,
+      禁止进入提交信息与 PR 正文。
 - [ ] 提交信息用 Conventional Commits:
   - `feat(skill): 增加 report 模式`
   - `fix(bridge): 修正 rc.9 锚点检测`
@@ -69,22 +74,23 @@ user-invocable: false
 - [ ] 行为变更补测试;测试基线变化同步 `TESTING.md`。
 - [ ] 涉及 README 单一真相时,跑 `npm run gen-package-readme`(在 `dsh-aux/` 下)。
 - [ ] 本地全量测试:`node --test tests/*.test.js`(在仓库根目录执行)。
+- [ ] 静态检查:`npm run lint`(0 error 门禁)+ `npm run format:check`;格式化用 `npm run format`。
+- [ ] 文档放置:专项设计 → `docs/design/`;过程/评审存档 → `docs/archive/`;
+      **禁止再往仓库根目录新增 md**(根目录固定为 README×2 / PROJECT×2 / CHANGELOG / TESTING / CONTRIBUTING / CREDITS / SECURITY / CODE_OF_CONDUCT)。
 
 ## 提 PR
 - [ ] 推送分支到 origin。
 - [ ] 打开 PR,标题 = 该 PR 的 Conventional Commit 摘要。
-- [ ] 正文使用 PR 模板;若仓库暂无模板,按以下清单填写:
-  - 背景 / 目标
-  - 改动摘要
-  - 测试方式与结果
-  - 影响面(补丁/设置/README/测试基线)
-  - 关联 Issue:`Closes #<issue>`
-- [ ] 需要早期反馈时用 Draft PR。
+- [ ] 正文使用 PR 模板,逐节填写:一句话摘要 / 背景·目标 / 改动摘要 /
+      **兼容性与风险(影响版本、用户升级动作、回滚方式)——不可省略** /
+      测试与验证(贴关键输出,如 `# pass 370 / # fail 0`)/
+      影响面 / 自审清单 / 关联 Issue(`Closes #<issue>`)。
+- [ ] 需要早期反馈时用 Draft PR;自审清单必须逐项真实执行,不做空勾。
 
 ## 自审清单(提 PR 后、合入前)
 - [ ] diff 只包含本 PR 意图内的文件;无意外改动。
-- [ ] 本地全量测试通过;CI 全绿。
-- [ ] 无本地绝对路径(`/home/...` 等)进入被跟踪文件。
+- [ ] 本地全量测试通过;CI 全绿;`npm run lint` / `npm run format:check` 通过。
+- [ ] 无本地绝对路径（`/home/...` 等）、无内部会话痕迹（私有文档引用/归属式提法）进入被跟踪文件。
 - [ ] README / README.en / CHANGELOG / TESTING 已按需同步。
 - [ ] `git status` 干净;无临时文件。
 - [ ] 补丁类改动已在 `02-patch-ledger.md` 记账(如适用)。
@@ -96,20 +102,24 @@ user-invocable: false
 
 ## 发布流程
 🔻易腐烂·命令与文件路径(以仓库当前结构为准):
-1. 从最新 `main` 开 `release/vX.Y.Z`(或直接在 main 上操作,见规划 §6 未决)。
+1. 从最新 `main` 开 `release/vX.Y.Z` 分支(发布必走 PR,不直推 main 发版)。
 2. 更新 `dsh-aux/package.json` 的 `version`。
 3. 更新 `CHANGELOG.md`;按需更新根 README/README.en 的版本与徽章。
-4. 跑全量测试,确保基线一致。
-5. 提交 `chore(release): vX.Y.Z`。
-6. **若开了 release 分支:先按正常 PR 流程合入 `main`,再继续;若直接在 main 上操作,确保 main 已 push。**
+4. 跑全量测试 + `npm run lint`,确保基线一致。
+5. 提交 `chore(release): vX.Y.Z`,推送并开 PR。
+6. CI 全绿后 Squash and merge。
 7. 在 `main` 的发布提交上打 tag:`git tag vX.Y.Z`;推送:`git push origin vX.Y.Z`。
 8. 创建 GitHub Release:
    - `gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."`
    - 或 GitHub Web UI 手工创建;测试版勾选 Pre-release。
 9. 发布后确认 Release 页可见、tag 指向正确提交。
 
+### 版本命名约定
+- 主线:`vX.Y.Z`;补丁修订:`vX.Y.Z-fix.N`(历史 `FIX1`/`0.3.0-FIX` 写法不再新增);
+- legacy 线:`vX.Y.Z-legacy`;Release 标题 = tag 名,不加叙述性副标题(正文里写)。
+
 ## 常见错误
-- 直接 `git push origin main` → 违反铁律 1,应改为分支 + PR。
+- 直接 `git push origin main` → 分支保护会直接拒绝;必须分支 + PR。
 - `git push --force` → 违反铁律 2;用 `--force-with-lease` 也不允许重写已推送历史。
 - 提交信息写成自然语言 → 必须改回 Conventional Commits(未推送时可用 amend/rebase 整理)。
 - 测试没跑就合入 → CI 会拦;本地也要先跑。

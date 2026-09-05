@@ -67,7 +67,7 @@ if (rollbackMode) {
 const data = await readFile(TARGET, "utf8");
 if (data.includes(MARK)) { log("已是补丁状态,跳过"); process.exit(0); }
 // rc.7+ 原生动态暴露(settings.describe),本补丁只为 rc.6 兜底(版本检测+动态
-// 补丁,蓝图 §2.3):rc.7+ 直接跳过,不打多余补丁。
+// 补丁):rc.7+ 直接跳过,不打多余补丁。
 const installedVersion = readPackageVersion(TARGET);
 if (isRc7OrNewer(installedVersion)) {
   log(`检测到 rc.7+(${installedVersion}) 原生动态设置暴露,跳过本补丁(仅 rc.6 需要)`);

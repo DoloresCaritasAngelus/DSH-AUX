@@ -1,5 +1,15 @@
 # Changelog
 
+## 未发布 (Unreleased)
+
+- **仓库治理与文档结构**(面向贡献者/维护者,不影响插件行为):
+  - 文档分层:根目录文档收敛为 10 篇(README×2、PROJECT×2、CHANGELOG、TESTING、CONTRIBUTING、CREDITS、SECURITY、CODE_OF_CONDUCT);专项设计迁入 `docs/design/`,v0.1 时代过程文档(PRD/评审/上游提案)归档至 `docs/archive/` 并附归档索引;
+  - `CONTRIBUTIONS.md` 更名 `CREDITS.md`(借鉴致谢,消除与 CONTRIBUTING 的命名混淆),npm 包内副本并入生成器单源机制;
+  - 引入 ESLint + Prettier + EditorConfig(仅 devDependencies,运行时零依赖不变),CI 新增 lint 与格式检查门禁;
+  - 治理文档:新增 `SECURITY.md`(私密漏洞报告渠道)与 `CODE_OF_CONDUCT.md`;新增 `docs/known-issues.md` 公开已知问题(KI-1:commandcode MiMo 视觉);
+  - PR 模板增强:新增一句话摘要、兼容性与风险(影响版本 / 用户升级动作 / 回滚方式)、测试证据与截图要求;自审清单补凭据检查与包内副本生成器项;
+  - 流程固化:发布统一走 `release/vX.Y.Z` 分支 + PR;版本命名统一 `vX.Y.Z` / `vX.Y.Z-fix.N` / `vX.Y.Z-legacy`。
+
 ## 0.4.3 (2026-09-04) — DSH 0.1.2-rc.1 兼容
 
 - **DSH 0.1.2-alpha.4+ / rc.1 Session API 兼容**:
@@ -206,7 +216,7 @@
   native 直通不拦截;辅助调用失败时回退原生结果。
   配套补丁:`dsh-tool-skill` schema 增加可选 `task` 参数(新增 P11 维护债),
   设置页新增「技能预审 (skill)」区块,`/aux test skill` 可自检。
-- **README 单一真相(U1)**:npm 发布用的 `dsh-aux/README.md`(.en)不再是第二份
+- **README 单一真相**:npm 发布用的 `dsh-aux/README.md`(.en)不再是第二份
   人工维护文档,改为仓库根 README 的**生成快照**——新增
   `scripts/gen-package-readme.mjs`(`prepack` 自动再生成,`--check` 供 CI),并
   加回归测试防漂移(285 项全过)。消除"两套 README"文档债。
@@ -224,7 +234,7 @@
   `self-heal.mjs` 在补丁锚点不匹配/无法自愈时输出醒目 ⚠️ 提示;`/aux status`
   在补丁缺失时顶部显示「请运行 ./update.sh」警告。
 - **DSH rc.8 支持**:已完成 rc.8 实机升级与补丁验证(P1-P8/P11 全打,P9/P10 跳过);
-  多版本支持矩阵见 `aux-notes/13-version-support-plan.md`。
+  多版本支持矩阵见 `PROJECT.md` 的版本策略。
 
 ## 0.3.0(2026-08-17)— 子代理辅助模型桥接(subagent bridge)
 

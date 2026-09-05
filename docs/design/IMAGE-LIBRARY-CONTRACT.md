@@ -2,7 +2,7 @@
 
 > 状态：**已冻结（Phase 0）**
 > 本文件是并行任务之间避免返工的接口约定。实现必须与本契约一致；若需改动，先更新本文件再改代码。
-> 配套设计：`IMAGE-LIBRARY-DESIGN.md`；实施计划：`IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md`
+> 配套设计:`IMAGE-LIBRARY-DESIGN.md`。
 
 ---
 
