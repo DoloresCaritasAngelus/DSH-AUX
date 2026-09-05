@@ -19,8 +19,6 @@ import { readFileSync } from "node:fs";
 const TEXT_EXT = /\.(md|mjs|js|yml|yaml|json|sh|txt)$/;
 const SKIP = [
   /^scripts\/ci-doc-hygiene\.mjs$/, // 本脚本自身包含模式字面量
-  /^bridge\/retired\//, // 冻结的历史补丁(其中的锚点文本不可改动)
-  /^tests\//, // 测试用 /home/user 等占位路径
 ];
 
 const RULES = [
@@ -92,7 +90,8 @@ try {
     }
   }
 } catch {
-  // 无 origin/main(浅克隆/首次推送前):跳过提交信息扫描
+  console.log("提示:无法解析 origin/main..HEAD(浅克隆或首次推送前),本次跳过提交信息扫描。");
+  console.log("CI 中应为 checkout 设置 fetch-depth: 0,避免静默跳过。");
 }
 
 if (hits > 0) {

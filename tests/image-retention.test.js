@@ -1,7 +1,7 @@
 /**
  * Tests for dsh-aux image retention persistence.
  *
- * Run: cd /home/ehekatl/dsh/dsh work/aux && node --test tests/image-retention.test.js
+ * Run: 在仓库根目录执行 node --test tests/image-retention.test.js
  */
 import test from "node:test";
 import assert from "node:assert/strict";
