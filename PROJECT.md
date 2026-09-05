@@ -131,4 +131,4 @@ cd dsh-aux && npm run gen-package-readme
   因为旧版补丁链和设置 API 差异大，混在一起会让代码/CI/文档都很重。旧版用户走 legacy 分支。
 
 - **Q：为什么我们还在改官方包？**
-  因为部分能力（会话 ignorable 事件、图片输入桥接等）官方当前没有扩展点；我们通过 `bridge/` 集中管理、可自愈、可检测，并持续寻找 upstream/替代方案来减少。
+  因为部分能力（会话 ignorable 事件、图片输入桥接等）官方当前没有扩展点；我们通过 `bridge/` 集中管理、可自愈、可检测，并持续寻找官方扩展点/替代方案来减少。DSH 官方仓库开源(MIT,[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness))，但当前不接受 Issues/PR，无社区反馈渠道。
