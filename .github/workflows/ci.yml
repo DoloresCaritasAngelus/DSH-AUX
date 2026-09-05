@@ -23,6 +23,8 @@ jobs:
         run: npm run format:check
       - name: 全量测试(零第三方运行时依赖)
         run: node --test tests/*.test.js
+      - name: 文档脱密检查
+        run: node scripts/ci-doc-hygiene.mjs
       - name: README 单一真相检查
         run: node scripts/gen-package-readme.mjs --check
       - name: 全仓语法检查
@@ -52,6 +54,8 @@ jobs:
         run: node --test tests/*.test.js
       - name: Bridge 补丁 dry-run(DSH ${{ matrix.dsh-version }})
         run: node scripts/ci-fake-dsh.mjs
+      - name: 文档脱密检查
+        run: node scripts/ci-doc-hygiene.mjs
       - name: README 单一真相检查
         run: node scripts/gen-package-readme.mjs --check
 
