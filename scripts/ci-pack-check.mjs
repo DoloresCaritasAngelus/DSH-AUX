@@ -5,7 +5,7 @@
  * `npm pack --dry-run --json` 解析发布文件清单:
  *   - 必含:包元数据、双语 README 快照、CREDITS/AI/LICENSE、cordis.patch.yml、核心 src;
  *   - 顶层只允许白名单条目(防止未来杂物混入发布包);
- *   - 禁止:私有工作区(aux-notes/.local)、node_modules、lockfile、日志、tgz。
+ *   - 禁止:私有工作区目录、node_modules、lockfile、日志、tgz。
  *
  * files 字段改错、漏文件、杂物混入,当场红。零第三方依赖。
  */
