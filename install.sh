@@ -71,6 +71,8 @@ TARGET="$NODE_MODULES/$PACKAGE_NAME"
 if [ -L "$TARGET" ] || [ -d "$TARGET" ]; then
   echo "  插件已存在: $TARGET(跳过链接)"
 else
+  # 全新部署上 scoped 作用域目录不存在,必须先建,否则 ln -s 失败
+  run mkdir -p "$(dirname "$TARGET")"
   run ln -s "$HERE/dsh-aux" "$TARGET"
 fi
 

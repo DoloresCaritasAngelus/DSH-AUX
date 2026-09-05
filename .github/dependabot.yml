@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # 只管 GitHub Actions 的 SHA/版本升级(checkout/setup-node 等);
+  # 升级以 PR 形式到达,由维护者审阅合并。仓库零第三方运行时依赖,
+  # npm 生态不需要 dependabot。
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
