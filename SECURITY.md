@@ -14,7 +14,7 @@
 
 - `dsh-aux/src/`(插件本体,含客户端设置页脚本)与 `bridge/`(本地补丁、自愈脚本);
 - AUX 自带的 SSRF 防护(fetch 工具)、提示注入缓解、会话图片生命周期清理属于安全相关功能,欢迎负责任披露;
-- DSH 官方包本身的问题不属于本仓库范围(上游闭源,无法代为转报)。
+- DSH 官方包本身的问题不属于本仓库范围(上游为开源项目但不接受 Issues/PR,无代为转报的渠道;官方仓库:[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness))。
 
 ## 支持版本
 

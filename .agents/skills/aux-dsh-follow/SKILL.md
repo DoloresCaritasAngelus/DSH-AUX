@@ -10,7 +10,7 @@ user-invocable: false
 > 清单、版本号**是快照,引用前以补丁台账（`aux-notes/02-patch-ledger.md`，维护者本地 gitignore 文件，不随仓库分发）与 `/aux status` 实测为准。
 
 ## 立场
-- DSH 闭源、无 PR 口 → 所有补丁(🔻**易腐烂·编号清单** *P1-P11*,数量随台账增减;
+- DSH 官方**开源**(MIT,仓库 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)),但**不开放 Issues/PR**,无社区反馈渠道 → 所有补丁(🔻**易腐烂·编号清单** *P1-P11*,数量随台账增减;
   以补丁台账当前列表为准)是**永久维护债**;接受并管理它。
 - 机制:**版本检测 + 动态补丁**——只对缺能力/旧版本打补丁,新版(原生已有)跳过;
   "官方支持了"不等于"停补丁"。
