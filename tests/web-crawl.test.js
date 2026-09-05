@@ -1,7 +1,7 @@
 /**
  * web_crawl(P1+P2)验收测试(node:test,零依赖)。
  *
- * 覆盖 WEB-CRAWL-DESIGN.md:
+ * 覆盖 docs/design/WEB-CRAWL-DESIGN.md:
  *  P1: robots.txt、scope(same-origin/hosts)、minIntervalMs、预算、
  *      runWebCrawl 模式 A、注册/路由联动
  *  P2: sitemap 引导(含嵌套 index 跳过、跨域计数)、模式 B 逐页摘要、受控并发

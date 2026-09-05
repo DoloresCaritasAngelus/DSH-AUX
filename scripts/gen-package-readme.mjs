@@ -25,10 +25,11 @@ const HERE = dirname(fileURLToPath(import.meta.url)); // <repo>/scripts
 const ROOT = join(HERE, ".."); // 仓库根
 const PKG = join(ROOT, "dsh-aux"); // 包根(发布面)
 
-/** (根 README 文件名, 包内副本, banner 名) —— 中英两对。 */
+/** (根文件名, 包内副本, banner 名) —— README 中英两对 + CREDITS。 */
 export const PAIRS = [
   { root: join(ROOT, "README.md"), dest: join(PKG, "README.md"), banner: "README.md" },
-  { root: join(ROOT, "README.en.md"), dest: join(PKG, "README.en.md"), banner: "README.en.md" }
+  { root: join(ROOT, "README.en.md"), dest: join(PKG, "README.en.md"), banner: "README.en.md" },
+  { root: join(ROOT, "CREDITS.md"), dest: join(PKG, "CREDITS.md"), banner: "CREDITS.md" }
 ];
 
 /** 把根 README 文本变成包内副本:顶部加"生成快照"banner,正文原样。 */

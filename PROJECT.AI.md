@@ -28,13 +28,13 @@
 ```text
 dsh-aux/src/             plugin source (server + client)
 bridge/                  local DSH patches + self-heal + installers
-scripts/                 CI helpers, doctor, readme generator
+scripts/                 CI helpers, doctor, readme/credits generator
 tests/                   node --test suite
-dsh-aux/README*          generated snapshots from root README (do not hand-edit)
+docs/design/             feature design docs (image library, bridges, crawl, vision agent, attachment GC)
+docs/archive/            v0.1-era process docs (PRD, reviews, upstream proposals)
+CREDITS.md               credits & acknowledgements
 PROJECT.md               human long-term overview
 PROJECT.AI.md            this file
-IMAGE-LIBRARY-DESIGN.md  Image-library visualization design
-IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md  Image-library execution plan
 dsh-aux/AI.md            AI install/verification guide
 ```
 
@@ -55,7 +55,7 @@ dsh-aux/AI.md            AI install/verification guide
 5. **DSH upgrades require self-heal.**
    `bridge/self-heal.mjs` is idempotent and runs from `start-dsh.sh`; it may also be run manually.
 6. **Docs single-source.**
-   Root README is source for package README snapshots. `PROJECT.md` / `PROJECT.AI.md` are synchronized mirrors.
+   Root README and root CREDITS.md are the sources for their package snapshots (`dsh-aux/README*`, `dsh-aux/CREDITS.md`). `PROJECT.md` / `PROJECT.AI.md` are synchronized mirrors.
 7. **Git discipline.**
    Work from `main` on short-lived branches; do not push to merged/closed branches; no force-push of published history.
 
@@ -97,6 +97,6 @@ Current deployment verification pattern:
 
 - Running `apply-patch` from repo cwd without DSH_ROOT can target repo-local old DSH dev deps; always resolve deployment root first.
 - `bridge-locate` tests may run in repo mode (no DSH_ROOT) and should still resolve repo `node_modules` for unit tests; production path is deployment-root-authoritative.
-- Never hand-edit `dsh-aux/README*.md`; regenerate.
+- Never hand-edit `dsh-aux/README*.md` or `dsh-aux/CREDITS.md`; regenerate.
 - Do not store GitHub tokens in files/commands/logs.
 - Keep legacy branch untouched by main-line changes.

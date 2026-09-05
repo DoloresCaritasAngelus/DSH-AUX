@@ -43,8 +43,12 @@ DSH 迭代很快，尤其是 0.1.2-alpha.x 后：
 │   └── AI.md                # 给 AI 代理的安装/验证指南
 ├── bridge/                  # 本地补丁、自愈、安装脚本（补丁台账）
 ├── scripts/                 # CI、doctor、install-dsh-version、README 生成器
+├── docs/
+│   ├── design/              # 专项设计文档（图库/桥接/抓取/视觉代理/附件 GC）
+│   └── archive/             # v0.1 时代过程文档存档（PRD/评审/上游提案）
 ├── tests/                   # node --test 全量测试
 ├── assets/                  # 吉祥物图片
+├── CREDITS.md               # 借鉴来源与致谢
 └── PROJECT.md / PROJECT.AI.md  # 本长期项目文档
 ```
 
@@ -63,7 +67,7 @@ DSH 迭代很快，尤其是 0.1.2-alpha.x 后：
 2. **补丁要可检测**：每个补丁都要有唯一 marker，让 `bridge-locate` / `imageBridgeStatus` / `patchLedger` 能只读判断状态。
 3. **设置页必须能诊断**：不仅“全正常/有缺失”，还要让用户看到具体哪些补丁、目标包、状态。
 4. **DSH 升级后先跑自愈**：`bridge/self-heal.mjs` 幂等，失败不阻塞启动但会在日志/status 中提示。
-5. **文档单一真相**：根 README 是发布 README 的源；`PROJECT.md` 与 `PROJECT.AI.md` 同步同一组事实。
+5. **文档单一真相**：根 README 与根 CREDITS.md 是各自发布副本的源；`PROJECT.md` 与 `PROJECT.AI.md` 同步同一组事实。
 6. **分支/PR 纪律**：新工作从 `main` 开短生命周期分支；合入用 Squash；已合入/关闭分支不再 push。
 
 ## 补丁体系速览
@@ -92,15 +96,14 @@ DSH 迭代很快，尤其是 0.1.2-alpha.x 后：
 | [README.md](./README.md) | 用户入口/功能/快速开始（中英） |
 | [PROJECT.md](./PROJECT.md) | 人类长期项目总览（本文件） |
 | [PROJECT.AI.md](./PROJECT.AI.md) | AI/代理长期项目总览 |
-| [IMAGE-LIBRARY-DESIGN.md](./IMAGE-LIBRARY-DESIGN.md) | 图片生命周期可视化面板正式设计 |
-| [IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md](./IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md) | 图片库实施计划（并行任务分解） |
-| [dsh-aux/AI.md](./dsh-aux/AI.md) | AI 安装/验证指南 |
 | [CHANGELOG.md](./CHANGELOG.md) | 版本历史 |
-| [PRD.md](./PRD.md) | 需求规格与设计决策 |
 | [TESTING.md](./TESTING.md) | 测试清单与基线 |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 贡献指南 |
+| [CREDITS.md](./CREDITS.md) | 借鉴来源与致谢 |
+| [docs/design/](./docs/design/) | 专项设计：图库 DESIGN/PLAN/CONTRACT、SUBAGENT-BRIDGE、WORKFLOW-BRIDGE、WEB-CRAWL-DESIGN、VISION-AGENT、SESSION-ATTACHMENT-GC |
+| [docs/archive/](./docs/archive/) | v0.1 时代过程存档：PRD、UPSTREAM-PR、COMPARISON、设计符合度/web_extract 评审 |
+| [dsh-aux/AI.md](./dsh-aux/AI.md) | AI 安装/验证指南 |
 | [bridge/README.md](./bridge/README.md) | 补丁/桥接组件说明 |
-| 各 `*-DESIGN.md` / `*-BRIDGE.md` | 专项设计/审查记录 |
 
 ## 快速命令
 

@@ -243,7 +243,7 @@ node scripts/doctor.mjs    # 更新后健康检查（不修改任何文件）
 | `/aux image retain <id>` / `unretain <id>` | 固化 / 取消固化 |
 | `/aux image locate <id> [--session <id>] [--json]` | 定位图片最近出现的消息/调用位置 |
 
-详细接口与数据形状见 [IMAGE-LIBRARY-CONTRACT.md](./IMAGE-LIBRARY-CONTRACT.md) 与 [IMAGE-LIBRARY-DESIGN.md](./IMAGE-LIBRARY-DESIGN.md)。
+详细接口与数据形状见 [IMAGE-LIBRARY-CONTRACT.md](https://github.com/DoloresCaritasAngelus/DSH-AUX/blob/main/docs/design/IMAGE-LIBRARY-CONTRACT.md) 与 [IMAGE-LIBRARY-DESIGN.md](https://github.com/DoloresCaritasAngelus/DSH-AUX/blob/main/docs/design/IMAGE-LIBRARY-DESIGN.md)。
 
 ## 设置页与状态面板
 
@@ -398,17 +398,14 @@ const result = await ctx.auxLlm.call("compress", {
 | 文档 | 内容 |
 |---|---|
 | [PROJECT.md](./PROJECT.md) | 长期项目总览（人类友好） |
-| [IMAGE-LIBRARY-DESIGN.md](./IMAGE-LIBRARY-DESIGN.md) | 图片生命周期可视化面板设计 |
-| [IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md](./IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md) | 图片库实施计划（并行任务分解） |
 | [PROJECT.AI.md](./PROJECT.AI.md) | 长期项目总览（AI/代理友好） |
 | [CHANGELOG.md](./CHANGELOG.md) | 版本历史 |
 | [TESTING.md](./TESTING.md) | 测试文件清单与基线 |
-| [PRD.md](./PRD.md) | 需求规格与设计决策 |
-| [WEB-CRAWL-DESIGN.md](./WEB-CRAWL-DESIGN.md) | 站点抓取设计 |
-| [SUBAGENT-BRIDGE.md](./SUBAGENT-BRIDGE.md) | 子代理桥接设计 |
-| [WORKFLOW-BRIDGE.md](./WORKFLOW-BRIDGE.md) | workflow 桥接设计 |
-| [AI.md](./dsh-aux/AI.md) | 给 AI 代理的安装指南 |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 贡献指南 |
+| [CREDITS.md](./CREDITS.md) | 借鉴来源与致谢 |
+| [docs/design/](./docs/design/) | 专项设计文档（图库 / 桥接 / 抓取 / 视觉代理 / 会话附件 GC） |
+| [docs/archive/](./docs/archive/) | v0.1 时代过程文档存档（PRD / 评审 / 上游提案） |
+| [AI.md](./dsh-aux/AI.md) | 给 AI 代理的安装指南 |
 
 ## 常见问题
 

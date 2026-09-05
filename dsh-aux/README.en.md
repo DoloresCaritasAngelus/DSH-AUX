@@ -243,7 +243,7 @@ Command-line read/manage commands:
 | `/aux image retain <id>` / `unretain <id>` | Retain / unretain |
 | `/aux image locate <id> [--session <id>] [--json]` | Locate the image's latest message/call anchors |
 
-See [IMAGE-LIBRARY-CONTRACT.md](./IMAGE-LIBRARY-CONTRACT.md) and [IMAGE-LIBRARY-DESIGN.md](./IMAGE-LIBRARY-DESIGN.md) for the detailed contract and design.
+See [IMAGE-LIBRARY-CONTRACT.md](https://github.com/DoloresCaritasAngelus/DSH-AUX/blob/main/docs/design/IMAGE-LIBRARY-CONTRACT.md) and [IMAGE-LIBRARY-DESIGN.md](https://github.com/DoloresCaritasAngelus/DSH-AUX/blob/main/docs/design/IMAGE-LIBRARY-DESIGN.md) for the detailed contract and design.
 
 ## Settings & status panel
 
@@ -398,17 +398,14 @@ Before the first persistent `tool/call`, only the Minimal tool pair is exposed a
 | Doc | Content |
 |---|---|
 | [PROJECT.md](./PROJECT.md) | Long-term project overview (human) |
-| [IMAGE-LIBRARY-DESIGN.md](./IMAGE-LIBRARY-DESIGN.md) | Image lifecycle visualization panel design |
-| [IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md](./IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md) | Image-library implementation plan |
 | [PROJECT.AI.md](./PROJECT.AI.md) | Long-term project overview (AI/agent) |
 | [CHANGELOG.md](./CHANGELOG.md) | Version history |
 | [TESTING.md](./TESTING.md) | Test file list and baseline |
-| [PRD.md](./PRD.md) | Requirements & design decisions |
-| [WEB-CRAWL-DESIGN.md](./WEB-CRAWL-DESIGN.md) | Site crawl design |
-| [SUBAGENT-BRIDGE.md](./SUBAGENT-BRIDGE.md) | Subagent bridge design |
-| [WORKFLOW-BRIDGE.md](./WORKFLOW-BRIDGE.md) | Workflow bridge design |
-| [AI.md](./dsh-aux/AI.md) | AI agent install guide |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guide |
+| [CREDITS.md](./CREDITS.md) | Credits & acknowledgements |
+| [docs/design/](./docs/design/) | Feature design docs (image library / bridges / crawl / vision agent / attachment GC) |
+| [docs/archive/](./docs/archive/) | v0.1-era process docs (PRD / reviews / upstream proposals) |
+| [AI.md](./dsh-aux/AI.md) | AI agent install guide |
 
 ## FAQ
 

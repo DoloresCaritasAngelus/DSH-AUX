@@ -1,3 +1,8 @@
+<!--
+  CREDITS.md — generated snapshot of the repo-root <../../CREDITS.md> (single source of truth).
+  DO NOT EDIT BY HAND. Regenerate with: npm run gen-package-readme
+  (runs automatically on prepack before npm pack/publish).
+-->
 # 贡献与借鉴说明(Credits & Acknowledgements)
 
 dsh-aux 是独立设计的 DSH 辅助模型系统,但架构方向与若干具体方法深受以下
@@ -44,7 +49,7 @@ OpenCode),用透明代理 + 单文件插件改写模型输入;dsh-aux 在 DSH �
   工具可以;问具体问题,一次聚焦一个"。
 - **stripThink**:剥离 GLM/Kimi 系 thinking 模型内联的 `<think>…</think>`。
 
-**落地**:`stripThinkBlocks()` 接入 `_callRoute`,三个辅助任务统一生效;
+**落地**:`stripThinkBlocks()` 接入 `_callRoute`,各辅助任务统一生效;
 `visionSystemPrompt` 内置任务聚焦引导。
 
 **差异**:dsh-vision 自带 provider 解析矩阵(Zhipu/DashScope/Ark/Ollama/env
@@ -62,6 +67,10 @@ block(UI 渲染缩略图),agent-loop 在**模型输入边界**按模型模态改
 配套 `tests/bridge.test.js`(4 项)直接提取已安装 agent-loop 的方法体做
 离线验证。
 
+**演进(v3,2026-08-17)**:旧 DSH 的 `selectModel` 会在含图会话中拒绝切换到
+纯文本模型,即使 v2 桥接已能处理图片。v3 补丁移除该门控,使含图会话可以
+自由切换到纯文本模型,由 agent-loop 在输入边界自动降级为 `vision_analyze`。
+
 ## 5. [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)平台机制(基座)
 
 **复用而非借鉴**:事件溯源会话(`session.append` + 投影)、`ctx.llm.stream`
@@ -76,7 +85,7 @@ dsh-tool-fs(read_image 附件模式)、dsh-agent-default-model(设置页模式)�
 
 1. **统一 aux-LLM 路由服务**(`ctx.auxLlm`):任务分派 + 路由解析(显式配置
    > 任务默认 > 主模型)+ 失败分类 + 冷却 + 信号量 + 降级 + 聚合错误
-   (`AuxCallError`) + 事件溯源,一服务承载三任务(视觉/网页/压缩)。
+   (`AuxCallError`) + 事件溯源,一服务承载多任务(视觉/网页/压缩/会话压缩)。
 2. **图片能力门语义**:发起前查 `resolveModelInfo.inputModalities`;
    **空列表(适配器未声明)视为未知放行**——避免误拒豆包这类未声明能力的
    视觉模型;非空且不含 image 才判"明确不支持"并降级。
@@ -85,8 +94,8 @@ dsh-tool-fs(read_image 附件模式)、dsh-agent-default-model(设置页模式)�
    定时对账(比对内存 + 持久化会话集)+ 手动 GC,共享引用保留、归档不误删。
 4. **图片记忆日志**(`image-memory.json` + `/aux memory`):跨重启回忆
    "看过什么图、问过什么、结论是什么"。
-5. **image-bridge v2 两段式桥接**(见上)——"UI 保留图片 + 模型输入边界按
-   模态改写"的组合是我们在 #733 思路上的原创演进。
+5. **image-bridge v3 桥接**(见上)——"UI 保留图片 + 模型输入边界按模态
+   改写 + 含图会话可切纯文本模型"是我们在 #733 思路上的原创演进。
 6. **focus-hint 的强制化落地**:question 必填(工具层拒绝,而非提示性文案),
    与事件溯源结合可审计每次视觉调用的意图。
 
