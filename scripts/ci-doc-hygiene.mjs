@@ -24,9 +24,20 @@ const SKIP = [
 ];
 
 const RULES = [
-  { name: "aux-notes 私有工作区引用", re: /aux-notes\//, allow: [/^\.gitignore$/, /^CONTRIBUTING\.md$/, /^\.github\//, /^\.agents\//] },
-  { name: "私有台账文件名", re: /02-patch-ledger/, allow: [/^\.gitignore$/, /^CONTRIBUTING\.md$/, /^\.github\//, /^\.agents\//] },
-  { name: "私有交接/计划文档名", re: /HANDOFF|EXECUTION-PLAN|maintenance-debt|version-support-plan|04-glossary|u1-readme/ },
+  {
+    name: "aux-notes 私有工作区引用",
+    re: /aux-notes\//,
+    allow: [/^\.gitignore$/, /^CONTRIBUTING\.md$/, /^\.github\//, /^\.agents\//],
+  },
+  {
+    name: "私有台账文件名",
+    re: /02-patch-ledger/,
+    allow: [/^\.gitignore$/, /^CONTRIBUTING\.md$/, /^\.github\//, /^\.agents\//],
+  },
+  {
+    name: "私有交接/计划文档名",
+    re: /HANDOFF|EXECUTION-PLAN|maintenance-debt|version-support-plan|04-glossary|u1-readme/,
+  },
   { name: "内部蓝图章节引用", re: /蓝图 §/ },
   { name: "本机绝对路径 /home/<user>", re: /\/home\/(?!user\b|\.\.\/?\.?)/ },
   { name: "Windows 盘符路径", re: /[A-Z]:\\(?![ntr0])/ },
