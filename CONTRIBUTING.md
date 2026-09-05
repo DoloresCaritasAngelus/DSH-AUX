@@ -69,9 +69,10 @@ node --test tests/*.test.js
 
 ## 文档同步
 
-- 根 `README.md` / `README.en.md` 是文档真相;
-- 改完根 README 后运行 `cd dsh-aux && npm run gen-package-readme`;
-- 行为/命令/设置变化同步 `CHANGELOG.md` 与 `TESTING.md`;
+- 根 `README.md` / `README.en.md` / `CREDITS.md` 是文档真相；
+- 改完根 README / CREDITS 后运行 `cd dsh-aux && npm run gen-package-readme`；
+- 行为/命令/设置变化同步 `CHANGELOG.md` 与 `TESTING.md`；
+- 专项设计文档放 `docs/design/`,v0.1 时代过程文档在 `docs/archive/`(勿再往根目录堆文档)；
 - 补丁类改动同步 `aux-notes/02-patch-ledger.md`(工作区台账,非 git)。
 
 ## Pull Request 流程
@@ -109,7 +110,8 @@ node --test tests/*.test.js
 ## 结构
 
 - `dsh-aux/` — 插件包(host + client)
-- `bridge/` — 可选本地补丁(image-bridge v2、settings 白名单)
+- `bridge/` — 可选本地补丁(image-bridge、settings 白名单)
 - `tests/` — 测试
-- `scripts/` — 维护脚本(doctor、readme 生成等)
-- 文档 MD — PRD / 设计 / 对比 / 贡献说明
+- `scripts/` — 维护脚本(doctor、readme/credits 生成等)
+- `docs/design/` — 专项设计文档;`docs/archive/` — v0.1 时代过程存档
+- 根文档 — README / PROJECT / CHANGELOG / TESTING / CONTRIBUTING / CREDITS

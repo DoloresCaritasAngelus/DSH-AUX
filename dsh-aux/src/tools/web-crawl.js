@@ -1,5 +1,5 @@
 /**
- * dsh-aux `web_crawl` tool implementation (design: WEB-CRAWL-DESIGN.md).
+ * dsh-aux `web_crawl` tool implementation (design: docs/design/WEB-CRAWL-DESIGN.md).
  *
  * Depth-crawls a documentation site (or a whitelisted host set) from a seed
  * URL through the shared crawl core, then summarizes the whole site with one

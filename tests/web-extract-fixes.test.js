@@ -1,7 +1,7 @@
 /**
  * web_extract 修复验收测试(node:test,零依赖)。
  *
- * 覆盖 WEB-EXTRACT-REVIEW.md 中合入的修复:
+ * 覆盖 docs/archive/WEB-EXTRACT-REVIEW.md 中合入的修复:
  *  - H1/H2: seam 能力探测 + provider 加固(缺 finalUrl / 3xx 重跟随 /
  *    Code-based 回退 / seam 缺失回退)
  *  - H3: 码点边界截断(不切开代理对) + readTextCapped 流式截断
