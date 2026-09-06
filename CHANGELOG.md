@@ -2,6 +2,15 @@
 
 ## 未发布 (Unreleased)
 
+- **`vision_analyze` 轨迹回显**(轨迹可见性增强,不改变分析行为):
+  - 成功的视觉分析把消费的持久图片 ref 原样带回工具结果,官方 render 管线随即产出 text+image 块:
+    轨迹视图从此能看到辅助模型实际分析过的图片(`imagePath` / `imageUrl` 场景此前在轨迹里完全不可见);
+  - 纯文本主模型安全:tool result 中的 image block 由官方 LLM runtime 投影为稳定占位文本后才进入模型上下文;
+    image-capable 主模型则可在后续轮次直接回看图片;
+  - 输出 schema 严格锁定 ref 形状(与官方 `read_image` 的 image block 逐字段一致,不多不少),失败项不携带图片;
+  - 前向声明 `presentationMeta`(统一 attachments 数组;当前无官方消费者,为未来工具图片卡片预留);
+  - 测试基建:新增 `@deepseek-ai/dsh-tool-fs` devDependency 作为形状基准,回显块与当期 DSH 版本的真实 `read_image` render 逐字段对照;
+    新增 `tests/vision-echo.test.js`(schema 锁形/官方形状对齐/Session 加载边)。
 - **仓库治理与文档结构**(面向贡献者/维护者,不影响插件行为):
   - 文档分层:根目录文档收敛为 10 篇(README×2、PROJECT×2、CHANGELOG、TESTING、CONTRIBUTING、CREDITS、SECURITY、CODE_OF_CONDUCT);专项设计迁入 `docs/design/`,v0.1 时代过程文档(PRD/评审/上游提案)归档至 `docs/archive/` 并附归档索引;
   - `CONTRIBUTIONS.md` 更名 `CREDITS.md`(借鉴致谢,消除与 CONTRIBUTING 的命名混淆),npm 包内副本并入生成器单源机制;

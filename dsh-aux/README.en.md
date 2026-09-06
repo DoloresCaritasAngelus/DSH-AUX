@@ -79,7 +79,7 @@ Models keep getting stronger, but handing "look at this image", "read this page"
 
 | Tool | What it does | Typical use |
 |---|---|---|
-| `vision_analyze` | Image analysis (parallel multi-image) | "What's in this image?" "Read the chart values" |
+| `vision_analyze` | Image analysis (parallel multi-image; analyzed images echoed to the trajectory view) | "What's in this image?" "Read the chart values" |
 | `web_extract` | Web page fetch + summary (same-origin recursion) | "Summarize this page" "Answer a question from this page" |
 | `web_crawl` | Site-wide deep crawl + overall summary | "Crawl the whole docs site and summarize" |
 | `compress_text` | Long-text compression (code/log/doc aware) | Compress logs, docs, or very long context |

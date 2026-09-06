@@ -9,6 +9,36 @@ import { runWebExtract } from "./web-extract.js";
 import { runWebCrawl } from "./web-crawl.js";
 import { runCompress } from "./compress.js";
 
+/** Strict mirror of the official durable image ref (ImageAttachmentRef, the
+ * same shape read_image emits in its tool result). The ref is produced by the
+ * official attachment service and passed through verbatim — a field drift
+ * fails loudly here instead of leaking an unexpected shape into session logs. */
+const IMAGE_REF_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  description: "Durable attachment ref of the analyzed image.",
+  properties: {
+    attachmentId: { type: "string", required: true },
+    mediaType: {
+      type: "string",
+      required: true,
+      enum: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+    },
+    bytes: { type: "integer", required: true },
+    width: { type: "integer", required: true },
+    height: { type: "integer", required: true },
+    name: { type: "string" },
+    originalDimensions: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        width: { type: "integer", required: true },
+        height: { type: "integer", required: true },
+      },
+    },
+  },
+};
+
 /** Register the auxiliary tools. */
 export function registerAuxTools(service) {
   const ctx = service.ctx;
@@ -65,19 +95,54 @@ export function registerAuxTools(service) {
               additionalProperties: false,
               properties: {
                 analysis: { type: "string", description: "Present for single-image calls." },
-                analyses: { type: "array", description: "Present for multi-image calls; one entry per image." },
+                analyses: {
+                  type: "array",
+                  description: "Present for multi-image calls; one entry per image.",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      analysis: { type: "string", required: true },
+                      provider: { type: "string", required: true },
+                      model: { type: "string", required: true },
+                      // Success entries only; failed images carry error text
+                      // without an attachment.
+                      attachment: IMAGE_REF_SCHEMA,
+                    },
+                  },
+                },
                 provider: { type: "string", required: true },
                 model: { type: "string", required: true },
+                attachment: IMAGE_REF_SCHEMA,
               },
             },
-            render: (_args, value) => [
-              {
-                type: "text",
-                text: Array.isArray(value.analyses)
-                  ? value.analyses.map((a, i) => "【图" + (i + 1) + "】" + a.analysis).join("\n\n")
-                  : value.analysis,
-              },
-            ],
+            // Trace echo: each successful analysis is followed by the image it
+            // consumed (mirrors read_image's text-then-image blocks), so the
+            // trajectory view shows what the auxiliary model actually looked
+            // at. Failed entries render text only. Text-only main models stay
+            // safe via the official tool-result image projection.
+            render: (_args, value) => {
+              if (Array.isArray(value.analyses)) {
+                return value.analyses.flatMap((entry, i) => [
+                  { type: "text", text: "【图" + (i + 1) + "】" + entry.analysis },
+                  ...(entry.attachment !== void 0 ? [{ type: "image", attachment: entry.attachment }] : []),
+                ]);
+              }
+              return [
+                { type: "text", text: value.analysis },
+                ...(value.attachment !== void 0 ? [{ type: "image", attachment: value.attachment }] : []),
+              ];
+            },
+            // Forward-compatible declaration (no official consumer yet): the
+            // refs ride along with the result so a future generalized tool
+            // image card can pick them up without a format change.
+            presentationMeta: (_args, value) => ({
+              attachments: Array.isArray(value.analyses)
+                ? value.analyses.map((entry) => entry.attachment).filter((ref) => ref !== void 0)
+                : value.attachment !== void 0
+                  ? [value.attachment]
+                  : [],
+            }),
           },
           timeoutMs: 120_000,
           isConcurrencySafe: () => true,

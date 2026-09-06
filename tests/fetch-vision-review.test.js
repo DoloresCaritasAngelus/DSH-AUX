@@ -41,10 +41,13 @@ test("resolveImageRef: cancelable body is cancelled on non-OK imageUrl response"
 
 /** Build a stub vision service whose image attachment resolution and vision
  * call are driven by `behavior(id)`, which either returns an analysis text
- * or throws. */
+ * or throws. readImage hands back a full official ImageAttachmentRef so the
+ * trace-echo pass-through can be asserted. */
 function makeVisionStub(behavior) {
   const attachments = {
-    readImage: async (att) => ({ ref: { attachmentId: att.attachmentId } }),
+    readImage: async (att) => ({
+      ref: { attachmentId: att.attachmentId, mediaType: "image/png", bytes: 8, width: 2, height: 2 },
+    }),
   };
   const service = {
     _imageCtx: void 0,
@@ -92,13 +95,23 @@ test("vision_analyze multi-image: partial failure preserves successful analyses"
     exec,
   );
   assert.equal(result.analyses.length, 3);
-  assert.deepEqual(result.analyses[0], { analysis: "OK ok1", provider: "prov", model: "mod" });
+  assert.deepEqual(result.analyses[0], {
+    analysis: "OK ok1",
+    provider: "prov",
+    model: "mod",
+    attachment: { attachmentId: "ok1", mediaType: "image/png", bytes: 8, width: 2, height: 2 },
+  });
   assert.deepEqual(result.analyses[1], {
     analysis: "vision_analyze: image failed: boom for bad1",
     provider: "",
     model: "",
   });
-  assert.deepEqual(result.analyses[2], { analysis: "OK ok2", provider: "prov", model: "mod" });
+  assert.deepEqual(result.analyses[2], {
+    analysis: "OK ok2",
+    provider: "prov",
+    model: "mod",
+    attachment: { attachmentId: "ok2", mediaType: "image/png", bytes: 8, width: 2, height: 2 },
+  });
 });
 
 test("vision_analyze multi-image: all failures produce error entries without throwing", async () => {
