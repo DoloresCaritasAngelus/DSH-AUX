@@ -2,6 +2,8 @@
 
 ## 未发布 (Unreleased)
 
+## 0.4.4 (2026-09-06) — vision_analyze 轨迹回显
+
 - **`vision_analyze` 轨迹回显**(轨迹可见性增强,不改变分析行为):
   - 成功的视觉分析把消费的持久图片 ref 原样带回工具结果,官方 render 管线随即产出 text+image 块:
     轨迹视图从此能看到辅助模型实际分析过的图片(`imagePath` / `imageUrl` 场景此前在轨迹里完全不可见);
