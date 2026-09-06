@@ -23,7 +23,7 @@ jobs:
       contents: read
     steps:
       - name: 检出仓库
-        uses: actions/checkout@b1722c1245f90604c2c348f9d1624af97ea8fc6e # v3.29.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: 初始化 CodeQL(javascript-typescript,免构建模式)
         uses: github/codeql-action/init@b1722c1245f90604c2c348f9d1624af97ea8fc6e # v3.29.0
         with:
