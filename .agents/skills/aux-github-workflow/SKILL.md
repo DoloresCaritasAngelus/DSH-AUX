@@ -12,7 +12,9 @@ user-invocable: false
 
 ## 铁律
 1. **所有改动从 `main` 开短生命周期分支**,禁止直接推 `main`。
-2. **禁止 force-push 已推送历史**;需要修正时用新提交。
+2. **禁止 force-push 已推送历史**;需要修正时用新提交。**唯一例外**:凭据/私密文件
+   泄露等安全问题需要从历史中清除内容时,经维护者明确批准后可重写
+   (2026-09-06 政策修正);须知悉 clone/fork/缓存残留无法完全收回。
 3. 提交信息必须遵循 **Conventional Commits**:
    `<type>(<scope>): <subject>`,破坏性变更用 `!` 或 `BREAKING CHANGE` footer。
 4. 每个 PR 对应**一个逻辑变更**;PR 要小、聚焦、可独立 review。
@@ -120,7 +122,8 @@ user-invocable: false
 
 ## 常见错误
 - 直接 `git push origin main` → 分支保护会直接拒绝;必须分支 + PR。
-- `git push --force` → 违反铁律 2;用 `--force-with-lease` 也不允许重写已推送历史。
+- `git push --force` → 默认违反铁律 2;用 `--force-with-lease` 也不允许重写已推送历史;
+  仅凭据/私密文件泄露(经维护者批准)例外。
 - 提交信息写成自然语言 → 必须改回 Conventional Commits(未推送时可用 amend/rebase 整理)。
 - 测试没跑就合入 → CI 会拦;本地也要先跑。
 - 发版不改版本号/CHANGELOG → 用户安装更新时无法识别新版本。

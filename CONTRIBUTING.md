@@ -112,7 +112,7 @@ npm run format:check          # Prettier 格式检查
 ## 禁止事项
 
 - 禁止直接推 `main`(分支保护已强制:要求 PR + CI + 线性历史,禁 force-push);
-- 禁止 force-push 已推送历史;
+- 禁止 force-push 已推送历史(唯一例外:凭据/私密文件泄露等安全问题需要从历史中清除内容时,经维护者明确批准后可重写;须知悉 clone/fork/缓存中的残留无法完全收回);
 - 禁止跳过测试合入;
 - 禁止发版不改版本号/CHANGELOG。
 
