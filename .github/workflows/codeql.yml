@@ -1,0 +1,35 @@
+name: CodeQL
+
+# 产品安全(C 象限)的 CI 部分:对 JS 代码做注入/SSRF 等模式的静态安全分析。
+# 公共仓库免费;push 到 main、所有 PR、以及每周一定时各跑一次。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "23 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    permissions:
+      # 全工作流中唯一需要写权限的 job:CodeQL 要把分析结果写回 security events。
+      # 权限按 job 最小授予,其余 job 保持 contents: read。
+      security-events: write
+      contents: read
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: 初始化 CodeQL(javascript-typescript,免构建模式)
+        uses: github/codeql-action/init@b1722c1245f90604c2c348f9d1624af97ea8fc6e # v3.29.0
+        with:
+          languages: javascript-typescript
+          build-mode: none
+      - name: 执行分析
+        uses: github/codeql-action/analyze@b1722c1245f90604c2c348f9d1624af97ea8fc6e # v3.29.0
+        with:
+          category: "/language:javascript-typescript"
