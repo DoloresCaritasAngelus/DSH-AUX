@@ -133,5 +133,9 @@ export async function analyzeOne(service, source, question, exec) {
   if (exec.agent?.session?.id !== void 0) {
     recordImageMemory(service, exec.agent.session.id, ref.attachmentId, question, result.text);
   }
-  return { analysis: result.text, provider: result.provider, model: result.model };
+  // Echo the durable ref so the official render pipeline can emit an image
+  // block: the trajectory view then shows what the auxiliary model actually
+  // looked at (text-only main models are protected by the official
+  // tool-result image projection). Pass-through only — never reshape.
+  return { analysis: result.text, provider: result.provider, model: result.model, attachment: ref };
 }
