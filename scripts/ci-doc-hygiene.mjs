@@ -73,6 +73,7 @@ const MSG_RULES = [
   { name: "本机绝对路径 /home/<user>", re: /\/home\/(?!user\b|\.\.\/?\.?)/ },
   { name: "Windows 盘符路径", re: /[A-Z]:\\(?![ntr0])/ },
   { name: "会话归属式提法", re: /等用户指示|用户确认[后了对]?再|本地未推送/ },
+  { name: "会话叙事/事故叙述", re: /事故|AI (起草|未与维护者)|对齐意图|已决定接受/ },
 ];
 
 let msgHits = 0;
