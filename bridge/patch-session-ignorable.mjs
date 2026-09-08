@@ -45,14 +45,22 @@ async function block(name) {
   return (await readFile(join(HERE, name), "utf8")).trim();
 }
 // DSH 0.1.2-alpha.2/alpha.3 use `seq: this.log.length`; DSH 0.1.2-alpha.4+
-// use `seq: SessionSeq(this.log.length)`. Both need the same ignorable write
-// entry, so select the original block that matches the deployed source.
+// use `seq: SessionSeq(this.log.length)`; DSH 0.1.5-alpha.1 replaced the
+// pre-snapshot `assertSupportedRequestHeader` call with a post-event
+// `validateSessionEventData` and added the append-reentrancy guard. All three
+// need the same ignorable write entry, so select the original block that
+// matches the deployed source.
 const APPEND_VARIANTS = [
   { name: "append-alpha3", origFile: "orig-session-append.txt", patchedFile: "patched-session-append.txt" },
   {
     name: "append-alpha4",
     origFile: "orig-session-append-alpha4-block.txt",
     patchedFile: "patched-session-append-alpha4-block.txt",
+  },
+  {
+    name: "append-0.1.5",
+    origFile: "orig-session-append-0.1.5-block.txt",
+    patchedFile: "patched-session-append-0.1.5-block.txt",
   },
 ];
 const WHITELIST_STEP = ["白名单", "orig-session-whitelist.txt", "patched-session-whitelist.txt"];
@@ -117,7 +125,7 @@ for (const variant of APPEND_VARIANTS) {
 }
 const appendVariant = appendVariants.find((variant) => data.includes(variant.origText));
 if (appendVariant === void 0) {
-  log("版本不匹配,缺失 append 原块: alpha.2/3 与 alpha.4+/rc.1 均未命中");
+  log("版本不匹配,缺失 append 原块: alpha.2/3、alpha.4+/rc.1 与 0.1.5 均未命中");
   process.exit(1);
 }
 const steps = [[appendVariant.name, appendVariant.origText, appendVariant.patchedText]];

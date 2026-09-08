@@ -137,18 +137,20 @@ function ensureSessionAppendIgnorable() {
     return;
   }
 
-  // DSH 0.1.2-alpha.2/alpha.3 and 0.1.2-alpha.4+/rc.1 have different
-  // append internals (`seq: this.log.length` vs `seq: SessionSeq(...)`),
-  // so choose the matching original block before replacing.
+  // DSH 0.1.2-alpha.2/alpha.3, 0.1.2-alpha.4+/rc.1 and 0.1.5-alpha.1 have
+  // different append internals (`seq: this.log.length` vs `seq: SessionSeq(...)`
+  // vs the post-event `validateSessionEventData` + reentrancy guard), so choose
+  // the matching original block before replacing.
   const appendVariants = [
     ["alpha.2/3", "orig-session-append.txt", "patched-session-append.txt"],
     ["alpha.4+/rc.1", "orig-session-append-alpha4-block.txt", "patched-session-append-alpha4-block.txt"],
+    ["0.1.5", "orig-session-append-0.1.5-block.txt", "patched-session-append-0.1.5-block.txt"],
   ];
   const variant = appendVariants.find(([label, origFile]) =>
     data.includes(readFileSync(join(HERE, origFile), "utf8").trim()),
   );
   if (variant === void 0) {
-    log("⚠️ P7 无法自动补:append 原块不匹配(alpha.2/3 与 alpha.4+/rc.1 均未命中),请人工核对 DSH 版本");
+    log("⚠️ P7 无法自动补:append 原块不匹配(alpha.2/3、alpha.4+/rc.1 与 0.1.5 均未命中),请人工核对 DSH 版本");
     return;
   }
   const [label, origFile, patchedFile] = variant;
