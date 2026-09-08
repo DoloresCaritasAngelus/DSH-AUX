@@ -171,6 +171,33 @@ window.__ModuleLoader__.load({
       ".ax-image-memory-more{border:none;background:transparent;color:var(--dsw-alias-state-business-primary);cursor:pointer;font-size:11px;padding:0}",
       ".ax-image-resize-handle{position:absolute;right:2px;bottom:2px;width:16px;height:16px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,var(--dsw-alias-label-caption) 50%,var(--dsw-alias-label-caption) 60%,transparent 60%),linear-gradient(135deg,transparent 70%,var(--dsw-alias-label-caption) 70%,var(--dsw-alias-label-caption) 80%,transparent 80%);opacity:.8}",
       ".ax-image-resize-handle:hover{opacity:1}",
+      ".ax-task-summary{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--dsw-alias-label-secondary);padding:4px 0;min-width:0}",
+      ".ax-task-name{font-weight:600;color:var(--dsw-alias-label-primary)}",
+      ".ax-task-chain{font-size:12px;color:var(--dsw-alias-label-tertiary);overflow-wrap:anywhere;min-width:0}",
+      ".ax-task-chainline{display:flex;align-items:baseline;gap:8px;font-size:13px;min-width:0}",
+      ".ax-picker{display:flex;flex-direction:column;gap:8px;min-width:0}",
+      ".ax-picker-group{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden}",
+      ".ax-picker-head{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;background:var(--dsw-alias-bg-layer-2);border:none;color:inherit;font:inherit;cursor:pointer;text-align:left}",
+      ".ax-picker-chevron{color:var(--dsw-alias-label-tertiary);font-size:11px}",
+      ".ax-picker-provider{font-weight:600;font-size:13px;color:var(--dsw-alias-label-primary)}",
+      ".ax-picker-count{margin-left:auto;font-size:11px;color:var(--dsw-alias-label-tertiary)}",
+      ".ax-picker-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 12px;padding:8px 10px}",
+      ".ax-picker-model{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dsw-alias-label-secondary);min-width:0}",
+      ".ax-picker-modelName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+      ".ax-picker-modelId{font-size:11px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+      ".ax-picker-chainTitle{font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary)}",
+      ".ax-picker-chain{display:flex;flex-direction:column;gap:4px}",
+      ".ax-picker-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dsw-alias-label-secondary);min-width:0}",
+      ".ax-picker-spec{overflow-wrap:anywhere;min-width:0}",
+      ".ax-picker-btn{border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font-size:12px;padding:1px 6px;cursor:pointer}",
+      ".ax-picker-btn:disabled{opacity:.4;cursor:default}",
+      ".ax-picker-remove{color:var(--dsw-alias-state-error-primary)}",
+      ".ax-picker-cap{font-size:11px;border-radius:999px;padding:0 6px;border:1px solid var(--dsw-alias-border-l2)}",
+      ".ax-picker-cap-true{color:var(--dsw-alias-state-success-primary)}",
+      ".ax-picker-cap-false{color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-primary)}",
+      ".ax-picker-cap-null{color:var(--dsw-alias-label-tertiary)}",
+      ".ax-picker-manual{display:flex;gap:6px}",
+      ".ax-picker-manual input{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-strong);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}",
       ".ax-tv{display:flex;flex-direction:column;gap:6px;min-width:0}",
       ".ax-tv-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--dsw-alias-label-secondary);min-width:0}",
       ".ax-tv-title{font-weight:600;color:var(--dsw-alias-label-primary)}",
@@ -247,6 +274,39 @@ window.__ModuleLoader__.load({
       "subagent.mode": "模式",
       "subagent.general": "通用子代理",
       "subagent.vision": "视觉子代理",
+      "section.overview": "概览",
+      "section.overview.desc": "平台状态与各任务当前路由摘要。",
+      "section.routing": "路由与模型",
+      "section.routing.desc": "vision 交付路由、native 白名单与降级策略。",
+      "section.routing.tasks": "任务模型与降级链",
+      "section.switches": "工具与桥接开关",
+      "section.switches.desc": "每个工具/桥接使用原生、AUX 还是未来深耕模式。",
+      "section.images": "图片与缓存",
+      "section.images.desc": "消息图片画廊与派生请求缓存。",
+      "section.debug": "调试与诊断",
+      "section.debug.desc": "内容真相记录与密钥脱敏。",
+      "section.advanced": "高级",
+      "section.advanced.desc": "超时、并发与思考档位(一般无需修改)。",
+      "picker.chain": "降级链(按序尝试)",
+      "picker.chain.empty": "尚未选择任何模型。",
+      "picker.selected": "已选 ",
+      "picker.up": "上移",
+      "picker.down": "下移",
+      "picker.remove": "移除",
+      "picker.manual": "手动输入 provider/model",
+      "picker.add": "添加",
+      "picker.capability.true": "image",
+      "picker.capability.false": "未声明 image",
+      "picker.capability.null": "未知",
+      "picker.capability.falseHint": "该路由未声明 image 输入,native 交付不会生效",
+      "picker.capability.unknownHint": "无法确认该路由的 image 能力",
+      "task.edit": "编辑",
+      "task.collapse": "收起",
+      "task.summary.chain": "链: ",
+      "task.summary.timeout": "timeout ",
+      "task.summary.concurrency": " | 并发 ",
+      "task.summary.unconfigured": "(未配置 → 主模型)",
+      "task.models": "模型降级链",
       "subagent.reasoningEffort": "思考强度",
       "subagent.native": "native (原生,不拦截)",
       "subagent.manual": "manual (统一用 general)",
@@ -499,6 +559,39 @@ window.__ModuleLoader__.load({
       "subagent.mode": "Mode",
       "subagent.general": "General subagent",
       "subagent.vision": "Vision subagent",
+      "section.overview": "Overview",
+      "section.overview.desc": "Platform status and each task current route.",
+      "section.routing": "Routing & models",
+      "section.routing.desc": "Vision delivery route, native whitelist, and fallback policy.",
+      "section.routing.tasks": "Task models & fallback chains",
+      "section.switches": "Tools & bridge switches",
+      "section.switches.desc": "Native, AUX, or future deep-compat mode per tool/bridge.",
+      "section.images": "Images & cache",
+      "section.images.desc": "Message image gallery and the derived request-image cache.",
+      "section.debug": "Debug & diagnostics",
+      "section.debug.desc": "Content-truth recording and secret redaction.",
+      "section.advanced": "Advanced",
+      "section.advanced.desc": "Timeouts, concurrency, and reasoning effort (rarely needed).",
+      "picker.chain": "Fallback chain (tried in order)",
+      "picker.chain.empty": "No model selected yet.",
+      "picker.selected": "selected ",
+      "picker.up": "Move up",
+      "picker.down": "Move down",
+      "picker.remove": "Remove",
+      "picker.manual": "Enter provider/model manually",
+      "picker.add": "Add",
+      "picker.capability.true": "image",
+      "picker.capability.false": "no image",
+      "picker.capability.null": "unknown",
+      "picker.capability.falseHint": "This route does not declare image input; native delivery will not take effect",
+      "picker.capability.unknownHint": "Image capability of this route could not be confirmed",
+      "task.edit": "Edit",
+      "task.collapse": "Collapse",
+      "task.summary.chain": "chain: ",
+      "task.summary.timeout": "timeout ",
+      "task.summary.concurrency": " | concurrency ",
+      "task.summary.unconfigured": "(unconfigured -> main model)",
+      "task.models": "Model fallback chain",
       "subagent.reasoningEffort": "Reasoning effort",
       "subagent.native": "native (no interception)",
       "subagent.manual": "manual (always use general)",
@@ -773,13 +866,7 @@ window.__ModuleLoader__.load({
         models: [],
         reasoning: {},
       });
-      const [openGroups, setOpenGroups] = react.useState({
-        diagnostics: true,
-        tools: true,
-        bridges: false,
-        subagent: false,
-        global: false,
-      });
+      const [openGroups, setOpenGroups] = react.useState({ overview: true });
       const load = react.useCallback(() => {
         let alive = true;
         Promise.all([
@@ -859,6 +946,26 @@ window.__ModuleLoader__.load({
       react.useEffect(() => {
         if (state.status === "ready" && draft === null) setDraft(structuredClone(state.value ?? {}));
       }, [state, draft]);
+      // Image capability of each provider/model, filled lazily by /aux models
+      // when a picker expands. null = not fetched yet, {} = fetched but empty
+      // (every route then shows "unknown"), which is also the failure mode.
+      const [capabilities, setCapabilities] = react.useState(null);
+      const loadCapabilities = () => {
+        if (capabilities !== null) return;
+        setCapabilities({});
+        runAuxCommand("/aux models --json")
+          .then((result) => {
+            if (!result || result.kind !== "success") throw new Error("models unavailable");
+            const data = JSON.parse(result.text);
+            const next = {};
+            for (const route of data.routes ?? []) {
+              next[route.provider + "/" + route.model] = route.imageCapable;
+            }
+            setCapabilities(next);
+          })
+          .catch(() => setCapabilities({}));
+      };
+      const [expandedTasks, setExpandedTasks] = react.useState({});
       const [saving, setSaving] = react.useState(false);
       const [saveError, setSaveError] = react.useState(null);
       const [saved, setSaved] = react.useState(false);
@@ -959,20 +1066,19 @@ window.__ModuleLoader__.load({
           return next;
         });
       };
-      /** Multi-line "provider/model" text -> ordered chain array (empty clears). */
-      const setTaskModels = (task, text) => {
-        const routes = String(text ?? "")
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0);
+      /** Ordered chain array for one task (empty clears the key). */
+      const setTaskModels = (task, routes) => {
+        const list = (Array.isArray(routes) ? routes : []).filter(
+          (spec) => typeof spec === "string" && spec.length > 0,
+        );
         setSaved(false);
         setSaveError(null);
         setDraft((d) => {
           const next = structuredClone(d ?? {});
           next.tasks = next.tasks ?? {};
           next.tasks[task] = next.tasks[task] ?? {};
-          if (routes.length === 0) delete next.tasks[task].models;
-          else next.tasks[task].models = routes;
+          if (list.length === 0) delete next.tasks[task].models;
+          else next.tasks[task].models = list;
           return next;
         });
       };
@@ -1309,43 +1415,116 @@ window.__ModuleLoader__.load({
         );
       };
       const taskCard = (task) => {
-        const effortOptions = reasoningOptionsFor(task);
+        const open = expandedTasks[task] === true;
         return react.createElement(
           "div",
           { key: task, className: "ax-task" },
+          taskSummary(task),
+          open
+            ? react.createElement(
+                "div",
+                { className: "ax-grid" },
+                fieldRow(
+                  task,
+                  "provider",
+                  t("field.provider"),
+                  select(task, "provider", providerOptions, t("placeholder.inheritModel")),
+                ),
+                fieldRow(
+                  task,
+                  "model",
+                  t("field.model"),
+                  select(
+                    task,
+                    "model",
+                    modelOptionsFor(task).map((id) => ({ value: id, label: id })),
+                    t("placeholder.inheritModel"),
+                  ),
+                ),
+                react.createElement(
+                  "div",
+                  { className: "ax-row" },
+                  react.createElement("label", { htmlFor: "ax-" + task + "-models" }, t("task.models")),
+                  react.createElement(ModelPicker, {
+                    id: "ax-" + task + "-models",
+                    value: field(task, "models") ?? [],
+                    onChange: (next) => setTaskModels(task, next),
+                    onExpand: loadCapabilities,
+                  }),
+                ),
+              )
+            : null,
+        );
+      };
+      /** Read-only one-line chain summary for the overview section. */
+      const taskSummaryLine = (task) => {
+        const models = field(task, "models");
+        const singular =
+          typeof field(task, "provider") === "string" && typeof field(task, "model") === "string"
+            ? field(task, "provider") + "/" + field(task, "model")
+            : void 0;
+        const chain = Array.isArray(models) && models.length > 0 ? models : singular === void 0 ? [] : [singular];
+        return react.createElement(
+          "div",
+          { className: "ax-task-chainline", key: "line-" + task },
+          react.createElement("span", { className: "ax-task-name" }, t("task." + task)),
+          react.createElement(
+            "span",
+            { className: "ax-task-chain" },
+            chain.length > 0 ? chain.join(" → ") : t("task.summary.unconfigured"),
+          ),
+        );
+      };
+
+      /** One-line task summary with an edit toggle (progressive disclosure). */
+      const taskSummary = (task) => {
+        const models = field(task, "models");
+        const singular =
+          typeof field(task, "provider") === "string" && typeof field(task, "model") === "string"
+            ? field(task, "provider") + "/" + field(task, "model")
+            : void 0;
+        const chain = Array.isArray(models) && models.length > 0 ? models : singular === void 0 ? [] : [singular];
+        const chainText = chain.length > 0 ? chain.join(" → ") : t("task.summary.unconfigured");
+        const open = expandedTasks[task] === true;
+        return react.createElement(
+          "div",
+          { className: "ax-task-summary", key: "summary-" + task },
+          react.createElement("span", { className: "ax-task-name" }, t("task." + task)),
+          react.createElement(
+            "span",
+            { className: "ax-task-chain" },
+            t("task.summary.chain") +
+              chainText +
+              " | " +
+              t("task.summary.timeout") +
+              (field(task, "timeoutMs") ?? 60000) +
+              "ms" +
+              t("task.summary.concurrency") +
+              (field(task, "maxConcurrency") ?? 2),
+          ),
+          react.createElement(
+            "button",
+            {
+              type: "button",
+              className: "ax-picker-btn",
+              "aria-expanded": open,
+              onClick: () => setExpandedTasks((current) => ({ ...current, [task]: !open })),
+            },
+            open ? t("task.collapse") : t("task.edit"),
+          ),
+        );
+      };
+
+      /** Advanced per-task fields: moved out of the everyday editor. */
+      const taskAdvanced = (task) => {
+        const effortOptions = reasoningOptionsFor(task);
+        return react.createElement(
+          "div",
+          { className: "ax-task", key: "advanced-" + task },
           react.createElement("h3", null, t("task." + task)),
           react.createElement(
             "div",
             { className: "ax-grid" },
-            fieldRow(
-              task,
-              "provider",
-              t("field.provider"),
-              select(task, "provider", providerOptions, t("placeholder.inheritModel")),
-            ),
-            fieldRow(
-              task,
-              "model",
-              t("field.model"),
-              select(
-                task,
-                "model",
-                modelOptionsFor(task).map((id) => ({ value: id, label: id })),
-                t("placeholder.inheritModel"),
-              ),
-            ),
-            fieldRow(
-              task,
-              "models",
-              t("field.models"),
-              react.createElement("textarea", {
-                rows: 2,
-                value: Array.isArray(field(task, "models")) ? field(task, "models").join("\n") : "",
-                placeholder: t("field.models.placeholder"),
-                disabled: false,
-                onChange: (e) => setTaskModels(task, e.target.value),
-              }),
-            ),
             fieldRow(
               task,
               "timeoutMs",
@@ -1399,6 +1578,188 @@ window.__ModuleLoader__.load({
                 react.createElement("option", { value: "" }, t("placeholder.inheritDefault")),
                 effortOptions.map((o) => react.createElement("option", { key: o.id, value: o.id }, o.name ?? o.id)),
               ),
+            ),
+          ),
+        );
+      };
+      /**
+       * Shared model picker: collapsible provider groups with multi-select plus
+       * an ordered chain (move up/down, remove) below. Serves the six tasks
+       * `models` chains and the `nativeRoutes` whitelist; the latter shows the
+       * tri-state image capability of every chain entry.
+       * @param props { id, value: string[], onChange, showCapability? }
+       */
+      const ModelPicker = (props) => {
+        const value = Array.isArray(props.value) ? props.value : [];
+        const [open, setOpen] = react.useState({});
+        const [manual, setManual] = react.useState("");
+        react.useEffect(() => {
+          if (props.onExpand) props.onExpand();
+        }, []);
+        const providerName = (pid) => {
+          const found = catalog.providers.find((entry) => entry.provider === pid);
+          return found?.displayName ?? pid;
+        };
+        const groups = [];
+        for (const model of catalog.models) {
+          let group = groups.find((entry) => entry.provider === model.provider);
+          if (group === void 0) {
+            group = { provider: model.provider, models: [] };
+            groups.push(group);
+          }
+          group.models.push(model);
+        }
+        // Routes already configured but absent from the catalog (manual entries,
+        // or a provider whose catalog failed to load) still need a group.
+        for (const spec of value) {
+          const provider = spec.slice(0, spec.indexOf("/"));
+          if (provider.length === 0 || groups.some((entry) => entry.provider === provider)) continue;
+          groups.push({ provider, models: [] });
+        }
+        const toggle = (spec) => {
+          props.onChange(value.includes(spec) ? value.filter((entry) => entry !== spec) : [...value, spec]);
+        };
+        const move = (index, delta) => {
+          const target = index + delta;
+          if (target < 0 || target >= value.length) return;
+          const next = [...value];
+          const swap = next[index];
+          next[index] = next[target];
+          next[target] = swap;
+          props.onChange(next);
+        };
+        const remove = (index) => props.onChange(value.filter((entry, i) => i !== index));
+        const addManual = () => {
+          const spec = manual.trim();
+          setManual("");
+          if (!/^[^/\s]+\/.+$/.test(spec) || value.includes(spec)) return;
+          props.onChange([...value, spec]);
+        };
+        const capabilityOf = (spec) => {
+          if (capabilities === null) return void 0;
+          return capabilities[spec];
+        };
+        const chainRows = value.map((spec, index) => {
+          const capability = props.showCapability === true ? capabilityOf(spec) : void 0;
+          const state = capability === true ? "true" : capability === false ? "false" : "null";
+          const hint =
+            capability === false
+              ? t("picker.capability.falseHint")
+              : capability === null || capability === void 0
+                ? t("picker.capability.unknownHint")
+                : void 0;
+          return react.createElement(
+            "div",
+            { key: "chain-" + index, className: "ax-picker-row" },
+            react.createElement("span", { className: "ax-picker-spec" }, String(index + 1) + ". " + spec),
+            props.showCapability === true
+              ? react.createElement(
+                  "span",
+                  { className: "ax-picker-cap ax-picker-cap-" + state, title: hint },
+                  t("picker.capability." + state),
+                )
+              : null,
+            react.createElement(
+              "button",
+              {
+                type: "button",
+                className: "ax-picker-btn",
+                title: t("picker.up"),
+                onClick: () => move(index, -1),
+                disabled: index === 0,
+              },
+              "↑",
+            ),
+            react.createElement(
+              "button",
+              {
+                type: "button",
+                className: "ax-picker-btn",
+                title: t("picker.down"),
+                onClick: () => move(index, 1),
+                disabled: index === value.length - 1,
+              },
+              "↓",
+            ),
+            react.createElement(
+              "button",
+              {
+                type: "button",
+                className: "ax-picker-btn ax-picker-remove",
+                title: t("picker.remove"),
+                onClick: () => remove(index),
+              },
+              "×",
+            ),
+          );
+        });
+        return react.createElement(
+          "div",
+          { className: "ax-picker", id: props.id },
+          ...groups.map((group, groupIndex) => {
+            const selected = group.models.filter((model) => value.includes(group.provider + "/" + model.id)).length;
+            const isOpen = open[group.provider] ?? groupIndex === 0;
+            return react.createElement(
+              "div",
+              { key: "group-" + group.provider, className: "ax-picker-group" },
+              react.createElement(
+                "button",
+                {
+                  type: "button",
+                  className: "ax-picker-head",
+                  "aria-expanded": isOpen,
+                  onClick: () => setOpen((current) => ({ ...current, [group.provider]: !isOpen })),
+                },
+                react.createElement("span", { className: "ax-picker-chevron" }, isOpen ? "▾" : "▸"),
+                react.createElement("span", { className: "ax-picker-provider" }, providerName(group.provider)),
+                react.createElement(
+                  "span",
+                  { className: "ax-picker-count" },
+                  t("picker.selected") + selected + "/" + group.models.length,
+                ),
+              ),
+              isOpen
+                ? react.createElement(
+                    "div",
+                    { className: "ax-picker-body" },
+                    ...group.models.map((model) => {
+                      const spec = group.provider + "/" + model.id;
+                      return react.createElement(
+                        "label",
+                        { key: spec, className: "ax-picker-model" },
+                        react.createElement("input", {
+                          type: "checkbox",
+                          checked: value.includes(spec),
+                          onChange: () => toggle(spec),
+                        }),
+                        react.createElement("span", { className: "ax-picker-modelName" }, model.name ?? model.id),
+                        react.createElement("span", { className: "ax-picker-modelId" }, spec),
+                      );
+                    }),
+                  )
+                : null,
+            );
+          }),
+          react.createElement("div", { className: "ax-picker-chainTitle" }, t("picker.chain")),
+          chainRows.length > 0
+            ? react.createElement("div", { className: "ax-picker-chain" }, ...chainRows)
+            : react.createElement("div", { className: "ax-hint" }, t("picker.chain.empty")),
+          react.createElement(
+            "div",
+            { className: "ax-picker-manual" },
+            react.createElement("input", {
+              type: "text",
+              placeholder: t("picker.manual"),
+              value: manual,
+              onChange: (e) => setManual(e.target.value),
+              onKeyDown: (e) => {
+                if (e.key === "Enter") addManual();
+              },
+            }),
+            react.createElement(
+              "button",
+              { type: "button", className: "ax-picker-btn", onClick: addManual },
+              t("picker.add"),
             ),
           ),
         );
@@ -1580,17 +1941,17 @@ window.__ModuleLoader__.load({
           return next;
         });
       };
-      const setNativeRoutes = (text) => {
-        const routes = String(text ?? "")
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0);
+      /** Ordered native-delivery whitelist (empty clears the key). */
+      const setNativeRoutes = (routes) => {
+        const list = (Array.isArray(routes) ? routes : []).filter(
+          (spec) => typeof spec === "string" && spec.length > 0,
+        );
         setSaved(false);
         setSaveError(null);
         setDraft((d) => {
           const next = structuredClone(d ?? {});
-          if (routes.length === 0) delete next.nativeRoutes;
-          else next.nativeRoutes = routes;
+          if (list.length === 0) delete next.nativeRoutes;
+          else next.nativeRoutes = list;
           return next;
         });
       };
@@ -2005,19 +2366,14 @@ window.__ModuleLoader__.load({
               t("settings.readonly"),
             )
           : null,
-        statusPanel(),
         group(
-          "tools",
-          t("group.tools"),
-          t("group.tools.desc"),
-          tasks.filter((x) => ["vision", "web_extract", "web_crawl", "compress"].includes(x)).map(taskCard),
+          "overview",
+          t("section.overview"),
+          t("section.overview.desc"),
+          statusPanel(),
+          ...tasks.map(taskSummaryLine),
         ),
-        group(
-          "bridges",
-          t("group.bridges"),
-          t("group.bridges.desc"),
-          tasks.filter((x) => ["compaction", "skill"].includes(x)).map(taskCard),
-        ),
+        group("tasks", t("section.routing.tasks"), t("section.routing.desc"), ...tasks.map(taskCard)),
         group(
           "subagent",
           t("group.subagent"),
@@ -2147,9 +2503,9 @@ window.__ModuleLoader__.load({
           ),
         ),
         group(
-          "global",
-          t("group.global"),
-          t("group.global.desc"),
+          "routing",
+          t("section.routing"),
+          t("section.routing.desc"),
           switchRow(t("global.fallbackToMain"), draft?.fallbackToMain !== false, false, (e) => {
             setSaved(false);
             setSaveError(null);
@@ -2192,42 +2548,13 @@ window.__ModuleLoader__.load({
           react.createElement(
             "div",
             { className: "ax-row" },
-            react.createElement("label", { htmlFor: "ax-message-images" }, t("global.messageImages")),
-            react.createElement(
-              "select",
-              {
-                id: "ax-message-images",
-                value: draft?.enabled?.messageImages === "aux" ? "aux" : "native",
-                disabled: false,
-                onChange: (e) => setMessageImagesMode(e.target.value),
-              },
-              react.createElement("option", { value: "native" }, t("global.messageImages.native")),
-              react.createElement("option", { value: "aux" }, t("global.messageImages.aux")),
-            ),
-          ),
-          react.createElement(
-            "div",
-            { className: "ax-row" },
             react.createElement("label", { htmlFor: "ax-native-routes" }, t("global.nativeRoutes")),
-            react.createElement("textarea", {
+            react.createElement(ModelPicker, {
               id: "ax-native-routes",
-              rows: 3,
-              placeholder: t("global.nativeRoutes.placeholder"),
-              value: Array.isArray(draft?.nativeRoutes) ? draft.nativeRoutes.join("\n") : "",
-              onChange: (e) => setNativeRoutes(e.target.value),
-            }),
-          ),
-          react.createElement(
-            "div",
-            { className: "ax-row" },
-            react.createElement("label", { htmlFor: "ax-request-images-cap" }, t("global.requestImagesMaxMiB")),
-            react.createElement("input", {
-              id: "ax-request-images-cap",
-              type: "number",
-              min: 0,
-              step: 1,
-              value: Number.isFinite(draft?.requestImagesMaxMiB) ? draft.requestImagesMaxMiB : 256,
-              onChange: (e) => setRequestImagesMaxMiB(e.target.value),
+              value: draft?.nativeRoutes ?? [],
+              onChange: setNativeRoutes,
+              showCapability: true,
+              onExpand: loadCapabilities,
             }),
           ),
           switchRow(t("global.visionFallbackToMain"), draft?.visionFallbackToMain !== false, false, (e) => {
@@ -2250,9 +2577,9 @@ window.__ModuleLoader__.load({
           }),
         ),
         group(
-          "platform",
-          t("group.platform"),
-          t("group.platform.desc"),
+          "switches",
+          t("section.switches"),
+          t("section.switches.desc"),
           react.createElement(
             "div",
             { className: "ax-grid" },
@@ -2285,29 +2612,7 @@ window.__ModuleLoader__.load({
               ),
             ),
           ),
-          switchRow(t("debug.fullToolTrace"), draft?.debug?.fullToolTrace === true, false, (e) =>
-            setDebug("fullToolTrace", e.target.checked),
-          ),
-          react.createElement("div", { className: "ax-hint" }, __t("debug.fullToolTraceHint")),
-          react.createElement(
-            "div",
-            { className: "ax-row" },
-            react.createElement("label", { htmlFor: "ax-debug-maxDebugEventBytes" }, t("debug.maxDebugEventBytes")),
-            react.createElement("input", {
-              id: "ax-debug-maxDebugEventBytes",
-              type: "number",
-              min: "1024",
-              value: draft?.debug?.maxDebugEventBytes ?? 65536,
-              disabled: false,
-              onChange: (e) => setDebug("maxDebugEventBytes", e.target.value === "" ? "" : Number(e.target.value)),
-            }),
-          ),
-          switchRow(t("debug.debugEventsInHistory"), draft?.debug?.debugEventsInHistory === true, false, (e) =>
-            setDebug("debugEventsInHistory", e.target.checked),
-          ),
-          switchRow(t("debug.redactSecrets"), draft?.debug?.redactSecrets !== false, false, (e) =>
-            setDebug("redactSecrets", e.target.checked),
-          ),
+
           react.createElement(
             "div",
             { className: "ax-actions" },
@@ -2332,6 +2637,69 @@ window.__ModuleLoader__.load({
               ),
           ),
         ),
+        group(
+          "images",
+          t("section.images"),
+          t("section.images.desc"),
+          react.createElement(
+            "div",
+            { className: "ax-row" },
+            react.createElement("label", { htmlFor: "ax-message-images" }, t("global.messageImages")),
+            react.createElement(
+              "select",
+              {
+                id: "ax-message-images",
+                value: draft?.enabled?.messageImages === "aux" ? "aux" : "native",
+                disabled: false,
+                onChange: (e) => setMessageImagesMode(e.target.value),
+              },
+              react.createElement("option", { value: "native" }, t("global.messageImages.native")),
+              react.createElement("option", { value: "aux" }, t("global.messageImages.aux")),
+            ),
+          ),
+          react.createElement(
+            "div",
+            { className: "ax-row" },
+            react.createElement("label", { htmlFor: "ax-request-images-cap" }, t("global.requestImagesMaxMiB")),
+            react.createElement("input", {
+              id: "ax-request-images-cap",
+              type: "number",
+              min: 0,
+              step: 1,
+              value: Number.isFinite(draft?.requestImagesMaxMiB) ? draft.requestImagesMaxMiB : 256,
+              onChange: (e) => setRequestImagesMaxMiB(e.target.value),
+            }),
+          ),
+        ),
+        group(
+          "debug",
+          t("section.debug"),
+          t("section.debug.desc"),
+          switchRow(t("debug.fullToolTrace"), draft?.debug?.fullToolTrace === true, false, (e) =>
+            setDebug("fullToolTrace", e.target.checked),
+          ),
+          react.createElement("div", { className: "ax-hint" }, __t("debug.fullToolTraceHint")),
+          react.createElement(
+            "div",
+            { className: "ax-row" },
+            react.createElement("label", { htmlFor: "ax-debug-maxDebugEventBytes" }, t("debug.maxDebugEventBytes")),
+            react.createElement("input", {
+              id: "ax-debug-maxDebugEventBytes",
+              type: "number",
+              min: "1024",
+              value: draft?.debug?.maxDebugEventBytes ?? 65536,
+              disabled: false,
+              onChange: (e) => setDebug("maxDebugEventBytes", e.target.value === "" ? "" : Number(e.target.value)),
+            }),
+          ),
+          switchRow(t("debug.debugEventsInHistory"), draft?.debug?.debugEventsInHistory === true, false, (e) =>
+            setDebug("debugEventsInHistory", e.target.checked),
+          ),
+          switchRow(t("debug.redactSecrets"), draft?.debug?.redactSecrets !== false, false, (e) =>
+            setDebug("redactSecrets", e.target.checked),
+          ),
+        ),
+        group("advanced", t("section.advanced"), t("section.advanced.desc"), ...tasks.map(taskAdvanced)),
         react.createElement(
           "div",
           { className: "ax-actions" },

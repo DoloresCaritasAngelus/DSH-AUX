@@ -235,6 +235,9 @@ export class AuxLlmService extends Service {
     this._dnsLookup = dnsLookup;
     this._semaphores = new Map();
     this._cooldown = new FailureCooldown();
+    // Per-route image-capability tri-state for /aux models, invalidated when the
+    // adapter registry announces a change.
+    this._imageCapabilityCache = new Map();
     this._customTasks = new Map();
     this._projectionCtx = void 0;
     this._auxStatusProjectionDispose = void 0;
@@ -356,6 +359,10 @@ export class AuxLlmService extends Service {
     // incrementally, including images nested inside tool results. Constructor
     // seeds never fire `session/event` (replay/fork/resume enter through
     // construction), so `session/created` backfills the history once.
+    // Adapter registry changed: drop the cached capability tri-states.
+    ctx.on("llm/adapters-updated", () => {
+      this._imageCapabilityCache.clear();
+    });
     ctx.on("session/event", (session, event) => {
       const sessionId = session?.id ?? session?.sessionId;
       if (sessionId === void 0) return;
@@ -391,7 +398,7 @@ export class AuxLlmService extends Service {
         // actually run. Mirror of how official /goal /plan /preset /echo
         // register their argument-taking commands.
         input: {
-          hint: "status [--json] | history [N] | history full [N] | debug [N] | patch [--json] | model <task> [provider/model] | vision <imagePath> <question> | test <task> | gc-images [days] | memory | images [--json] | image delete|gc-orphans|retain|unretain|locate <attachmentId> [--session <id>] [--json]",
+          hint: "status [--json] | history [N] | history full [N] | debug [N] | patch [--json] | model <task> [provider/model] | models [--json] | vision <imagePath> <question> | test <task> | gc-images [days] | memory | images [--json] | image delete|gc-orphans|retain|unretain|locate <attachmentId> [--session <id>] [--json]",
         },
         handler: ({ agent, rawInput }) => handleAuxCommand(this, agent, rawInput),
       });
