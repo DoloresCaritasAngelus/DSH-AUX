@@ -10,6 +10,8 @@ import { recordAttachmentOwnership } from "../images/ownership.js";
 import { recordAttachmentRefs } from "../images/attachment-refs.js";
 import { recordAuxEvent } from "../events.js";
 import { recordImageMemory } from "../images/memory.js";
+import { messageOrdinalFor } from "../images/refs.js";
+import { sessionEvents } from "../session-utils.js";
 import { classifyFailure, isRetryableFailure } from "../route.js";
 
 /** Run async work over an array with a bounded number of concurrent workers.
@@ -97,6 +99,27 @@ export function failureInstruction(kind) {
   return `分析失败(${reason},不可重试)。请勿重复调用同一来源;如仍需本图结论,请改用其它来源(重新上传或换图),或告知用户该图无法分析。`;
 }
 
+/**
+ * Attach the display ordinal to one successful analysis value. An image that
+ * came from a user message is numbered inside that message (the bridge's
+ * "本条消息第N张/共M张" numbering, same source and order); anything else
+ * (imagePath / imageUrl) is numbered inside this call only.
+ * @param value successful analysis value.
+ * @param position zero-based position of this item inside the call.
+ * @param total number of items this call requested.
+ * @param events the session's event log (for message-scoped numbering).
+ */
+function withImageOrdinal(value, position, total, events) {
+  const message = messageOrdinalFor(events, value?.attachment?.attachmentId);
+  return {
+    ...value,
+    imageOrdinal:
+      message === void 0
+        ? { scope: "call", index: position + 1, total }
+        : { scope: "message", index: message.index, total: message.total },
+  };
+}
+
 /** vision_analyze execution. Supports ONE image via the classic single
  * source fields, or MANY via `images` (bounded by maxImagesPerMessage and a
  * small download/analysis concurrency limit). */
@@ -141,13 +164,14 @@ export async function runVision(service, args, exec) {
   const settled = await mapWithConcurrency(items, Math.min(maxImages, 4), (item) =>
     analyzeWithRetry(service, item, question, exec),
   );
+  const events = sessionEvents(exec.agent?.session);
   if (images.length === 0) {
     // Classic single-image shape: preserve the old throw-on-failure contract.
     if (settled[0].status === "rejected") throw settled[0].reason;
-    return settled[0].value;
+    return withImageOrdinal(settled[0].value, 0, 1, events);
   }
-  const results = settled.map((entry) => {
-    if (entry.status === "fulfilled") return entry.value;
+  const results = settled.map((entry, index) => {
+    if (entry.status === "fulfilled") return withImageOrdinal(entry.value, index, settled.length, events);
     // Failed entries carry a machine-readable classification beside the
     // imperative text, so the caller can decide to retry without parsing the
     // message. `code` is the AUX kind from route.js (DSH alignment table in

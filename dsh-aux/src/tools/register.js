@@ -39,6 +39,20 @@ const IMAGE_REF_SCHEMA = {
   },
 };
 
+/** Where one analyzed image sits: inside its user message (the bridge's
+ * "本条消息第N张/共M张" numbering) or inside this single tool call. */
+const IMAGE_ORDINAL_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  description:
+    "Display ordinal of this image: scope 'message' matches the bridge numbering of the user message it came from; 'call' is the position inside this tool call.",
+  properties: {
+    scope: { type: "string", required: true, enum: ["message", "call"] },
+    index: { type: "integer", required: true },
+    total: { type: "integer", required: true },
+  },
+};
+
 /** Register the auxiliary tools. */
 export function registerAuxTools(service) {
   const ctx = service.ctx;
@@ -115,6 +129,8 @@ export function registerAuxTools(service) {
                       // Success entries only; failed images carry error text
                       // without an attachment.
                       attachment: IMAGE_REF_SCHEMA,
+                      // Success entries only: where this image sits for the user.
+                      imageOrdinal: IMAGE_ORDINAL_SCHEMA,
                       // Failed entries only: the machine-readable reason.
                       // `code` is the AUX failure kind (route.js
                       // classifyFailure), `retryable` mirrors the in-tool
@@ -138,6 +154,7 @@ export function registerAuxTools(service) {
                 // "native" (the image was handed to the main model).
                 mode: { type: "string", required: true },
                 attachment: IMAGE_REF_SCHEMA,
+                imageOrdinal: IMAGE_ORDINAL_SCHEMA,
               },
             },
             // Trace echo: each successful analysis is followed by the image it
@@ -157,16 +174,26 @@ export function registerAuxTools(service) {
                 ...(value.attachment !== void 0 ? [{ type: "image", attachment: value.attachment }] : []),
               ];
             },
-            // Forward-compatible declaration (no official consumer yet): the
-            // refs ride along with the result so a future generalized tool
-            // image card can pick them up without a format change.
-            presentationMeta: (_args, value) => ({
-              attachments: Array.isArray(value.analyses)
-                ? value.analyses.map((entry) => entry.attachment).filter((ref) => ref !== void 0)
-                : value.attachment !== void 0
-                  ? [value.attachment]
-                  : [],
-            }),
+            // The refs plus their display ordinals ride along with the result
+            // so the AUX toolview card (tool.call.toolview key
+            // "vision_analyze") can label each thumbnail without parsing the
+            // content text. `ordinals` stays index-aligned with `attachments`
+            // (failed entries contribute neither).
+            presentationMeta: (_args, value) => {
+              const attachments = [];
+              const ordinals = [];
+              const entries = Array.isArray(value.analyses)
+                ? value.analyses
+                : value.attachment === void 0
+                  ? []
+                  : [{ attachment: value.attachment, imageOrdinal: value.imageOrdinal }];
+              for (const entry of entries) {
+                if (entry.attachment === void 0) continue;
+                attachments.push(entry.attachment);
+                ordinals.push(entry.imageOrdinal ?? null);
+              }
+              return { attachments, ordinals };
+            },
           },
           timeoutMs: 120_000,
           isConcurrencySafe: () => true,

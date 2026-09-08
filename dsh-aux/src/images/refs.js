@@ -73,3 +73,28 @@ export function sessionImageRefs(events) {
   }
   return out;
 }
+
+/**
+ * Locate one attachmentId inside a `user/message` and report its 1-based
+ * position and that message's image count — the same numbering the bridge
+ * writes into the request (`[本条消息第N张/共M张, attachmentId=…]`).
+ *
+ * The newest matching message wins: a re-uploaded image references the
+ * message the model is answering now, not an older turn that carried the same
+ * content-addressed id.
+ *
+ * @param {ReadonlyArray<object>|undefined} events Session events.
+ * @param {string|undefined} attachmentId Durable id to locate.
+ * @returns {{ index: number, total: number }|undefined}
+ */
+export function messageOrdinalFor(events, attachmentId) {
+  if (!Array.isArray(events) || typeof attachmentId !== "string" || attachmentId.length === 0) return void 0;
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i];
+    if (event?.type !== "user/message") continue;
+    const refs = eventImageRefs(event);
+    const index = refs.findIndex((ref) => String(ref.attachmentId) === attachmentId);
+    if (index >= 0) return { index: index + 1, total: refs.length };
+  }
+  return void 0;
+}

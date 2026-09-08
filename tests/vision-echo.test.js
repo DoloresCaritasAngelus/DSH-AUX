@@ -176,18 +176,35 @@ test("trace echo: 回显块通过官方 Session 种子校验且结构原样存�
   assert.equal(Object.isFrozen(inner[0]), true, "入库快照应深冻结");
 });
 
-test("trace echo: presentationMeta 统一产出 attachments 数组", () => {
+test("trace echo: presentationMeta 产出 attachments 数组与同序 ordinals", () => {
   const def = captureVisionDefinition();
+  const messageOrdinal = { scope: "message", index: 1, total: 4 };
+  const callOrdinal = { scope: "call", index: 3, total: 3 };
   const multi = {
     analyses: [
-      { analysis: "one", provider: "prov", model: "mod", attachment: FULL_REF },
+      { analysis: "one", provider: "prov", model: "mod", attachment: FULL_REF, imageOrdinal: messageOrdinal },
       { analysis: "failed", provider: "", model: "" },
-      { analysis: "three", provider: "prov", model: "mod", attachment: BARE_REF },
+      { analysis: "three", provider: "prov", model: "mod", attachment: BARE_REF, imageOrdinal: callOrdinal },
     ],
     provider: "prov",
     model: "mod",
   };
-  assert.deepEqual(def.output.presentationMeta({}, multi), { attachments: [FULL_REF, BARE_REF] });
-  const single = { analysis: "a", provider: "prov", model: "mod", attachment: BARE_REF };
-  assert.deepEqual(def.output.presentationMeta({}, single), { attachments: [BARE_REF] });
+  assert.deepEqual(def.output.presentationMeta({}, multi), {
+    attachments: [FULL_REF, BARE_REF],
+    ordinals: [messageOrdinal, callOrdinal],
+  });
+  const single = {
+    analysis: "a",
+    provider: "prov",
+    model: "mod",
+    attachment: BARE_REF,
+    imageOrdinal: messageOrdinal,
+  };
+  assert.deepEqual(def.output.presentationMeta({}, single), {
+    attachments: [BARE_REF],
+    ordinals: [messageOrdinal],
+  });
+  // 缺 ordinal 的条目保留 null 占位,索引仍与 attachments 对齐
+  const legacy = { analysis: "a", provider: "prov", model: "mod", attachment: BARE_REF };
+  assert.deepEqual(def.output.presentationMeta({}, legacy), { attachments: [BARE_REF], ordinals: [null] });
 });

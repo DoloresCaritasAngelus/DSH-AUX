@@ -100,6 +100,7 @@ test("vision_analyze multi-image: partial failure preserves successful analyses"
     model: "mod",
     mode: "aux",
     attachment: { attachmentId: "ok1", mediaType: "image/png", bytes: 8, width: 2, height: 2 },
+    imageOrdinal: { scope: "message", index: 1, total: 3 },
   });
   assert.deepEqual(result.analyses[1], {
     analysis: failureInstruction("other"),
@@ -114,6 +115,7 @@ test("vision_analyze multi-image: partial failure preserves successful analyses"
     model: "mod",
     mode: "aux",
     attachment: { attachmentId: "ok2", mediaType: "image/png", bytes: 8, width: 2, height: 2 },
+    imageOrdinal: { scope: "message", index: 2, total: 3 },
   });
 });
 
@@ -168,6 +170,7 @@ test("vision_analyze multi-image: 可重试失败(限流)自动重试一次,第�
     model: "mod",
     mode: "aux",
     attachment: { attachmentId: "bad1", mediaType: "image/png", bytes: 8, width: 2, height: 2 },
+    imageOrdinal: { scope: "message", index: 3, total: 3 },
   });
 });
 

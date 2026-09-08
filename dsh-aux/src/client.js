@@ -171,6 +171,14 @@ window.__ModuleLoader__.load({
       ".ax-image-memory-more{border:none;background:transparent;color:var(--dsw-alias-state-business-primary);cursor:pointer;font-size:11px;padding:0}",
       ".ax-image-resize-handle{position:absolute;right:2px;bottom:2px;width:16px;height:16px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,var(--dsw-alias-label-caption) 50%,var(--dsw-alias-label-caption) 60%,transparent 60%),linear-gradient(135deg,transparent 70%,var(--dsw-alias-label-caption) 70%,var(--dsw-alias-label-caption) 80%,transparent 80%);opacity:.8}",
       ".ax-image-resize-handle:hover{opacity:1}",
+      ".ax-tv{display:flex;flex-direction:column;gap:6px;min-width:0}",
+      ".ax-tv-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--dsw-alias-label-secondary);min-width:0}",
+      ".ax-tv-title{font-weight:600;color:var(--dsw-alias-label-primary)}",
+      ".ax-tv-badge{font-size:11px;line-height:16px;border-radius:999px;padding:0 6px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);white-space:nowrap}",
+      ".ax-tv-running{color:var(--dsw-alias-label-tertiary)}",
+      ".ax-tv-error{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:18px;overflow-wrap:anywhere}",
+      ".ax-tv-text{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;overflow-wrap:anywhere}",
+      ".ax-tv-gallery{min-width:0}",
     ].join("");
     const tagId = "@dolorescaritasangelus/dsh-aux/Aux.css";
     if (
@@ -217,6 +225,10 @@ window.__ModuleLoader__.load({
       "field.reasoningEffort": "思考档位",
       "field.models": "降级链 (provider/model,每行一条,按序尝试)",
       "field.models.placeholder": "例如 volcengine-ark/minimax-m3\nopencode-go/kimi-k2.7-code",
+      "toolview.title": "图像分析",
+      "toolview.running": "分析中…",
+      "toolview.failed": "分析失败",
+      "toolview.image": "图",
       "placeholder.inheritModel": "(继承主模型)",
       "placeholder.inheritDefault": "(继承默认)",
       "subagent.mode": "模式",
@@ -455,6 +467,10 @@ window.__ModuleLoader__.load({
       "field.reasoningEffort": "Reasoning effort",
       "field.models": "Fallback chain (provider/model, one per line, tried in order)",
       "field.models.placeholder": "e.g. volcengine-ark/minimax-m3\nopencode-go/kimi-k2.7-code",
+      "toolview.title": "Image analysis",
+      "toolview.running": "Analyzing…",
+      "toolview.failed": "Analysis failed",
+      "toolview.image": "Image",
       "placeholder.inheritModel": "(Inherit main model)",
       "placeholder.inheritDefault": "(Inherit default)",
       "subagent.mode": "Mode",
@@ -3713,6 +3729,114 @@ window.__ModuleLoader__.load({
       "remote.session",
       "sessions",
     ];
+    /** Text blocks of a settled tool result, joined in order. */
+    function blockText(content) {
+      if (!Array.isArray(content)) return "";
+      return content
+        .filter(
+          (part) => part !== null && typeof part === "object" && part.type === "text" && typeof part.text === "string",
+        )
+        .map((part) => part.text)
+        .join("\n");
+    }
+
+    /**
+     * Card model of one vision_analyze call. Running and cancelled calls carry
+     * no content; a settled failure renders text only; a settled success yields
+     * the durable refs (paired with their display ordinals) plus the conclusion
+     * text. Attachment data comes from the result presentationMeta, which the
+     * host writes from the same values, never from parsing the content text.
+     */
+    function visionCardModel(block) {
+      if (block === null || typeof block !== "object" || !("kind" in block)) {
+        return { state: "running", images: [], ordinals: [], text: "" };
+      }
+      const text = blockText(block.content);
+      if (block.isError === true) return { state: "error", images: [], ordinals: [], text };
+      const meta = block.meta !== null && typeof block.meta === "object" ? block.meta : {};
+      const refs = Array.isArray(meta.attachments) ? meta.attachments : [];
+      const ordinals = Array.isArray(meta.ordinals) ? meta.ordinals : [];
+      const images = [];
+      const badges = [];
+      for (let i = 0; i < refs.length; i += 1) {
+        const ref = refs[i];
+        if (ref === null || typeof ref !== "object" || typeof ref.attachmentId !== "string") continue;
+        images.push({ attachment: ref });
+        const ordinal = ordinals[i];
+        badges.push(ordinal !== null && typeof ordinal === "object" ? ordinal : null);
+      }
+      return { state: "settled", images, ordinals: badges, text };
+    }
+
+    /** Display badge: the CJK 【图N/共M】 for a message image, 【图N】 for a call
+     * image. The wording matches the bridge anchor text, so the human and the
+     * model count the same way; attachmentId remains the stable anchor. */
+    function ordinalBadge(ordinal) {
+      if (ordinal === null || typeof ordinal !== "object") return null;
+      if (!Number.isInteger(ordinal.index) || ordinal.index <= 0) return null;
+      if (ordinal.scope === "message" && Number.isInteger(ordinal.total)) {
+        return "【图" + ordinal.index + "/共" + ordinal.total + "】";
+      }
+      return "【图" + ordinal.index + "】";
+    }
+
+    /**
+     * vision_analyze toolview card. Registering this key suppresses the generic
+     * tool row for every vision_analyze result, so all four states must render:
+     * running, cancelled, failed (text only) and settled (badges + gallery +
+     * conclusion). The gallery is dispatched through the declared
+     * tool.call.images child slot; the official conversation.message.images slot
+     * is never replaced.
+     */
+    function VisionAnalyzeRow(props) {
+      const t = (props && props.t) || __t;
+      const block = props && props.block;
+      const renderSlot = props && props.renderSlot;
+      const loadImage = props && props.loadImage;
+      const model = visionCardModel(block);
+      const badges = model.ordinals.map(ordinalBadge).filter((label) => label !== null);
+      const children = [
+        react.createElement(
+          "div",
+          { className: "ax-tv-head", key: "head" },
+          react.createElement("span", { className: "ax-tv-title" }, t("toolview.title")),
+          model.state === "running"
+            ? react.createElement("span", { className: "ax-tv-running" }, t("toolview.running"))
+            : null,
+          model.state === "error"
+            ? react.createElement("span", { className: "ax-tv-error" }, t("toolview.failed"))
+            : null,
+          ...badges.map((label, index) =>
+            react.createElement("span", { className: "ax-tv-badge", key: "badge-" + index }, label),
+          ),
+        ),
+      ];
+      if (
+        model.state === "settled" &&
+        model.images.length > 0 &&
+        typeof renderSlot === "function" &&
+        typeof loadImage === "function"
+      ) {
+        children.push(
+          react.createElement(
+            "div",
+            { className: "ax-tv-gallery", key: "gallery" },
+            renderSlot("tool.call.images", { images: model.images, loadImage, align: "start" }),
+          ),
+        );
+      }
+      if (model.text !== "") {
+        children.push(
+          react.createElement(
+            "div",
+            { className: model.state === "error" ? "ax-tv-error" : "ax-tv-text", key: "text" },
+            model.text,
+          ),
+        );
+      }
+      return react.createElement("div", { className: "ax-tv", role: "group" }, ...children);
+    }
+
     /**
      * Client plugin body: register the settings page and the status chip.
      * @param ctx - client root context.
@@ -3737,6 +3861,20 @@ window.__ModuleLoader__.load({
         if (result.value === void 0) throw new Error(__t("command.unknown") + line);
         return result.value.result;
       };
+      ctx.slots.inject("tool.call.toolview", () =>
+        ctx.slots.register(
+          {
+            name: "tool.call.toolview",
+            key: "vision_analyze",
+            locale: NS,
+            // Declaring the Tool image gallery as a child is what authorizes
+            // this entry's renderSlot to dispatch it; the official
+            // conversation.message.images slot stays untouched.
+            children: { "tool.call.images": { kind: "single", scope: "session" } },
+          },
+          VisionAnalyzeRow,
+        ),
+      );
       ctx.slots.inject("settings.section", () =>
         ctx.slots.register(
           {
