@@ -43,11 +43,34 @@ export function collectImageRefs(content, out = []) {
 }
 
 /**
- * Extract image refs from one session event, tolerating both event shapes:
- * the persisted envelope (`event.data.message.content`) and the derived live
- * shape (`event.message.content`). Only message-producing event types are
- * considered — `user/message` (pasted images) and `tool/result` (tool-produced
- * images).
+ * The message one event carries, normalized per event type.
+ *
+ * A `user/message` stores the UserMessage itself as `event.data`
+ * (`packages/core/session/src/types.ts:297`; the official reader normalizes it
+ * exactly this way in `packages/core/session/src/index.ts:335`), while
+ * `tool/result` nests it under `data.message` (`types.ts:353-356`). The
+ * derived live shape (`event.message`) stays as a fallback for other API
+ * generations.
+ *
+ * `agent/inbox/spliced` also carries `inserted: UserMessage[]`, but those
+ * messages are spliced into the log as `user/message` events afterwards;
+ * counting them here would double-count every image, so that type is
+ * deliberately not handled.
+ *
+ * @param {object} event A session event.
+ * @returns {object|undefined} The carried message, when the shape provides one.
+ */
+function messageOf(event) {
+  const data = event.data !== null && typeof event.data === "object" ? event.data : void 0;
+  if (event.type === "user/message") return event.message ?? data;
+  return data?.message ?? event.message;
+}
+
+/**
+ * Extract image refs from one session event. Only message-producing event
+ * types are considered — `user/message` (pasted images, whose `data` is the
+ * message) and `tool/result` (tool-produced images, nested under
+ * `data.message`).
  *
  * @param {object|null|undefined} event A session event.
  * @returns {Array<object>} Durable attachment refs.
@@ -55,8 +78,7 @@ export function collectImageRefs(content, out = []) {
 export function eventImageRefs(event) {
   if (event === null || event === void 0 || typeof event !== "object") return [];
   if (event.type !== "user/message" && event.type !== "tool/result") return [];
-  const message = event.message ?? event.data?.message;
-  return collectImageRefs(message?.content);
+  return collectImageRefs(messageOf(event)?.content);
 }
 
 /**

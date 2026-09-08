@@ -3161,3 +3161,50 @@ test("/aux model: 选择写成单元素链,可覆盖已有链", async () => {
   // 其他任务条目必须原样保留(只改本任务)
   assert.deepEqual(replaced[0].section.tasks.vision ?? {}, {});
 });
+
+/** 真实 user/message 事件:data 是扁平 UserMessage(A42 的会话日志形状)。 */
+function pastedImageEvent(attachmentId, seq = 9) {
+  return {
+    type: "user/message",
+    seq,
+    time: 1757300000000,
+    data: {
+      content: [
+        { type: "image", attachment: { attachmentId, mediaType: "image/png", bytes: 12, width: 8, height: 8 } },
+        { type: "text", text: "测试." },
+      ],
+      source: { kind: "user" },
+      role: "user",
+      id: "msg-" + seq,
+    },
+    surfaceOp: "append",
+  };
+}
+
+test("归属钩子: 真实 user/message 形状的粘贴图被登记(A42 影响 ②)", async () => {
+  const { ctx } = await makeHarness();
+  const session = makeSession();
+  const attachmentId = "sha256:6d5f" + "a".repeat(60);
+  ctx.emit("session/event", session, pastedImageEvent(attachmentId));
+  await pollUntil(() => ctx.auxLlm._sessionImages.get(session.id)?.has(attachmentId) === true);
+  assert.equal(
+    ctx.auxLlm._sessionImages.get(session.id).has(attachmentId),
+    true,
+    "用户粘贴图必须被登记(否则图库判为 orphan)",
+  );
+});
+
+test("归属钩子: agent/inbox/spliced 的 inserted 不计入(避免重复)", async () => {
+  const { ctx } = await makeHarness();
+  const session = makeSession();
+  const attachmentId = "sha256:7e6a" + "b".repeat(60);
+  ctx.emit("session/event", session, {
+    type: "agent/inbox/spliced",
+    seq: 3,
+    time: 1757300002000,
+    data: { inserted: [{ content: [{ type: "image", attachment: { attachmentId } }] }] },
+  });
+  await settle();
+  const owned = ctx.auxLlm._sessionImages.get(session.id);
+  assert.equal(owned === void 0 || owned.has(attachmentId) === false, true, "spliced 不得登记");
+});

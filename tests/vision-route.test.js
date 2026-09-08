@@ -121,7 +121,21 @@ function makeStub({ delivery, ref, attachmentId } = {}) {
         events:
           attachmentId === void 0
             ? []
-            : [{ type: "user/message", message: { content: [{ type: "image", attachment: { attachmentId } }] } }],
+            : [
+                {
+                  // 真实会话日志形状:user/message 的 data 是扁平 UserMessage。
+                  type: "user/message",
+                  seq: 1,
+                  time: 1000,
+                  data: {
+                    content: [{ type: "image", attachment: { attachmentId } }],
+                    source: { kind: "user" },
+                    role: "user",
+                    id: "msg-1",
+                  },
+                  surfaceOp: "append",
+                },
+              ],
         append(type, data) {
           appended.push({ type, data });
         },

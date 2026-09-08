@@ -12,10 +12,19 @@ import assert from "node:assert/strict";
 import { messageOrdinalFor } from "../dsh-aux/src/images/refs.js";
 import { runVision } from "../dsh-aux/src/tools/vision.js";
 
-function userMessage(ids) {
+/** 真实会话日志形状:user/message 的 data 是扁平 UserMessage。 */
+function userMessage(ids, seq = 1) {
   return {
     type: "user/message",
-    message: { content: ids.map((attachmentId) => ({ type: "image", attachment: { attachmentId } })) },
+    seq,
+    time: seq * 1000,
+    data: {
+      content: ids.map((attachmentId) => ({ type: "image", attachment: { attachmentId } })),
+      source: { kind: "user" },
+      role: "user",
+      id: "msg-" + seq,
+    },
+    surfaceOp: "append",
   };
 }
 

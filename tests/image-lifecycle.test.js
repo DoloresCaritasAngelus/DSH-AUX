@@ -85,22 +85,51 @@ test("collectImageRefs: 递归 tool-result.content 并按遇到顺序返回", ()
   );
 });
 
-test("eventImageRefs: 兼容持久化信封与 live 形状,只认消息事件", () => {
+test("eventImageRefs: user/message 的 data 就是消息本体,只认消息事件", () => {
   const persisted = {
     type: "tool/result",
     data: { message: { content: [{ type: "tool-result", content: [{ type: "image", attachment: refOf("d") }] }] } },
   };
-  const live = { type: "user/message", message: { content: [{ type: "image", attachment: refOf("e") }] } };
+  // 真实会话日志形状:user/message 的 data 是扁平 UserMessage(content/role/id/source)。
+  const pasted = {
+    type: "user/message",
+    seq: 9,
+    time: 1000,
+    data: {
+      content: [
+        { type: "image", attachment: refOf("e") },
+        { type: "text", text: "测试." },
+      ],
+      source: { kind: "user" },
+      role: "user",
+      id: "msg-9",
+    },
+    surfaceOp: "append",
+  };
+  // 容错回退:派生 live 形状(event.message)在其它 API 世代仍可解析。
+  const derived = { type: "user/message", message: { content: [{ type: "image", attachment: refOf("f") }] } };
   assert.deepEqual(
     eventImageRefs(persisted).map((r) => r.attachmentId),
     [id("d")],
   );
   assert.deepEqual(
-    eventImageRefs(live).map((r) => r.attachmentId),
+    eventImageRefs(pasted).map((r) => r.attachmentId),
     [id("e")],
   );
   assert.deepEqual(
-    eventImageRefs({ type: "assistant/message", message: { content: [{ type: "image", attachment: refOf("f") }] } }),
+    eventImageRefs(derived).map((r) => r.attachmentId),
+    [id("f")],
+  );
+  assert.deepEqual(
+    eventImageRefs({ type: "assistant/message", message: { content: [{ type: "image", attachment: refOf("g") }] } }),
+    [],
+  );
+  // agent/inbox/spliced 的 inserted 随后会成为 user/message,计入会重复。
+  assert.deepEqual(
+    eventImageRefs({
+      type: "agent/inbox/spliced",
+      data: { inserted: [{ content: [{ type: "image", attachment: refOf("h") }] }] },
+    }),
     [],
   );
   assert.deepEqual(eventImageRefs(void 0), []);
@@ -198,7 +227,10 @@ test("noteLiveSession: 扫描内存日志登记归属,期间保持 fail-closed",
     const session = {
       id: "s-live",
       snapshotEvents: () => [
-        { type: "user/message", data: { message: { content: [{ type: "image", attachment: refOf("1") }] } } },
+        {
+          type: "user/message",
+          data: { content: [{ type: "image", attachment: refOf("1") }], role: "user", id: "m1" },
+        },
         {
           type: "tool/result",
           data: {
@@ -234,7 +266,10 @@ test("noteLiveSession: 归属写入失败时进入 failed 集合并上报(fail-c
     await noteLiveSession(service, {
       id: "s-bad",
       snapshotEvents: () => [
-        { type: "user/message", message: { content: [{ type: "image", attachment: refOf("9") }] } },
+        {
+          type: "user/message",
+          data: { content: [{ type: "image", attachment: refOf("9") }], role: "user", id: "m9" },
+        },
       ],
     });
     assert.equal(deletionReady(service), false);
@@ -374,7 +409,10 @@ test("R5:恢复窗口内另一会话删除 —— 未回填会话引用的图不
     const a = {
       id: "s-a",
       snapshotEvents: () => [
-        { type: "user/message", message: { content: [{ type: "image", attachment: refOf("8") }] } },
+        {
+          type: "user/message",
+          data: { content: [{ type: "image", attachment: refOf("8") }], role: "user", id: "m8" },
+        },
       ],
     };
     const barrier = noteLiveSession(service, a);

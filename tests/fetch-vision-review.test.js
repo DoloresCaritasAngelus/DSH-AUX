@@ -64,14 +64,21 @@ function makeVisionStub(behavior) {
       session: {
         events: [
           {
+            // 真实会话日志形状:user/message 的 data 是扁平 UserMessage。
             type: "user/message",
-            message: {
+            seq: 1,
+            time: 1000,
+            data: {
               content: [
                 { type: "image", attachment: { attachmentId: "ok1" } },
                 { type: "image", attachment: { attachmentId: "ok2" } },
                 { type: "image", attachment: { attachmentId: "bad1" } },
               ],
+              source: { kind: "user" },
+              role: "user",
+              id: "msg-1",
             },
+            surfaceOp: "append",
           },
         ],
       },
