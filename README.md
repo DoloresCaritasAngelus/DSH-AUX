@@ -403,7 +403,7 @@ const result = await ctx.auxLlm.call("compress", {
 | [TESTING.md](./TESTING.md) | 测试文件清单与基线 |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 贡献指南 |
 | [CREDITS.md](./CREDITS.md) | 借鉴来源与致谢 |
-| [docs/design/](./docs/design/) | 专项设计文档（图库 / 桥接 / 抓取 / 视觉代理 / 会话附件 GC） |
+| [docs/design/](./docs/design/) | 专项设计文档（图库 / 桥接 / 抓取 / 视觉代理 / 会话附件 GC / 上游请求） |
 | [docs/archive/](./docs/archive/) | v0.1 时代过程文档存档（PRD / 评审 / 上游提案） |
 | [AI.md](./dsh-aux/AI.md) | 给 AI 代理的安装指南 |
 

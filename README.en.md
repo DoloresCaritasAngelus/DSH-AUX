@@ -403,7 +403,7 @@ Before the first persistent `tool/call`, only the Minimal tool pair is exposed a
 | [TESTING.md](./TESTING.md) | Test file list and baseline |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guide |
 | [CREDITS.md](./CREDITS.md) | Credits & acknowledgements |
-| [docs/design/](./docs/design/) | Feature design docs (image library / bridges / crawl / vision agent / attachment GC) |
+| [docs/design/](./docs/design/) | Feature design docs (image library / bridges / crawl / vision agent / attachment GC / upstream requests) |
 | [docs/archive/](./docs/archive/) | v0.1-era process docs (PRD / reviews / upstream proposals) |
 | [AI.md](./dsh-aux/AI.md) | AI agent install guide |
 
