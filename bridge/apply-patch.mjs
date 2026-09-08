@@ -300,6 +300,7 @@ async function applyOne(target, dryRun) {
   let data = await readFile(file, "utf8");
   let bak;
   let applied = 0;
+  let fromState;
   for (let i = 0; i < target.states.length + 3; i++) {
     const state = target.states.find((candidate) => candidate.detect(data));
     if (state === void 0) {
@@ -308,6 +309,10 @@ async function applyOne(target, dryRun) {
     }
     if (state.action === "skip") {
       if (applied > 0) {
+        if (dryRun) {
+          log(`[dry-run] ${target.label} 可从 ${fromState} 升级(${applied} 步): ${file}`);
+          return;
+        }
         try {
           await writeFile(file, data);
         } catch (error) {
@@ -326,15 +331,12 @@ async function applyOne(target, dryRun) {
       }
       return;
     }
-    if (dryRun) {
-      log(`[dry-run] ${target.label} 可从 ${state.name} 升级: ${file}`);
-      return;
-    }
-    if (bak === void 0) bak = await backupTarget(file, target.backupPrefix, target.label);
+    // dry-run 不提前返回:先按真实应用的判据校验步骤块,再给出结论。
+    if (bak === void 0 && !dryRun) bak = await backupTarget(file, target.backupPrefix, target.label);
     const patched = data.replace(state.block.trim(), (state.replacement ?? target.patched).trim());
     if (patched === data) {
       log(`${target.label} ${state.name} 步骤块未命中,停止推进(避免假成功空转)`);
-      if (applied > 0 || bak !== void 0) {
+      if (!dryRun && (applied > 0 || bak !== void 0)) {
         await restoreBackup(file, bak, target.label);
         log(`${target.label} 已回滚部分补丁`);
       }
@@ -342,14 +344,23 @@ async function applyOne(target, dryRun) {
     }
     if (!patched.includes(target.mark)) {
       log(`${target.label} 补丁块未生效(替换失败),回滚`);
+      if (dryRun) {
+        process.exitCode = 1;
+        break;
+      }
       await restoreBackup(file, bak, target.label);
       process.exit(1);
     }
+    if (fromState === void 0) fromState = state.name;
     data = patched;
     applied += 1;
-    log(`${target.label} 已应用 ${state.name} 步骤`);
+    if (!dryRun) log(`${target.label} 已应用 ${state.name} 步骤`);
   }
   if (applied > 0) {
+    if (dryRun) {
+      log(`[dry-run] ${target.label} 可从 ${fromState} 升级(${applied} 步): ${file}`);
+      return;
+    }
     try {
       await writeFile(file, data);
     } catch (error) {
