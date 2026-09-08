@@ -323,7 +323,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
   }
   return {
     kind: "error",
-    text: "用法: /aux status [--json] — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux debug [N] — 查看内容真相; /aux patch — 重打补丁; /aux model <task> [provider/model] — 查看或设置任务的辅助模型",
+    text: '用法: /aux status [--json] — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux debug [N] — 查看内容真相; /aux patch — 重打补丁; /aux model <task> [provider/model] — 查看或设置任务的辅助模型(设置时写成单元素降级链,可在设置页的"降级链"字段加长)',
   };
 }
 
@@ -642,7 +642,7 @@ export async function handleModelCommand(service, args) {
   if (!isBuiltin && custom === void 0) {
     return {
       kind: "error",
-      text: `用法: /aux model <task> [provider/model] — task ∈ {${AUX_TASKS.join(", ")}}`,
+      text: `用法: /aux model <task> [provider/model] — task ∈ {${AUX_TASKS.join(", ")}};设置时落成单元素降级链,多级链请在设置页“降级链”字段填写`,
     };
   }
   // Custom tasks are view-only through /aux model; their route is fixed by

@@ -213,7 +213,7 @@ node scripts/doctor.mjs    # post-update health check (does not modify anything)
 | `/aux debug <target> [N]` | Cross-session view (@this / session id / prefix / cwd) |
 | `/aux patch` | Install all patches required by the current DSH and self-heal |
 | `/aux patch --json` | Same, with structured step results |
-| `/aux model <task> [provider/model]` | View / set a task's auxiliary model |
+| `/aux model <task> [provider/model]` | View / set a task's auxiliary model (writes a single-entry chain; use the settings page's "Fallback chain" field for more levels) |
 | `/aux vision <path> <question...>` | Directly view an image from the command line |
 | `/aux test <task>` | Self-test a task route |
 | `/aux memory [n]` | View recent image analysis memory |
@@ -391,6 +391,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **image ownership & delete safety**: a `session/event` ownership hook plus a `session/created` recovery barrier (in-memory log scan); deletions are refused globally while a live session is unbackfilled (fail-closed, visible in `/aux status`); reclaim moves objects into `objects/.trash/` (7-day recovery window).
 - **GC debt**: an `attachment-refs.json` sidecar plus official `imageHostPath` reclamation and full `.ext` hard-link cleanup; the derived `request-images/` cache is reclaimed by mtime LRU under a total cap (256 MiB by default, `requestImagesMaxMiB`).
 - **Vision delivery route**: `aux.visionRoute` (aux by default / native-when-capable / auto); native delivery only applies to routes whitelisted in `aux.nativeRoutes`, and `forceAuxVision` wins.
+- **Multi-level fallback chain**: `aux.tasks.<task>.models` is an ordered array of "provider/model" entries (primary → backup 1 → backup 2 …); while it is non-empty the singular `provider/model` is ignored (`/aux status` warns). `/aux model <task> <provider/model>` writes a **single-entry chain** — add more levels in the settings page's "Fallback chain" field (one per line) or in `settings.yaml`. The chain tail still considers the main model per `fallbackToMain` / `visionFallbackToMain`.
 - **subagent-bridge**: transparently takes over native `subagent` and `workflow` parallel `agent()` children.
 
 ### Minimal / Anchored Standard compatibility
@@ -423,7 +424,7 @@ If the image block's attachment object has already been GC/cleaned, or none of t
 
 **Q3: Do I need to configure a model for dsh-aux?**
 
-No. dsh-aux is **zero-config**: it works without any model configuration and falls back to the session's main model. You can assign a dedicated model later via the settings page or `/aux model <task> <provider/model>`.
+No. dsh-aux is **zero-config**: it works without any model configuration and falls back to the session's main model. You can assign a dedicated model later via the settings page or `/aux model <task> <provider/model>`; for multi-level fallback, list several "provider/model" entries in order in the settings page's "Fallback chain" field or in `aux.tasks.<task>.models`.
 
 ## Related Projects
 

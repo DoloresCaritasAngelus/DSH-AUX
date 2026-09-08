@@ -208,7 +208,7 @@ node scripts/doctor.mjs    # 更新后健康检查（不修改任何文件）
 | `/aux debug <目标> [N]` | 跨会话查看（@this / session id / 前缀 / cwd） |
 | `/aux patch` | 一键安装当前 DSH 所需全部补丁并自愈 |
 | `/aux patch --json` | 同上，返回结构化步骤结果 |
-| `/aux model <task> [provider/model]` | 查看 / 设置某任务的辅助模型 |
+| `/aux model <task> [provider/model]` | 查看 / 设置某任务的辅助模型（设置时写成单元素降级链；多级链用设置页"降级链"字段） |
 | `/aux vision <path> <question...>` | 命令行直接看图 |
 | `/aux test <task>` | 自检某任务路由 |
 | `/aux memory [n]` | 查看最近图片分析记忆 |
@@ -386,6 +386,7 @@ const result = await ctx.auxLlm.call("compress", {
 - **图片归属与误删防护**：`session/event` 归属钩子 + `session/created` 恢复屏障（内存日志扫描）；屏障未完成/失败时全局拒绝删除（fail-closed，`/aux status` 可观测）；回收进 `objects/.trash/`（7 天恢复窗口）。
 - **GC 债**：旁挂 `attachment-refs.json` + 官方 `imageHostPath` 回收 + `.ext` 硬链接全量清理；派生 `request-images/` 按总量上限（默认 256 MiB，`requestImagesMaxMiB` 可配）做 mtime LRU 回收。
 - **vision 交付路由**：`aux.visionRoute` 可选 aux（默认）/ native-when-capable / auto；native 只对 `aux.nativeRoutes` 白名单内的路由生效，且 `forceAuxVision` 优先。
+- **多级降级链**：`aux.tasks.<task>.models` 是有序的 "provider/model" 数组（主选 → 备1 → 备2 …）；非空时单数 `provider/model` 被忽略（`/aux status` 会给出警告）。`/aux model <task> <provider/model>` 写入的是**单元素链**，多级链请在设置页"降级链"字段（每行一条）或 `settings.yaml` 中填写；链尾仍按 `fallbackToMain` / `visionFallbackToMain` 规则考虑主模型。
 - **subagent-bridge**：透明接管原生 `subagent` 与 `workflow` 并行 `agent()` 子代理。
 
 ### 极简 / Anchored Standard 兼容
@@ -418,7 +419,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 **Q3：dsh-aux 需要配置模型才能用吗？**
 
-不需要。dsh-aux 是**零配置**的：不配任何模型也能跑，辅助任务会自动回退到会话主模型。你可以随时通过设置页或 `/aux model <task> <provider/model>` 为某个任务指定专用模型。
+不需要。dsh-aux 是**零配置**的：不配任何模型也能跑，辅助任务会自动回退到会话主模型。你可以随时通过设置页或 `/aux model <task> <provider/model>` 为某个任务指定专用模型；需要多级兜底时，在设置页"降级链"字段或 `aux.tasks.<task>.models` 里按序填写多个 "provider/model"。
 
 ## 相关项目
 
