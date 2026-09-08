@@ -376,6 +376,21 @@ test("角标: 用户消息按消息内序号渲染 第N/共M", async () => {
     texts(view.tree).filter((text) => text.includes("第")),
     ["第2/共4"],
   );
+
+  // 单图消息:角标的价值是消歧,第1/共1 是噪声 ⇒ 不显示。
+  const single = mount(Gallery, {
+    images: [{ attachment: REF }],
+    loadImage: loaderFor("blob:one"),
+    align: "end",
+    useTrajectory: useTrajectoryOf([userNode([REF])]),
+  });
+  await single.act();
+  assert.deepEqual(
+    texts(single.tree).filter((text) => text.includes("第")),
+    [],
+    "单图不显示角标",
+  );
+  assert.equal(byClass(single.tree, "ax-mi-frame").length, 1, "缩略图照常");
 });
 
 test("角标: align start(assistant markdown)与预览臂都不编号", async () => {

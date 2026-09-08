@@ -206,7 +206,10 @@ export function installMessageImages({ ctx, react, t, priority = -1 }) {
           image,
           load: props.loadImage,
           compact,
-          badge: ordinal === null ? null : "第" + ordinal.index + "/共" + ordinal.total,
+          // A lone image needs no disambiguation: the badge exists to let a
+          // human and the model agree on "the second image", which only exists
+          // when the message carries more than one.
+          badge: ordinal === null || ordinal.total < 2 ? null : "第" + ordinal.index + "/共" + ordinal.total,
         });
       }),
     );

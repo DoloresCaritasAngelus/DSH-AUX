@@ -91,6 +91,17 @@ test("messageImageOrdinal: 预览臂、缺 hook、hook 抛错、找不到都返�
   assert.equal(messageImageOrdinal({ useTrajectory: trajectoryOf(nodes), image: null, align: "end" }), null);
 });
 
+test("角标契约: 单图消息不显示(消歧才有意义)", async () => {
+  // 位置仍由 messageImageOrdinal 给出;是否显示由组件按 total 决定。
+  const nodes = [userNode([imageBlock(REF_A)])];
+  assert.deepEqual(
+    messageImageOrdinal({ useTrajectory: trajectoryOf(nodes), image: { attachment: REF_A }, align: "end" }),
+    { index: 1, total: 1 },
+  );
+  const source = await readFile(MODULE_PATH, "utf8");
+  assert.match(source, /ordinal\.total < 2 \? null/, "组件必须在 total < 2 时不显示角标");
+});
+
 test("messageImageOrdinal: 同一 id 命中多条消息(歧义)时不编号", () => {
   const ambiguous = trajectoryOf([userNode([imageBlock(REF_A)]), userNode([imageBlock(REF_A), imageBlock(REF_B)])]);
   assert.equal(messageImageOrdinal({ useTrajectory: ambiguous, image: { attachment: REF_A }, align: "end" }), null);
