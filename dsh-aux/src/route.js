@@ -205,6 +205,39 @@ export function shouldFallback(kind) {
 }
 
 /**
+ * AUX failure kind -> canonical DSH `LlmError` code (`@deepseek-ai/dsh-llm`).
+ * AUX keeps its own kebab-case codes on the wire (they are already consumed by
+ * `aux/llm-call` events and `/aux status`); this table is the documented
+ * alignment, so a future migration to the DSH taxonomy is mechanical.
+ */
+export const DSH_FAILURE_CODES = Object.freeze({
+  aborted: "ABORTED",
+  timeout: "TIMEOUT",
+  "rate-limit": "RATE_LIMIT",
+  payment: "QUOTA",
+  auth: "AUTH",
+  "model-not-found": "UNKNOWN_MODEL",
+  connection: "TRANSPORT",
+  content: "UNSUPPORTED_CONTENT",
+  other: "UNKNOWN",
+});
+
+/**
+ * Whether one automatic in-tool retry is worth attempting. Exactly the
+ * transient classes DSH itself retries — TIMEOUT, RATE_LIMIT, TRANSPORT
+ * (`dsh-llm/src/retry-policy.ts` DEFAULT_RETRYABLE_CODES).
+ *
+ * Deliberate divergence from DSH: an unclassified failure lands in `other`,
+ * which also covers provider 5xx responses that DSH classifies as SERVER and
+ * does retry. AUX does not repeat an unknown failure inside the tool — the
+ * model gets `retryable: false` and decides, instead of the tool burning a
+ * second call on an error nobody classified.
+ */
+export function isRetryableFailure(kind) {
+  return kind === "rate-limit" || kind === "timeout" || kind === "connection";
+}
+
+/**
  * Per-route failure cooldown. A route that fails `threshold` times in a row
  * (with no success in between) enters cooldown for `ttlMs`; during cooldown
  * `isCoolingDown` reports true so the caller skips the route entirely.

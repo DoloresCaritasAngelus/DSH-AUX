@@ -69,7 +69,7 @@ export function registerAuxTools(service) {
         defineTool({
           name: "vision_analyze",
           description:
-            "Look at one image (or several via the images array) with the auxiliary vision model and answer a SPECIFIC question about it/them. Always state exactly what you need to know in the question parameter (extract text, count objects, read a chart, check a color, compare elements) — never ask for a generic description, because the vision model answers your intent, not a caption. If the returned description misses a detail you need, call again with a more specific question about that detail. If the same image (same attachmentId) was already analyzed with the same question in this session, reuse that earlier result instead of re-analyzing. Provide one of attachmentId (a session image attachment), imagePath (a local image file), imageUrl (a remote image URL), or an images array (each entry exactly one of those three keys; analyzed in parallel — useful for comparing multiple images with one question). Animated GIFs are analyzed from their first frame only: motion, timing, and later frames are not visible to the model.",
+            "Look at one image (or several via the images array) with the auxiliary vision model and answer a SPECIFIC question about it/them. Always state exactly what you need to know in the question parameter (extract text, count objects, read a chart, check a color, compare elements) — never ask for a generic description, because the vision model answers your intent, not a caption. If the returned description misses a detail you need, call again with a more specific question about that detail. If the same image (same attachmentId) was already analyzed with the same question in this session, reuse that earlier result instead of re-analyzing. Provide one of attachmentId (a session image attachment), imagePath (a local image file), imageUrl (a remote image URL), or an images array (each entry exactly one of those three keys; analyzed in parallel — useful for comparing multiple images with one question). Animated GIFs are analyzed from their first frame only: motion, timing, and later frames are not visible to the model. A failed image in the images array is reported with its reason and whether a retry can help — never drop it silently: retry that image or tell the user what is missing.",
           parameters: {
             attachmentId: {
               type: "string",
@@ -115,6 +115,20 @@ export function registerAuxTools(service) {
                       // Success entries only; failed images carry error text
                       // without an attachment.
                       attachment: IMAGE_REF_SCHEMA,
+                      // Failed entries only: the machine-readable reason.
+                      // `code` is the AUX failure kind (route.js
+                      // classifyFailure), `retryable` mirrors the in-tool
+                      // retry decision (rate-limit/timeout/connection).
+                      error: {
+                        type: "object",
+                        additionalProperties: false,
+                        description: "Present on failed entries only: why it failed and whether a retry can help.",
+                        properties: {
+                          code: { type: "string", required: true },
+                          message: { type: "string", required: true },
+                          retryable: { type: "boolean", required: true },
+                        },
+                      },
                     },
                   },
                 },
