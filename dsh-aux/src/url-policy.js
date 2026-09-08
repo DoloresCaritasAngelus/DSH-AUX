@@ -213,18 +213,27 @@ export function assertSafeHttpUrl(rawUrl, options = {}) {
 }
 
 /**
- * Async SSRF guard used before every fetch. Runs the synchronous checks and,
- * when the hostname is not a literal IP, resolves it and rejects private
- * resolved addresses. `lookup` defaults to `dns.promises.lookup`; injectable
- * for tests.
+ * Resolve one URL to its validated public address set. This is the single DNS
+ * resolution the caller must reuse for the connection: resolving again inside
+ * the transport would reopen the rebinding window this guard exists to close.
+ *
+ * Runs the synchronous checks and, when the hostname is not a literal IP,
+ * resolves it once and rejects the whole answer set if any address is
+ * private. `lookup` defaults to `dns.promises.lookup`; injectable for tests.
+ *
+ * @param rawUrl the URL string supplied by the model/user.
+ * @param options { allowInternalUrls?, lookup?, label? }
+ * @returns `{ url, addresses }`; `addresses` is empty when nothing had to be
+ *   resolved (internal URLs allowed, a literal IP, or no lookup available).
  */
-export async function assertSafeFetchUrl(rawUrl, options = {}) {
+export async function resolveSafeFetchTarget(rawUrl, options = {}) {
   const label = options.label ?? "web_extract";
   const parsed = assertSafeHttpUrl(rawUrl, options);
-  if (options.allowInternalUrls === true) return parsed;
+  if (options.allowInternalUrls === true) return { url: parsed, addresses: [] };
   const hostname = parsed.hostname.replace(/^\[|\]$/g, "");
-  if (isIP(hostname) !== 0) return parsed;
-  if (typeof options.lookup !== "function") return parsed;
+  const literalFamily = isIP(hostname);
+  if (literalFamily !== 0) return { url: parsed, addresses: [{ address: hostname, family: literalFamily }] };
+  if (typeof options.lookup !== "function") return { url: parsed, addresses: [] };
   let resolved;
   try {
     resolved = await options.lookup(hostname, { all: true, verbatim: true });
@@ -233,14 +242,27 @@ export async function assertSafeFetchUrl(rawUrl, options = {}) {
       `${label}: cannot resolve hostname "${hostname}" for SSRF check` + (error?.message ? ` (${error.message})` : ""),
     );
   }
-  const addresses = Array.isArray(resolved) ? resolved : [resolved];
-  for (const entry of addresses) {
+  const entries = Array.isArray(resolved) ? resolved : [resolved];
+  const addresses = [];
+  for (const entry of entries) {
     const address = typeof entry === "string" ? entry : entry?.address;
-    if (typeof address === "string" && isPrivateIp(address)) {
+    if (typeof address !== "string" || address.length === 0) continue;
+    if (isPrivateIp(address)) {
       throw new Error(
         `${label}: hostname "${hostname}" resolves to internal/private address "${address}" and is blocked by default`,
       );
     }
+    const family = isIP(address);
+    if (family !== 0) addresses.push({ address, family });
   }
-  return parsed;
+  return { url: parsed, addresses };
+}
+
+/**
+ * Async SSRF guard used before every fetch. Thin wrapper over
+ * {@link resolveSafeFetchTarget} for callers that only need the validated URL
+ * and let the transport resolve for itself (the tools' pre-flight checks).
+ */
+export async function assertSafeFetchUrl(rawUrl, options = {}) {
+  return (await resolveSafeFetchTarget(rawUrl, options)).url;
 }

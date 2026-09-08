@@ -13,6 +13,7 @@ import AuxLlmService from "../dsh-aux/src/index.js";
 import { crawlSite, RobotsPolicy } from "../dsh-aux/src/crawl/queue.js";
 import { runWebCrawl } from "../dsh-aux/src/tools/web-crawl.js";
 import { AUX_TASKS, resolveConfig } from "../dsh-aux/src/route.js";
+import { setFetchTransportForTests } from "../dsh-aux/src/fetch.js";
 
 function settle() {
   return new Promise((resolve) => setImmediate(resolve));
@@ -94,11 +95,10 @@ async function makeLocalHarness(config) {
   return { ctx, streams, tools };
 }
 
-/** 全局 fetch 桩:map = { url: htmlText } 或 { url: { body, contentType } }。返回调用记录。 */
+/** 直连传输桩:map = { url: htmlText } 或 { url: { body, contentType } }。返回调用记录。 */
 async function withFetchMap(map, fn) {
-  const original = globalThis.fetch;
   const calls = [];
-  globalThis.fetch = async (url) => {
+  setFetchTransportForTests(async (url) => {
     const u = String(url);
     calls.push(u);
     const entry = map[u];
@@ -107,11 +107,11 @@ async function withFetchMap(map, fn) {
     const body = typeof entry === "string" ? entry : entry.body;
     const contentType = typeof entry === "string" ? "text/html" : (entry.contentType ?? "text/html");
     return { ok: true, status: 200, url: u, headers: { get: () => contentType }, text: async () => body };
-  };
+  });
   try {
     return await fn(calls);
   } finally {
-    globalThis.fetch = original;
+    setFetchTransportForTests(null);
   }
 }
 

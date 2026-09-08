@@ -2261,7 +2261,7 @@ test("web_extract 工具: 抓取失败(HTTP 500)时报错", async () => {
   await assert.rejects(() => tool.execute({ url: "https://example.com/error" }, exec), /HTTP 500/);
 });
 
-test("web_extract 工具: 无 web provider 时回退全局 fetch 并清洗 HTML", async () => {
+test("web_extract 工具: 无 web provider 时回退直连传输并清洗 HTML", async () => {
   // 独立 harness:web 服务抛"no usable web provider"
   const ctx = new Context();
   const streams = [];
@@ -2327,9 +2327,9 @@ test("web_extract 工具: 无 web provider 时回退全局 fetch 并清洗 HTML"
   const fiber = ctx.plugin(AuxLlmService, {});
   await fiber;
   await settle();
-  // 打桩全局 fetch
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url, opts) => ({
+  // 打桩直连传输(service 缝)
+  const originalTransport = ctx.auxLlm._httpRequest;
+  ctx.auxLlm._httpRequest = async (url) => ({
     ok: true,
     status: 200,
     url: String(url),
@@ -2359,7 +2359,7 @@ test("web_extract 工具: 无 web provider 时回退全局 fetch 并清洗 HTML"
     assert.ok(userText.includes("回退页面"));
     assert.ok(userText.includes("bold"));
   } finally {
-    globalThis.fetch = originalFetch;
+    ctx.auxLlm._httpRequest = originalTransport;
   }
 });
 
@@ -2390,16 +2390,27 @@ test("web_extract 工具: allowInternalUrls 配置为 true 时允许内网 URL",
     signal: new AbortController().signal,
     agent: { session: makeSession(), options: { provider: "opencode-go", model: "deepseek-v4-flash" } },
   };
-  const value = await tool.execute({ url: "http://127.0.0.1:3080/internal", maxChars: 8000 }, exec);
-  assert.equal(value.url, "http://127.0.0.1:3080/internal");
-  assert.equal(value.provider, "opencode-go");
+  const originalTransport = ctx.auxLlm._httpRequest;
+  ctx.auxLlm._httpRequest = async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => "text/html" },
+    text: async () => "<html><body>INTERNAL</body></html>",
+  });
+  try {
+    const value = await tool.execute({ url: "http://127.0.0.1:3080/internal", maxChars: 8000 }, exec);
+    assert.equal(value.url, "http://127.0.0.1:3080/internal");
+    assert.equal(value.provider, "opencode-go");
+  } finally {
+    ctx.auxLlm._httpRequest = originalTransport;
+  }
 });
 
 test("SSRF: 手动重定向到内网地址时在请求前拒绝", async () => {
   const { ctx } = await makeHarness();
-  const originalFetch = globalThis.fetch;
+  const originalTransport = ctx.auxLlm._httpRequest;
   let internalFetched = false;
-  globalThis.fetch = async (input, opts) => {
+  ctx.auxLlm._httpRequest = async (input) => {
     const url = String(input);
     if (url === "https://public.example/redirect") {
       return { ok: false, status: 302, headers: { get: () => "http://127.0.0.1:3080/secret" }, text: async () => "" };
@@ -2418,7 +2429,7 @@ test("SSRF: 手动重定向到内网地址时在请求前拒绝", async () => {
     );
     assert.equal(internalFetched, false, "重定向到内网地址时不应发出实际请求");
   } finally {
-    globalThis.fetch = originalFetch;
+    ctx.auxLlm._httpRequest = originalTransport;
   }
 });
 

@@ -8,16 +8,100 @@ import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { Readable } from "node:stream";
 import { isIP } from "node:net";
-import { assertSafeFetchUrl } from "./url-policy.js";
+import { resolveSafeFetchTarget } from "./url-policy.js";
 import { ipv4Octets } from "./url-policy.js";
 
-/** Apply the SSRF guard before fetching a URL (web_extract or vision imageUrl). */
-export async function assertSafeFetchUrlForService(service, rawUrl, label = "web_extract") {
-  await assertSafeFetchUrl(rawUrl, {
+/** SSRF-guard options derived from the owning service (injectable DNS for tests). */
+function guardOptions(service, label) {
+  return {
     allowInternalUrls: service.allowInternalUrls === true,
     lookup: service._dnsLookup ?? dnsLookup,
     label,
+  };
+}
+
+/** Apply the SSRF guard before fetching a URL (web_extract or vision imageUrl). */
+export async function assertSafeFetchUrlForService(service, rawUrl, label = "web_extract") {
+  await resolveSafeFetchTarget(rawUrl, guardOptions(service, label));
+}
+
+/**
+ * Resolve one URL to `{ url, addresses }` for the actual request: the guard
+ * runs once and the validated addresses travel with the URL, so the transport
+ * connects to exactly what was checked (no second DNS answer can flip).
+ */
+export async function resolveSafeFetchTargetForService(service, rawUrl, label = "web_extract") {
+  return await resolveSafeFetchTarget(rawUrl, guardOptions(service, label));
+}
+
+/**
+ * Build a Node connection lookup that serves the already validated address set
+ * and never resolves again. The URL hostname still supplies HTTP Host and TLS
+ * SNI, so certificate verification is unchanged.
+ * @param addresses validated public addresses from the guard.
+ */
+export function pinnedLookup(addresses) {
+  return (hostname, options, callback) => {
+    const family = typeof options?.family === "number" ? options.family : 0;
+    const eligible = family === 0 ? addresses : addresses.filter((entry) => entry.family === family);
+    if (eligible.length === 0) {
+      const error = new Error(`no validated address for ${hostname} in family ${family}`);
+      error.code = "ENOTFOUND";
+      callback(error, options?.all === true ? [] : "", family);
+      return;
+    }
+    if (options?.all === true) {
+      callback(
+        null,
+        eligible.map((entry) => ({ ...entry })),
+      );
+      return;
+    }
+    callback(null, eligible[0].address, eligible[0].family);
+  };
+}
+
+/**
+ * Direct-path transport: one request through node:http/https with the
+ * validated addresses pinned as the connection lookup. Redirects are never
+ * followed here (the caller handles them hop by hop).
+ * @param url absolute URL.
+ * @param options { headers, signal, addresses } — `addresses` empty means no
+ *   pinning was possible (internal URLs allowed, or no lookup available).
+ * @returns a WHATWG Response.
+ */
+export async function requestDirect(url, { headers = {}, signal, addresses = [] } = {}) {
+  const parsed = typeof url === "string" ? new URL(url) : url;
+  const isHttps = parsed.protocol === "https:";
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, "");
+  const rawOut = await new Promise((resolve, reject) => {
+    const out = (isHttps ? httpsRequest : httpRequest)({
+      method: "GET",
+      hostname,
+      port: parsed.port ? Number(parsed.port) : isHttps ? 443 : 80,
+      path: (parsed.pathname || "/") + parsed.search,
+      headers: { ...BROWSER_HEADERS, ...headers },
+      ...(isHttps ? { servername: hostname } : {}),
+      ...(addresses.length > 0 ? { lookup: pinnedLookup(addresses) } : {}),
+      signal,
+    });
+    out.once("response", resolve);
+    out.once("error", reject);
+    out.end();
   });
+  return new Response(Readable.toWeb(rawOut), {
+    status: rawOut.statusCode ?? 200,
+    statusText: rawOut.statusMessage ?? "",
+    headers: rawOut.headers,
+  });
+}
+
+/** Direct transport used when no per-service override is installed. */
+let directTransport = requestDirect;
+
+/** Test-only seam: replace the process-wide direct transport (null restores it). */
+export function setFetchTransportForTests(transport) {
+  directTransport = typeof transport === "function" ? transport : requestDirect;
 }
 
 /** Browser-like request headers sent on the local fetch path (proxy hygiene). */
@@ -90,16 +174,20 @@ export function proxyForUrl(url) {
 
 /**
  * Fetch a URL honoring HTTP(S)_PROXY via a CONNECT tunnel when configured;
- * falls back to the global fetch otherwise. Returns a WHATWG Response.
- * @param options { via? } — "auto" (proxy if env set & not NO_PROXY), "direct"
- *   (never proxy), or "proxy" (force the tunnel when a proxy is configured).
+ * the direct path uses the pinned transport otherwise. Returns a WHATWG
+ * Response.
+ * @param options { via?, addresses?, request? } — "auto" (proxy if env set &
+ *   not NO_PROXY), "direct" (never proxy), or "proxy" (force the tunnel when a
+ *   proxy is configured). `addresses` are the guard's validated addresses to
+ *   pin on the direct path; `request` overrides the transport for this call.
  */
-export async function fetchViaProxy(url, { headers = {}, signal, via = "auto" } = {}) {
+export async function fetchViaProxy(url, { headers = {}, signal, via = "auto", addresses = [], request } = {}) {
   const parsed = typeof url === "string" ? new URL(url) : url;
   const mergedHeaders = { ...BROWSER_HEADERS, ...headers };
   const useProxy = via !== "direct" && proxyForUrl(parsed) !== null;
   if (!useProxy) {
-    return fetch(parsed, { signal, redirect: "manual", headers: mergedHeaders });
+    const send = typeof request === "function" ? request : directTransport;
+    return await send(parsed, { headers: mergedHeaders, signal, addresses });
   }
   const proxy = proxyForUrl(parsed);
   const isHttps = parsed.protocol === "https:";
@@ -172,7 +260,7 @@ function isTransportLike(error) {
 }
 
 /**
- * Fetch a URL through the global fetch (or the env proxy tunnel) with SSRF
+ * Fetch a URL through the pinned direct transport (or the env proxy tunnel) with SSRF
  * checks on every redirect hop. Redirects are followed manually so an
  * internal/private redirect target is rejected BEFORE the request is sent.
  */
@@ -182,14 +270,21 @@ export async function fetchWithSsrf(service, rawUrl, label, signal) {
   // silently allowed only MAX_REDIRECTS - 1 hops (off-by-one).
   const MAX_REDIRECTS = 5;
 
-  async function fetchResponse(currentUrl) {
+  const transport = typeof service?._httpRequest === "function" ? service._httpRequest : void 0;
+
+  async function fetchResponse(target) {
     // Direct first; if the transport fails and a proxy is configured, retry
     // through the proxy tunnel (e.g. hosts only reachable behind a proxy).
     try {
-      return await fetchViaProxy(currentUrl, { signal, via: "direct" });
+      return await fetchViaProxy(target.url, {
+        signal,
+        via: "direct",
+        addresses: target.addresses,
+        request: transport,
+      });
     } catch (error) {
-      if (isTransportLike(error) && proxyForUrl(new URL(currentUrl)) !== null) {
-        return await fetchViaProxy(currentUrl, { signal, via: "proxy" });
+      if (isTransportLike(error) && proxyForUrl(new URL(target.url)) !== null) {
+        return await fetchViaProxy(target.url, { signal, via: "proxy" });
       }
       throw error;
     }
@@ -198,8 +293,11 @@ export async function fetchWithSsrf(service, rawUrl, label, signal) {
   let currentUrl = rawUrl;
   let hops = 0;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    await assertSafeFetchUrlForService(service, currentUrl, label);
-    const response = await fetchResponse(currentUrl);
+    // One resolution per hop: the guard's validated addresses are pinned onto
+    // the connection, so the transport cannot resolve the hostname again into
+    // a different (internal) address.
+    const target = await resolveSafeFetchTargetForService(service, currentUrl, label);
+    const response = await fetchResponse(target);
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (location === null || location.length === 0) {

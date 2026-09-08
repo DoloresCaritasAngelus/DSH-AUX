@@ -1,7 +1,7 @@
 /**
  * dsh-aux review tests for fetch body cancellation (A6) and multi-image
  * vision_analyze allSettled handling (A7). Zero external dependencies: the
- * global fetch is stubbed for the cancellation test and the vision service
+ * the direct transport is stubbed for the cancellation test and the vision service
  * is stubbed for the multi-image tests.
  *
  * Run: node --test tests/fetch-vision-review.test.js
@@ -25,19 +25,14 @@ test("resolveImageRef: cancelable body is cancelled on non-OK imageUrl response"
     headers: { get: () => null },
     body,
   };
-  const previousFetch = globalThis.fetch;
-  globalThis.fetch = async () => response;
-  try {
-    const service = {
-      allowInternalUrls: true,
-      ctx: { get: (k) => (k === "attachments" ? {} : void 0) },
-    };
-    const exec = { signal: void 0 };
-    await assert.rejects(() => resolveImageRef(service, { imageUrl: "https://example.com/img.png" }, exec), /HTTP 404/);
-    assert.equal(cancelCalls.length, 1, "non-OK response body must be cancelled before throwing");
-  } finally {
-    globalThis.fetch = previousFetch;
-  }
+  const service = {
+    allowInternalUrls: true,
+    _httpRequest: async () => response,
+    ctx: { get: (k) => (k === "attachments" ? {} : void 0) },
+  };
+  const exec = { signal: void 0 };
+  await assert.rejects(() => resolveImageRef(service, { imageUrl: "https://example.com/img.png" }, exec), /HTTP 404/);
+  assert.equal(cancelCalls.length, 1, "non-OK response body must be cancelled before throwing");
 });
 
 /** Build a stub vision service whose image attachment resolution and vision
