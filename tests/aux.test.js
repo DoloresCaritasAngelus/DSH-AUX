@@ -2901,10 +2901,14 @@ test("vision_analyze 工具: 多图时 question 仍必填", async () => {
   assert.equal(streams.length, 0, "不应发起辅助调用");
 });
 
-test("visionSystemPrompt: 含 GIF 动画的条件引导(不虚构静态图动作)", () => {
-  const p = visionSystemPrompt();
-  assert.ok(p.includes("ANIMATED GIF"), "应包含 GIF 引导");
-  assert.ok(p.includes("do not invent motion for a static image"), "应禁止静态图虚构动作");
+test("GIF 契约: prompt 不再承诺动图时序,工具描述写明仅分析首帧", async () => {
+  const prompt = visionSystemPrompt();
+  assert.ok(!/ANIMATED GIF|temporal|motion/i.test(prompt), "prompt 不得再要求描述动图时序");
+  const { tools } = await makeHarness();
+  const tool = tools.find((t) => t.name === "vision_analyze");
+  assert.ok(tool, "vision_analyze 应已注册");
+  assert.match(tool.description, /Animated GIFs are analyzed from their first frame only/);
+  assert.match(tool.description, /not visible to the model/);
 });
 
 test("事件记录: aux/llm-call 以 ignorable 标记写入(白名单外事件可安全读回)", async () => {
