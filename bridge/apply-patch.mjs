@@ -225,6 +225,30 @@ function log(msg) {
   console.log(`[dsh-image-bridge] ${msg}`);
 }
 
+/** Escape a string for literal use inside a RegExp. */
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Build a pattern that matches `block` in a deployed package while ignoring the
+ * leading indentation of every line after the first. The first line is matched
+ * literally, exactly like the previous `String.replace(block.trim(), ...)` call:
+ * its own leading whitespace was already stripped by `trim()`, so the match
+ * starts at the first non-blank character and the replacement keeps the target
+ * file's original indentation on its first line.
+ *
+ * DSH rebuilds the same code at different nesting depths (0.1.5 compiles `using`
+ * bindings inside one more `try`, which adds a leading tab to every line of the
+ * session-controller admission gate), so an exact-indentation match silently
+ * degrades into "步骤块未命中" after an upstream upgrade.
+ */
+function blockPattern(block) {
+  const [first, ...rest] = block.trim().split("\n");
+  const tail = rest.map((line) => `\n[ \t]*${escapeRegExp(line.replace(/^[ \t]+/, ""))}`).join("");
+  return new RegExp(escapeRegExp(first) + tail);
+}
+
 // Keep one backup per physical file for the lifetime of one apply-patch run.
 // dsh-host-apiproxy appears in multiple TARGETS; without this, the second
 // target in the same second could overwrite the first backup with an already
@@ -333,7 +357,7 @@ async function applyOne(target, dryRun) {
     }
     // dry-run 不提前返回:先按真实应用的判据校验步骤块,再给出结论。
     if (bak === void 0 && !dryRun) bak = await backupTarget(file, target.backupPrefix, target.label);
-    const patched = data.replace(state.block.trim(), (state.replacement ?? target.patched).trim());
+    const patched = data.replace(blockPattern(state.block), (state.replacement ?? target.patched).trim());
     if (patched === data) {
       log(`${target.label} ${state.name} 步骤块未命中,停止推进(避免假成功空转)`);
       if (!dryRun && (applied > 0 || bak !== void 0)) {

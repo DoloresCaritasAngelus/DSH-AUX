@@ -6,7 +6,7 @@
  *
  * 本测试用最小 fake DSH 根驱动真实的 `bridge/apply-patch.mjs`,断言
  * dry-run 与真实应用对同一目标给出同一结论:
- *  - 缩进漂移(块不匹配)⇒ 两者都报"步骤块未命中",且都不改目标文件;
+ *  - 步骤块内容不匹配 ⇒ 两者都报"步骤块未命中",且都不改目标文件;
  *  - 块匹配 ⇒ dry-run 报"可从 … 升级",真实应用落盘、标记出现、`node --check` 通过。
  *
  * 运行:cd <仓库路径> && node --test tests/bridge-dry-run.test.js
@@ -29,13 +29,18 @@ const PATCH_MARK = "dsh-aux image bridge v3 (local patch)";
 
 /**
  * 建一个只含 session-controller 目标的 fake DSH 根。
- * @param indentShift 每行额外前导 tab 数;1 = 模拟 DSH 0.1.5 的 using 多包一层 try。
+ * @param options.indentShift 每行额外前导 tab 数;1 = DSH 0.1.5 的 using 多包一层 try。
+ * @param options.mutate 改写块内一行内容,制造"检测命中但步骤块内容不匹配"。
  */
-function fakeRoot(indentShift) {
+function fakeRoot({ indentShift = 0, mutate = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "dsh-aux-dryrun-"));
   const dir = join(root, "node_modules/@deepseek-ai/dsh-api-session-controller/lib");
   mkdirSync(dir, { recursive: true });
-  const block = ORIG_BLOCK.split("\n")
+  const source = mutate
+    ? ORIG_BLOCK.replace("this.agents.selectionFor(agent).current;", "this.agents.selectionFor(agent);")
+    : ORIG_BLOCK;
+  const block = source
+    .split("\n")
     .map((line) => "\t".repeat(indentShift) + line)
     .join("\n");
   const file = join(dir, "index.js");
@@ -61,8 +66,8 @@ function runApply(root, dryRun) {
 /** 目标目录里的备份文件(证明真实应用确实备份过)。 */
 const backups = (dir) => readdirSync(dir).filter((name) => name.startsWith("index.js.bak-"));
 
-test("dry-run:块不匹配(0.1.5 缩进漂移)时不得报可升级,且零写盘", () => {
-  const { root, dir, file } = fakeRoot(1);
+test("dry-run:步骤块内容不匹配时不得报可升级,且零写盘", () => {
+  const { root, dir, file } = fakeRoot({ mutate: true });
   try {
     const before = readFileSync(file, "utf8");
     const dry = runApply(root, true);
@@ -76,7 +81,7 @@ test("dry-run:块不匹配(0.1.5 缩进漂移)时不得报可升级,且零写盘
 });
 
 test("dry-run 与真实应用结论一致:块不匹配时两者都失败且都不写盘", () => {
-  const { root, file } = fakeRoot(1);
+  const { root, file } = fakeRoot({ mutate: true });
   try {
     const before = readFileSync(file, "utf8");
     const dry = runApply(root, true);
@@ -92,7 +97,7 @@ test("dry-run 与真实应用结论一致:块不匹配时两者都失败且都�
 });
 
 test("dry-run 与真实应用结论一致:块匹配时 dry-run 零写盘、真实应用落盘并通过语法检查", () => {
-  const { root, file } = fakeRoot(0);
+  const { root, file } = fakeRoot();
   try {
     const before = readFileSync(file, "utf8");
     const dry = runApply(root, true);
