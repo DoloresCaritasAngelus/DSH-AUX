@@ -102,5 +102,33 @@ if (hits > 0) {
 if (msgHits > 0) {
   console.error(`\n${msgHits} 处提交信息脱密命中:提交信息只写 diff 可见的变更语义,过程内容留在 aux-notes。`);
 }
-if (hits > 0 || msgHits > 0) process.exit(1);
-console.log("文档脱密检查通过。");
+// CHANGELOG 完整性闸(防截断):发布段只增不减。
+// 历史事故模式:整文件被 write 覆盖成"未发布"节的前几行,发布历史静默丢失;
+// 脱密规则不会命中这种删除,所以这里单独断言结构性下限。
+const CHANGELOG_RELEASE_BASELINE = 23; // 基线 v0.4.4 时的已发布版本段数量
+let changelogHits = 0;
+try {
+  const changelog = readFileSync("CHANGELOG.md", "utf8");
+  const releases = changelog.split("\n").filter((line) => /^## 0\./.test(line));
+  if (releases.length < CHANGELOG_RELEASE_BASELINE) {
+    console.error(
+      `DOC-HYGIENE CHANGELOG.md [发布历史截断] 已发布版本段 ${releases.length} < 基线 ${CHANGELOG_RELEASE_BASELINE};` +
+        " 追加新版本小节时不得删除既有发布段。",
+    );
+    changelogHits += 1;
+  }
+  if (!/^## 0\.4\.4\b/m.test(changelog)) {
+    console.error("DOC-HYGIENE CHANGELOG.md [发布历史缺失] 未找到 v0.4.4 段。");
+    changelogHits += 1;
+  }
+  if (!/^## 未发布 \(Unreleased\)$/m.test(changelog)) {
+    console.error("DOC-HYGIENE CHANGELOG.md [结构缺失] 未找到「未发布 (Unreleased)」节。");
+    changelogHits += 1;
+  }
+} catch (error) {
+  console.error(`DOC-HYGIENE CHANGELOG.md [不可读] ${error?.message ?? String(error)}`);
+  changelogHits += 1;
+}
+
+if (hits > 0 || msgHits > 0 || changelogHits > 0) process.exit(1);
+console.log(`文档脱密检查通过(CHANGELOG 发布段完整性:${CHANGELOG_RELEASE_BASELINE} 段基线)。`);
