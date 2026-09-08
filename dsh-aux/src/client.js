@@ -179,6 +179,19 @@ window.__ModuleLoader__.load({
       ".ax-tv-error{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:18px;overflow-wrap:anywhere}",
       ".ax-tv-text{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;overflow-wrap:anywhere}",
       ".ax-tv-gallery{min-width:0}",
+      ".ax-mi-gallery{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;min-width:0}",
+      ".ax-mi-gallery[data-align=end]{justify-content:flex-end}",
+      ".ax-mi-item{position:relative;display:inline-flex;min-width:0}",
+      ".ax-mi-frame{display:flex;align-items:center;justify-content:center;padding:0;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-alias-bg-layer-3);cursor:pointer;overflow:hidden}",
+      ".ax-mi-frame[data-variant=single]{max-width:240px;max-height:240px}",
+      ".ax-mi-frame[data-variant=single] img{display:block;max-width:240px;max-height:240px;object-fit:contain}",
+      ".ax-mi-frame[data-variant=tile]{width:96px;height:96px}",
+      ".ax-mi-frame[data-variant=tile] img{display:block;width:100%;height:100%;object-fit:cover}",
+      ".ax-mi-loading{padding:8px 12px;font-size:12px;color:var(--dsw-alias-label-tertiary)}",
+      ".ax-mi-error{border:1px solid var(--dsw-alias-state-error-primary);border-radius:10px;background:transparent;color:var(--dsw-alias-state-error-primary);font-size:12px;padding:6px 10px;cursor:pointer}",
+      ".ax-mi-badge{position:absolute;top:6px;left:6px;z-index:1;font-size:11px;line-height:16px;padding:0 6px;border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-bg-base,#000) 62%,transparent);color:#fff;pointer-events:none}",
+      ".ax-mi-lightbox{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;background:color-mix(in srgb,var(--dsw-alias-bg-base,#000) 72%,transparent);cursor:zoom-out}",
+      ".ax-mi-lightbox img{max-width:min(92vw,1400px);max-height:92vh;object-fit:contain;border-radius:8px;box-shadow:var(--dsw-shadow-lv3)}",
     ].join("");
     const tagId = "@dolorescaritasangelus/dsh-aux/Aux.css";
     if (
@@ -253,6 +266,16 @@ window.__ModuleLoader__.load({
       "global.visionRoute.aux": "aux —— 始终用辅助视觉模型",
       "global.visionRoute.native-when-capable": "native-when-capable —— 白名单路由交给主模型",
       "global.visionRoute.auto": "auto —— 仅当辅助路由等于主路由时交给主模型",
+      "global.messageImages": "消息图片画廊 (messageImages)",
+      "global.messageImages.native": "native —— 官方图库(默认)",
+      "global.messageImages.aux": "aux —— AUX 图库:官方缩略图 + 第N/共M 角标",
+      "messageImages.image": "图片",
+      "messageImages.loading": "图片加载中…",
+      "messageImages.loadFailed": "加载失败,点击重试",
+      "messageImages.retry": "重试",
+      "messageImages.open": "查看大图",
+      "messageImages.openNamed": "查看图片:",
+      "messageImages.lightbox": "图片预览",
       "global.nativeRoutes": "native 交付白名单 (provider/model,每行一条)",
       "global.nativeRoutes.placeholder": "例如 deepseek-official/deepseek-v4-flash-vision-exp",
       "global.requestImagesMaxMiB": "派生请求缓存上限 MiB (0 = 关闭回收)",
@@ -495,6 +518,16 @@ window.__ModuleLoader__.load({
       "global.visionRoute.aux": "aux — always use the auxiliary vision model",
       "global.visionRoute.native-when-capable": "native-when-capable — whitelisted routes go to the main model",
       "global.visionRoute.auto": "auto — main model only when the aux route equals it",
+      "global.messageImages": "Message image gallery (messageImages)",
+      "global.messageImages.native": "native — shipped gallery (default)",
+      "global.messageImages.aux": "aux — AUX gallery: shipped thumbnail + 第N/共M badge",
+      "messageImages.image": "Image",
+      "messageImages.loading": "Loading image…",
+      "messageImages.loadFailed": "Load failed — click to retry",
+      "messageImages.retry": "Retry",
+      "messageImages.open": "Open full size",
+      "messageImages.openNamed": "Open image: ",
+      "messageImages.lightbox": "Image preview",
       "global.nativeRoutes": "Native delivery whitelist (provider/model, one per line)",
       "global.nativeRoutes.placeholder": "e.g. deepseek-official/deepseek-v4-flash-vision-exp",
       "global.requestImagesMaxMiB": "Request-image cache cap in MiB (0 = disable reclaim)",
@@ -735,7 +768,11 @@ window.__ModuleLoader__.load({
         revision: 0,
         writable: true,
       });
-      const [catalog, setCatalog] = react.useState({ providers: [], models: [], reasoning: {} });
+      const [catalog, setCatalog] = react.useState({
+        providers: [],
+        models: [],
+        reasoning: {},
+      });
       const [openGroups, setOpenGroups] = react.useState({
         diagnostics: true,
         tools: true,
@@ -747,8 +784,14 @@ window.__ModuleLoader__.load({
         let alive = true;
         Promise.all([
           api.settings.describe({}),
-          api.llm.providers({}).catch(() => ({ ok: false, error: { message: "providers unavailable" } })),
-          api.llm.models({}).catch(() => ({ ok: false, error: { message: "models unavailable" } })),
+          api.llm.providers({}).catch(() => ({
+            ok: false,
+            error: { message: "providers unavailable" },
+          })),
+          api.llm.models({}).catch(() => ({
+            ok: false,
+            error: { message: "models unavailable" },
+          })),
         ])
           .then(([settingsRaw, providersRaw, modelsRaw]) => {
             if (!alive) return;
@@ -784,7 +827,11 @@ window.__ModuleLoader__.load({
               const pid = group.id ?? group.provider ?? "";
               for (const model of group.models ?? []) {
                 const mid = model.id;
-                models.push({ provider: pid, id: mid, name: model.name ?? model.id });
+                models.push({
+                  provider: pid,
+                  id: mid,
+                  name: model.name ?? model.id,
+                });
                 const efforts = model?.reasoning?.efforts ?? group?.reasoning?.efforts;
                 if (Array.isArray(efforts) && efforts.length > 0) {
                   reasoning[pid + "\u0000" + mid] = efforts;
@@ -939,8 +986,16 @@ window.__ModuleLoader__.load({
           const hasProvider = typeof entry.provider === "string" && entry.provider !== "";
           const hasModel = typeof entry.model === "string" && entry.model !== "";
           if (hasProvider && hasModel) {
-            ops.push({ op: "set", path: [...base, "provider"], value: entry.provider });
-            ops.push({ op: "set", path: [...base, "model"], value: entry.model });
+            ops.push({
+              op: "set",
+              path: [...base, "provider"],
+              value: entry.provider,
+            });
+            ops.push({
+              op: "set",
+              path: [...base, "model"],
+              value: entry.model,
+            });
           } else {
             ops.push({ op: "unset", path: [...base, "provider"] });
             ops.push({ op: "unset", path: [...base, "model"] });
@@ -974,7 +1029,12 @@ window.__ModuleLoader__.load({
         if (sub.mode !== void 0 && sub.mode !== "native")
           ops.push({ op: "set", path: ["subagent", "mode"], value: sub.mode });
         else ops.push({ op: "unset", path: ["subagent", "mode"] });
-        if (sub.includeWorkflow === false) ops.push({ op: "set", path: ["subagent", "includeWorkflow"], value: false });
+        if (sub.includeWorkflow === false)
+          ops.push({
+            op: "set",
+            path: ["subagent", "includeWorkflow"],
+            value: false,
+          });
         else ops.push({ op: "unset", path: ["subagent", "includeWorkflow"] });
         for (const group of ["general", "vision"]) {
           const g = sub?.[group] ?? {};
@@ -984,7 +1044,11 @@ window.__ModuleLoader__.load({
           const effort = g.reasoningEffort;
           const effortPath = [...gbase, "reasoningEffort"];
           if (gp && gm) {
-            ops.push({ op: "set", path: [...gbase, "provider"], value: g.provider });
+            ops.push({
+              op: "set",
+              path: [...gbase, "provider"],
+              value: g.provider,
+            });
             ops.push({ op: "set", path: [...gbase, "model"], value: g.model });
             if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
             else ops.push({ op: "unset", path: effortPath });
@@ -994,10 +1058,19 @@ window.__ModuleLoader__.load({
             ops.push({ op: "unset", path: effortPath });
           }
         }
-        if (sub.prepareTools === false) ops.push({ op: "set", path: ["subagent", "prepareTools"], value: false });
+        if (sub.prepareTools === false)
+          ops.push({
+            op: "set",
+            path: ["subagent", "prepareTools"],
+            value: false,
+          });
         else ops.push({ op: "unset", path: ["subagent", "prepareTools"] });
         if (Array.isArray(sub.visionKeywords) && sub.visionKeywords.length > 0)
-          ops.push({ op: "set", path: ["subagent", "visionKeywords"], value: sub.visionKeywords });
+          ops.push({
+            op: "set",
+            path: ["subagent", "visionKeywords"],
+            value: sub.visionKeywords,
+          });
         else ops.push({ op: "unset", path: ["subagent", "visionKeywords"] });
         if (draft?.fallbackToMain !== void 0) {
           if (draft.fallbackToMain === false) ops.push({ op: "set", path: ["fallbackToMain"], value: false });
@@ -1008,22 +1081,39 @@ window.__ModuleLoader__.load({
           else ops.push({ op: "unset", path: ["forceAuxVision"] });
         }
         if (draft?.visionRoute !== void 0) {
-          if (draft.visionRoute !== "aux") ops.push({ op: "set", path: ["visionRoute"], value: draft.visionRoute });
+          if (draft.visionRoute !== "aux")
+            ops.push({
+              op: "set",
+              path: ["visionRoute"],
+              value: draft.visionRoute,
+            });
           else ops.push({ op: "unset", path: ["visionRoute"] });
         }
         if (draft?.nativeRoutes !== void 0) {
           if (Array.isArray(draft.nativeRoutes) && draft.nativeRoutes.length > 0)
-            ops.push({ op: "set", path: ["nativeRoutes"], value: draft.nativeRoutes });
+            ops.push({
+              op: "set",
+              path: ["nativeRoutes"],
+              value: draft.nativeRoutes,
+            });
           else ops.push({ op: "unset", path: ["nativeRoutes"] });
         }
         if (draft?.requestImagesMaxMiB !== void 0) {
           if (Number.isFinite(draft.requestImagesMaxMiB) && draft.requestImagesMaxMiB !== 256)
-            ops.push({ op: "set", path: ["requestImagesMaxMiB"], value: draft.requestImagesMaxMiB });
+            ops.push({
+              op: "set",
+              path: ["requestImagesMaxMiB"],
+              value: draft.requestImagesMaxMiB,
+            });
           else ops.push({ op: "unset", path: ["requestImagesMaxMiB"] });
         }
         if (draft?.visionFallbackToMain !== void 0) {
           if (draft.visionFallbackToMain === false)
-            ops.push({ op: "set", path: ["visionFallbackToMain"], value: false });
+            ops.push({
+              op: "set",
+              path: ["visionFallbackToMain"],
+              value: false,
+            });
           else ops.push({ op: "unset", path: ["visionFallbackToMain"] });
         }
         if (draft?.showStatusChip !== void 0) {
@@ -1049,9 +1139,22 @@ window.__ModuleLoader__.load({
           const rawVal = val ?? "aux";
           const effectiveVal = auxForcedNative(key) && rawVal === "aux" ? "native" : val;
           if (effectiveVal !== void 0 && effectiveVal !== "aux")
-            ops.push({ op: "set", path: ["enabled", key], value: effectiveVal });
+            ops.push({
+              op: "set",
+              path: ["enabled", key],
+              value: effectiveVal,
+            });
           else ops.push({ op: "unset", path: ["enabled", key] });
         }
+        // messageImages defaults to native, so native is stored as absent (the
+        // key is not part of the host schema; it is a client-only switch).
+        if (draft?.enabled?.messageImages === "aux")
+          ops.push({
+            op: "set",
+            path: ["enabled", "messageImages"],
+            value: "aux",
+          });
+        else ops.push({ op: "unset", path: ["enabled", "messageImages"] });
         const skillMode = draft?.skill?.mode;
         if (skillMode !== void 0 && skillMode !== "audit")
           ops.push({ op: "set", path: ["skill", "mode"], value: skillMode });
@@ -1065,7 +1168,11 @@ window.__ModuleLoader__.load({
         for (const key of Object.keys(debugDefaults)) {
           const val = draft?.debug?.[key];
           if (val !== void 0 && val !== debugDefaults[key])
-            ops.push({ op: "set", path: ["debug", key], value: key === "maxDebugEventBytes" ? Number(val) : val });
+            ops.push({
+              op: "set",
+              path: ["debug", key],
+              value: key === "maxDebugEventBytes" ? Number(val) : val,
+            });
           else ops.push({ op: "unset", path: ["debug", key] });
         }
         api.settings
@@ -1078,7 +1185,11 @@ window.__ModuleLoader__.load({
               return;
             }
             setSaved(true);
-            setState((s) => ({ ...s, revision: resp.value.revision, value: resp.value.value }));
+            setState((s) => ({
+              ...s,
+              revision: resp.value.revision,
+              value: resp.value.value,
+            }));
             setDraft(structuredClone(resp.value.value ?? {}));
             loadStatus();
           })
@@ -1117,7 +1228,11 @@ window.__ModuleLoader__.load({
               loadStatus();
               return;
             }
-            setPatchStatus({ ok: true, key: sourceKey, text: t("settings.patchDone") });
+            setPatchStatus({
+              ok: true,
+              key: sourceKey,
+              text: t("settings.patchDone"),
+            });
             loadStatus();
           })
           .catch((error) => {
@@ -1294,7 +1409,10 @@ window.__ModuleLoader__.load({
         const titleId = "ax-group-title-" + id;
         return react.createElement(
           "div",
-          { id: "ax-group-" + id, className: "ax-group" + (open ? " ax-group-open" : "") },
+          {
+            id: "ax-group-" + id,
+            className: "ax-group" + (open ? " ax-group-open" : ""),
+          },
           react.createElement(
             "button",
             {
@@ -1310,11 +1428,23 @@ window.__ModuleLoader__.load({
               react.createElement("span", { id: titleId, className: "ax-group-title" }, title),
               react.createElement("span", { className: "ax-group-desc" }, desc),
             ),
-            react.createElement("span", { className: "ax-group-chevron" + (open ? " ax-group-chevronOpen" : "") }, "▾"),
+            react.createElement(
+              "span",
+              {
+                className: "ax-group-chevron" + (open ? " ax-group-chevronOpen" : ""),
+              },
+              "▾",
+            ),
           ),
           react.createElement(
             "div",
-            { id: bodyId, className: "ax-group-body", role: "region", "aria-labelledby": titleId, hidden: !open },
+            {
+              id: bodyId,
+              className: "ax-group-body",
+              role: "region",
+              "aria-labelledby": titleId,
+              hidden: !open,
+            },
             ...children,
           ),
         );
@@ -1398,7 +1528,12 @@ window.__ModuleLoader__.load({
         react.createElement(
           "label",
           { className: "ax-switch" },
-          react.createElement("input", { type: "checkbox", checked, disabled: disabled, onChange }),
+          react.createElement("input", {
+            type: "checkbox",
+            checked,
+            disabled: disabled,
+            onChange,
+          }),
           label,
         );
       const setEnabled = (key, value) => {
@@ -1409,6 +1544,18 @@ window.__ModuleLoader__.load({
           next.enabled = next.enabled ?? {};
           if (value === "aux") delete next.enabled[key];
           else next.enabled[key] = value;
+          return next;
+        });
+      };
+      /** messageImages defaults to native, so native is stored as "absent". */
+      const setMessageImagesMode = (value) => {
+        setSaved(false);
+        setSaveError(null);
+        setDraft((d) => {
+          const next = structuredClone(d ?? {});
+          next.enabled = next.enabled ?? {};
+          if (value === "aux") next.enabled.messageImages = "aux";
+          else delete next.enabled.messageImages;
           return next;
         });
       };
@@ -1551,19 +1698,28 @@ window.__ModuleLoader__.load({
           react.createElement(
             "div",
             { className: "ax-field-head", ...headerProps },
-            react.createElement("span", { className: "ax-dot ax-dot-" + state, "aria-hidden": "true" }),
+            react.createElement("span", {
+              className: "ax-dot ax-dot-" + state,
+              "aria-hidden": "true",
+            }),
             react.createElement("span", null, label),
             meta?.patch && patchLabel
               ? react.createElement(
                   "span",
-                  { className: "ax-status-badge ax-status-badge-" + meta.patch, title: reason },
+                  {
+                    className: "ax-status-badge ax-status-badge-" + meta.patch,
+                    title: reason,
+                  },
                   patchLabel,
                 )
               : null,
             forcedNative && rawValue === "aux"
               ? react.createElement(
                   "span",
-                  { className: "ax-status-badge ax-status-badge-partial", title: t("status.forcedNative") },
+                  {
+                    className: "ax-status-badge ax-status-badge-partial",
+                    title: t("status.forcedNative"),
+                  },
                   t("status.forcedNative"),
                 )
               : null,
@@ -1597,7 +1753,11 @@ window.__ModuleLoader__.load({
             ),
             react.createElement(
               "button",
-              { type: "button", className: "ax-repair-button", onClick: loadStatus },
+              {
+                type: "button",
+                className: "ax-repair-button",
+                onClick: loadStatus,
+              },
               t("status.refresh"),
             ),
           );
@@ -1609,7 +1769,11 @@ window.__ModuleLoader__.load({
             react.createElement("span", { className: "ax-status-summary" }, t("status.loadHint")),
             react.createElement(
               "button",
-              { type: "button", className: "ax-repair-button", onClick: loadStatus },
+              {
+                type: "button",
+                className: "ax-repair-button",
+                onClick: loadStatus,
+              },
               t("status.refresh"),
             ),
           );
@@ -1625,7 +1789,11 @@ window.__ModuleLoader__.load({
             ),
             react.createElement(
               "button",
-              { type: "button", className: "ax-repair-button", onClick: loadStatus },
+              {
+                type: "button",
+                className: "ax-repair-button",
+                onClick: loadStatus,
+              },
               t("status.refresh"),
             ),
           );
@@ -1670,7 +1838,10 @@ window.__ModuleLoader__.load({
                         react.createElement("td", null, entry.group),
                         react.createElement(
                           "td",
-                          { className: "ax-patch-desc", title: entry.description },
+                          {
+                            className: "ax-patch-desc",
+                            title: entry.description,
+                          },
                           entry.description,
                         ),
                         react.createElement("td", { className: "ax-patch-pkg" }, entry.pkg),
@@ -1714,7 +1885,12 @@ window.__ModuleLoader__.load({
             react.createElement("span", { className: "ax-status-summary" }, summary),
             react.createElement(
               "button",
-              { type: "button", className: "ax-repair-button", disabled: statusLoading, onClick: loadStatus },
+              {
+                type: "button",
+                className: "ax-repair-button",
+                disabled: statusLoading,
+                onClick: loadStatus,
+              },
               t("status.refresh"),
             ),
           ),
@@ -1725,7 +1901,10 @@ window.__ModuleLoader__.load({
                   ? react.createElement(
                       "div",
                       { key: "restart-required", className: "ax-status-issue" },
-                      react.createElement("span", { className: "ax-dot ax-dot-fixing", "aria-hidden": "true" }),
+                      react.createElement("span", {
+                        className: "ax-dot ax-dot-fixing",
+                        "aria-hidden": "true",
+                      }),
                       react.createElement("span", { className: "ax-status-issue-text" }, t("status.restartRequired")),
                     )
                   : null,
@@ -1742,7 +1921,10 @@ window.__ModuleLoader__.load({
                       tabIndex: -1,
                       className: "ax-status-issue" + (active ? " ax-status-issue-active" : ""),
                     },
-                    react.createElement("span", { className: "ax-dot " + dotClass, "aria-hidden": "true" }),
+                    react.createElement("span", {
+                      className: "ax-dot " + dotClass,
+                      "aria-hidden": "true",
+                    }),
                     react.createElement(
                       "div",
                       { className: "ax-status-issue-text" },
@@ -1750,13 +1932,19 @@ window.__ModuleLoader__.load({
                       active && patchStatus !== null && patchStatus.key === issue.key && patchStatus.ok === false
                         ? react.createElement(
                             "div",
-                            { className: "ax-status-summary ax-error", role: "alert" },
+                            {
+                              className: "ax-status-summary ax-error",
+                              role: "alert",
+                            },
                             patchStatus.text,
                           )
                         : active && patchStatus !== null && patchStatus.key === issue.key && patchStatus.ok === true
                           ? react.createElement(
                               "div",
-                              { className: "ax-status-summary ax-ok-text", role: "status" },
+                              {
+                                className: "ax-status-summary ax-ok-text",
+                                role: "status",
+                              },
                               patchStatus.text,
                             )
                           : null,
@@ -1778,7 +1966,11 @@ window.__ModuleLoader__.load({
                       : issue.action === "configure"
                         ? react.createElement(
                             "button",
-                            { type: "button", className: "ax-repair-button", onClick: () => openConfig(issue.key) },
+                            {
+                              type: "button",
+                              className: "ax-repair-button",
+                              onClick: () => openConfig(issue.key),
+                            },
                             t("status.action.configure"),
                           )
                         : null,
@@ -1788,7 +1980,10 @@ window.__ModuleLoader__.load({
                   return react.createElement(
                     "div",
                     { key: warning.code, className: "ax-status-issue" },
-                    react.createElement("span", { className: "ax-dot ax-dot-fixing", "aria-hidden": "true" }),
+                    react.createElement("span", {
+                      className: "ax-dot ax-dot-fixing",
+                      "aria-hidden": "true",
+                    }),
                     react.createElement(
                       "span",
                       { className: "ax-status-issue-text" },
@@ -1864,7 +2059,10 @@ window.__ModuleLoader__.load({
                 subGroupSelect(
                   "general",
                   "model",
-                  subModelOptionsFor("general").map((id) => ({ value: id, label: id })),
+                  subModelOptionsFor("general").map((id) => ({
+                    value: id,
+                    label: id,
+                  })),
                   t("placeholder.inheritModel"),
                 ),
               ),
@@ -1900,7 +2098,10 @@ window.__ModuleLoader__.load({
                 subGroupSelect(
                   "vision",
                   "model",
-                  subModelOptionsFor("vision").map((id) => ({ value: id, label: id })),
+                  subModelOptionsFor("vision").map((id) => ({
+                    value: id,
+                    label: id,
+                  })),
                   t("placeholder.inheritModel"),
                 ),
               ),
@@ -1986,6 +2187,22 @@ window.__ModuleLoader__.load({
                 t("global.visionRoute.native-when-capable"),
               ),
               react.createElement("option", { value: "auto" }, t("global.visionRoute.auto")),
+            ),
+          ),
+          react.createElement(
+            "div",
+            { className: "ax-row" },
+            react.createElement("label", { htmlFor: "ax-message-images" }, t("global.messageImages")),
+            react.createElement(
+              "select",
+              {
+                id: "ax-message-images",
+                value: draft?.enabled?.messageImages === "aux" ? "aux" : "native",
+                disabled: false,
+                onChange: (e) => setMessageImagesMode(e.target.value),
+              },
+              react.createElement("option", { value: "native" }, t("global.messageImages.native")),
+              react.createElement("option", { value: "aux" }, t("global.messageImages.aux")),
             ),
           ),
           react.createElement(
@@ -2096,13 +2313,21 @@ window.__ModuleLoader__.load({
             { className: "ax-actions" },
             react.createElement(
               "button",
-              { type: "button", className: "ax-save", disabled: patching, onClick: () => runPatch() },
+              {
+                type: "button",
+                className: "ax-save",
+                disabled: patching,
+                onClick: () => runPatch(),
+              },
               patching ? t("settings.patching") : t("settings.patch"),
             ),
             patchStatus !== null &&
               react.createElement(
                 "span",
-                { className: "ax-status " + (patchStatus.ok ? "ax-ok-text" : "ax-error"), role: "status" },
+                {
+                  className: "ax-status " + (patchStatus.ok ? "ax-ok-text" : "ax-error"),
+                  role: "status",
+                },
                 patchStatus.text,
               ),
           ),
@@ -2112,7 +2337,12 @@ window.__ModuleLoader__.load({
           { className: "ax-actions" },
           react.createElement(
             "button",
-            { type: "button", className: "ax-save", disabled: saving || !state.writable, onClick: save },
+            {
+              type: "button",
+              className: "ax-save",
+              disabled: saving || !state.writable,
+              onClick: save,
+            },
             saving ? t("settings.saving") : t("settings.save"),
           ),
           saveError !== null &&
@@ -2298,8 +2528,18 @@ window.__ModuleLoader__.load({
     /** Stable group identity for one entry under the active group mode. */
     function groupIdentityForEntry(entry, groupBy, sessions) {
       if (groupBy === "session") {
-        if (entry.orphan) return { id: GROUP_ORPHAN, label: __t("imageLibrary.orphanBadge"), value: -Infinity };
-        if (entry.archived) return { id: GROUP_ARCHIVED, label: __t("imageLibrary.archivedBadge"), value: -1 };
+        if (entry.orphan)
+          return {
+            id: GROUP_ORPHAN,
+            label: __t("imageLibrary.orphanBadge"),
+            value: -Infinity,
+          };
+        if (entry.archived)
+          return {
+            id: GROUP_ARCHIVED,
+            label: __t("imageLibrary.archivedBadge"),
+            value: -1,
+          };
         const sid = (entry.ownerSessions && entry.ownerSessions[0]) || "";
         return { id: sid, label: sessionTitle(sessions, sid), value: sid };
       }
@@ -2320,7 +2560,11 @@ window.__ModuleLoader__.load({
         const bucket = Math.floor(date.getHours() / 6); // 0..3
         const bucketStart = bucket * 6;
         const label = __t("imageLibrary.dateToday") + " " + String(bucketStart).padStart(2, "0") + ":00";
-        return { id: "today-" + bucket, label, value: startToday + bucketStart * 3600000 };
+        return {
+          id: "today-" + bucket,
+          label,
+          value: startToday + bucketStart * 3600000,
+        };
       }
       if (diffDays <= DATE_GROUP_RECENT_DAYS) {
         const dayStart = startOfDay(date);
@@ -2388,7 +2632,13 @@ window.__ModuleLoader__.load({
     /** Build grouped rows from filtered entries. */
     function buildGroups(entries, groupBy, sortKey, groupSortKey, sessions) {
       if (!groupBy || groupBy === "none") {
-        return [{ id: null, label: null, entries: [...entries].sort((a, b) => compareEntries(a, b, sortKey)) }];
+        return [
+          {
+            id: null,
+            label: null,
+            entries: [...entries].sort((a, b) => compareEntries(a, b, sortKey)),
+          },
+        ];
       }
       const groups = new Map();
       if (groupBy === "session") {
@@ -2396,7 +2646,12 @@ window.__ModuleLoader__.load({
           const occs = expandSessionOccurrences(entry, sessions);
           for (const occ of occs) {
             const group = sessionOccurrenceGroup(occ, sessions);
-            if (!groups.has(group.id)) groups.set(group.id, { id: group.id, label: group.label, occurrences: [] });
+            if (!groups.has(group.id))
+              groups.set(group.id, {
+                id: group.id,
+                label: group.label,
+                occurrences: [],
+              });
             groups.get(group.id).occurrences.push({ entry, sid: occ.sid });
           }
         }
@@ -2405,7 +2660,13 @@ window.__ModuleLoader__.load({
           const info = groupIdentityForEntry(entry, groupBy, sessions);
           const id = info.id;
           if (!groups.has(id))
-            groups.set(id, { id, label: info.label, order: info.order || 0, value: info.value, occurrences: [] });
+            groups.set(id, {
+              id,
+              label: info.label,
+              order: info.order || 0,
+              value: info.value,
+              occurrences: [],
+            });
           groups.get(id).occurrences.push({ entry, sid: null });
         }
       }
@@ -2552,7 +2813,14 @@ window.__ModuleLoader__.load({
         }
         return true;
       });
-      const counts = data?.counts ?? { total: 0, orphan: 0, archived: 0, shared: 0, retained: 0, withMemory: 0 };
+      const counts = data?.counts ?? {
+        total: 0,
+        orphan: 0,
+        archived: 0,
+        shared: 0,
+        retained: 0,
+        withMemory: 0,
+      };
       const visibleSelected = entries.filter((entry) => selected.has(entry.attachmentId)).length;
       const outsideCount = selected.size - visibleSelected;
       const selectedReferencedCount = (data?.entries ?? []).filter(
@@ -2608,7 +2876,14 @@ window.__ModuleLoader__.load({
           const top = Math.min(startY, moveEvent.clientY);
           const right = Math.max(startX, moveEvent.clientX);
           const bottom = Math.max(startY, moveEvent.clientY);
-          setDragBox({ left, top, right, bottom, width: right - left, height: bottom - top });
+          setDragBox({
+            left,
+            top,
+            right,
+            bottom,
+            width: right - left,
+            height: bottom - top,
+          });
           // Recompute selection from rendered cards.
           const additive = moveEvent.shiftKey || moveEvent.ctrlKey || moveEvent.metaKey;
           const next = additive ? new Set(state.previous) : new Set();
@@ -2711,7 +2986,13 @@ window.__ModuleLoader__.load({
               : null,
             react.createElement(
               "div",
-              { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+              {
+                style: {
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                },
+              },
               entry.fileName || entry.hash,
             ),
           ),
@@ -2838,7 +3119,11 @@ window.__ModuleLoader__.load({
           }),
           react.createElement(
             "button",
-            { className: "ax-image-action", onClick: () => loadFromCommand(), disabled: loading || busy },
+            {
+              className: "ax-image-action",
+              onClick: () => loadFromCommand(),
+              disabled: loading || busy,
+            },
             __t("imageLibrary.refresh"),
           ),
           react.createElement("button", { className: "ax-image-action", onClick: onClose }, __t("imageLibrary.close")),
@@ -2885,7 +3170,11 @@ window.__ModuleLoader__.load({
             react.createElement("span", null, __t("imageLibrary.groupBy") + " "),
             react.createElement(
               "select",
-              { value: groupBy, onChange: (e) => setGroupBy(e.target.value), title: __t("imageLibrary.groupBy") },
+              {
+                value: groupBy,
+                onChange: (e) => setGroupBy(e.target.value),
+                title: __t("imageLibrary.groupBy"),
+              },
               react.createElement("option", { value: "none" }, __t("imageLibrary.groupNone")),
               react.createElement("option", { value: "date" }, __t("imageLibrary.groupDate")),
               react.createElement("option", { value: "session" }, __t("imageLibrary.groupSession")),
@@ -2893,7 +3182,11 @@ window.__ModuleLoader__.load({
             react.createElement("span", null, __t("imageLibrary.sortBy") + " "),
             react.createElement(
               "select",
-              { value: sortKey, onChange: (e) => setSortKey(e.target.value), title: __t("imageLibrary.sortBy") },
+              {
+                value: sortKey,
+                onChange: (e) => setSortKey(e.target.value),
+                title: __t("imageLibrary.sortBy"),
+              },
               react.createElement("option", { value: "time-new" }, __t("imageLibrary.sortTimeNew")),
               react.createElement("option", { value: "time-old" }, __t("imageLibrary.sortTimeOld")),
               react.createElement("option", { value: "size-desc" }, __t("imageLibrary.sortSizeDesc")),
@@ -2948,7 +3241,10 @@ window.__ModuleLoader__.load({
             ),
             react.createElement(
               "button",
-              { className: "ax-image-action", onClick: () => setSelected(new Set()) },
+              {
+                className: "ax-image-action",
+                onClick: () => setSelected(new Set()),
+              },
               __t("imageLibrary.clear"),
             ),
             react.createElement(
@@ -2962,7 +3258,11 @@ window.__ModuleLoader__.load({
             ),
             react.createElement(
               "button",
-              { className: "ax-image-action ax-image-action-danger", disabled: busy, onClick: deleteOrphans },
+              {
+                className: "ax-image-action ax-image-action-danger",
+                disabled: busy,
+                onClick: deleteOrphans,
+              },
               __t("imageLibrary.deleteOrphans"),
             ),
             [
@@ -2991,7 +3291,9 @@ window.__ModuleLoader__.load({
             ref: scrollRef,
             className: "ax-image-scroll",
             onMouseDown: beginDragSelect,
-            style: { "--ax-thumb-size": (THUMB_SIZE_PX[thumbSize] || THUMB_SIZE_PX.medium) + "px" },
+            style: {
+              "--ax-thumb-size": (THUMB_SIZE_PX[thumbSize] || THUMB_SIZE_PX.medium) + "px",
+            },
           },
           loading
             ? react.createElement("div", { className: "ax-image-empty" }, "…")
@@ -3294,13 +3596,20 @@ window.__ModuleLoader__.load({
         },
         react.createElement(
           "div",
-          { className: "ax-image-modal", ref: modalRef, onClick: (e) => e.stopPropagation() },
+          {
+            className: "ax-image-modal",
+            ref: modalRef,
+            onClick: (e) => e.stopPropagation(),
+          },
           react.createElement(
             "div",
             { className: "ax-image-modal-header", onMouseDown: beginDrag },
             react.createElement(
               "span",
-              { className: "ax-image-modal-title", title: entry.fileName || entry.hash },
+              {
+                className: "ax-image-modal-title",
+                title: entry.fileName || entry.hash,
+              },
               entry.fileName || entry.hash,
             ),
             notice ? react.createElement("span", { className: "ax-image-notice", role: "status" }, notice) : null,
@@ -3309,7 +3618,10 @@ window.__ModuleLoader__.load({
               { className: "ax-image-modal-actions" },
               react.createElement(
                 "button",
-                { className: "ax-image-action", onClick: () => toggleRetain(entry) },
+                {
+                  className: "ax-image-action",
+                  onClick: () => toggleRetain(entry),
+                },
                 entry.retained ? __t("imageLibrary.unretain") : __t("imageLibrary.retain"),
               ),
               react.createElement(
@@ -3344,7 +3656,10 @@ window.__ModuleLoader__.load({
               ),
               react.createElement(
                 "button",
-                { className: "ax-image-action", onClick: () => onCloseDetail() },
+                {
+                  className: "ax-image-action",
+                  onClick: () => onCloseDetail(),
+                },
                 __t("imageLibrary.close"),
               ),
             ),
@@ -3355,7 +3670,11 @@ window.__ModuleLoader__.load({
             react.createElement(
               "div",
               { className: "ax-image-modal-preview" },
-              react.createElement(ImageThumb, { sessions, entry, size: "detail" }),
+              react.createElement(ImageThumb, {
+                sessions,
+                entry,
+                size: "detail",
+              }),
             ),
             react.createElement(
               "div",
@@ -3373,7 +3692,10 @@ window.__ModuleLoader__.load({
                     react.createElement("span", { className: "ax-image-meta-label" }, __t("imageLibrary.fileName")),
                     react.createElement(
                       "span",
-                      { className: "ax-image-meta-value", title: entry.fileName || entry.hash },
+                      {
+                        className: "ax-image-meta-value",
+                        title: entry.fileName || entry.hash,
+                      },
                       entry.fileName || entry.hash,
                     ),
                   ),
@@ -3469,7 +3791,9 @@ window.__ModuleLoader__.load({
                             isArchived
                               ? react.createElement(
                                   "span",
-                                  { className: "ax-image-badge ax-image-badge-archived" },
+                                  {
+                                    className: "ax-image-badge ax-image-badge-archived",
+                                  },
                                   __t("imageLibrary.archivedBadge"),
                                 )
                               : null,
@@ -3527,7 +3851,11 @@ window.__ModuleLoader__.load({
                             react.createElement("span", null, formatDateTime(m.at)),
                             react.createElement(
                               "button",
-                              { className: "ax-image-memory-more", type: "button", onClick: () => toggleSummary(key) },
+                              {
+                                className: "ax-image-memory-more",
+                                type: "button",
+                                onClick: () => toggleSummary(key),
+                              },
                               isLong
                                 ? expanded
                                   ? __t("imageLibrary.memoryCollapse")
@@ -3588,7 +3916,11 @@ window.__ModuleLoader__.load({
           wide ? __t("imageLibrary.open") : "🖼",
         ),
         open
-          ? react.createElement(ImageLibraryPanel, { sessions, runAuxCommand, onClose: () => setOpen(false) })
+          ? react.createElement(ImageLibraryPanel, {
+              sessions,
+              runAuxCommand,
+              onClose: () => setOpen(false),
+            })
           : null,
       );
     }
@@ -3711,7 +4043,10 @@ window.__ModuleLoader__.load({
         sessions: {
           list: async () => {
             const snapshot = sessions.list.getSnapshot();
-            const items = snapshot.ids.map((id) => ({ sessionId: id, ...snapshot.byId[id] }));
+            const items = snapshot.ids.map((id) => ({
+              sessionId: id,
+              ...snapshot.byId[id],
+            }));
             return { ok: true, value: { items } };
           },
         },
@@ -3821,7 +4156,11 @@ window.__ModuleLoader__.load({
           react.createElement(
             "div",
             { className: "ax-tv-gallery", key: "gallery" },
-            renderSlot("tool.call.images", { images: model.images, loadImage, align: "start" }),
+            renderSlot("tool.call.images", {
+              images: model.images,
+              loadImage,
+              align: "start",
+            }),
           ),
         );
       }
@@ -3829,13 +4168,260 @@ window.__ModuleLoader__.load({
         children.push(
           react.createElement(
             "div",
-            { className: model.state === "error" ? "ax-tv-error" : "ax-tv-text", key: "text" },
+            {
+              className: model.state === "error" ? "ax-tv-error" : "ax-tv-text",
+              key: "text",
+            },
             model.text,
           ),
         );
       }
       return react.createElement("div", { className: "ax-tv", role: "group" }, ...children);
     }
+
+    /* @generated:message-images:start (source: dsh-aux/src/client/message-images.js; run node scripts/gen-client-message-images.mjs) */
+    /**
+     * AUX message-image gallery: the shipped thumbnail plus a `第N/共M` badge for
+     * user-pasted images.
+     *
+     * This file is the single source of truth. It is inlined into the shipped
+     * browser bundle (`src/client.js`) by `scripts/gen-client-message-images.mjs`,
+     * because a client package has exactly one bundle entry (`exports["./client"]`)
+     * and the browser bundle cannot import sibling files. The generator refuses any
+     * `import`/`require` in this file, so it stays dependency-free by construction.
+     *
+     * Retirement: disable `enabled.messageImages` (default native) or delete this
+     * file plus its generated block and call site — the official attachment
+     * gallery returns with no residue.
+     *
+     * @module @dolorescaritasangelus/dsh-aux/client/message-images
+     */
+
+    /** Content blocks of one message, tolerating any shape. */
+    function contentBlocks(content) {
+      return Array.isArray(content) ? content : [];
+    }
+
+    /**
+     * Durable image ids of a message content array, in source order. Counts only
+     * top-level image blocks: the bridge numbers exactly these, so the badge and
+     * the model-facing anchor agree.
+     * @param content message content blocks.
+     * @returns attachment ids in order (empty for non-image content).
+     */
+    function contentImageIds(content) {
+      const ids = [];
+      for (const block of contentBlocks(content)) {
+        if (block === null || typeof block !== "object" || block.type !== "image") continue;
+        const attachment = block.attachment;
+        const id = attachment !== null && typeof attachment === "object" ? attachment.attachmentId : void 0;
+        if (typeof id === "string" && id.length > 0) ids.push(id);
+      }
+      return ids;
+    }
+
+    /**
+     * The `第N/共M` position of one rendered image, or null when it cannot be
+     * stated unambiguously.
+     *
+     * Only user-pasted images are numbered (`align === "end"`): the numbering
+     * contract covers the message the user sent, not assistant markdown groups or
+     * tool echoes. A submission-echo preview carries no durable id yet, so it is
+     * never numbered. The position comes from the assembled conversation
+     * (`useTrajectory().eventNodes`, the same nodes the transcript renders), matched
+     * by attachment id; if the id appears in more than one user message, the answer
+     * is ambiguous and no badge is shown.
+     *
+     * @param options.useTrajectory session standard prop (may be absent).
+     * @param options.image one MessageImageSource.
+     * @param options.align owner alignment.
+     * @returns `{ index, total }` (1-based) or null.
+     */
+    function messageImageOrdinal({ useTrajectory, image, align }) {
+      if (align !== "end") return null;
+      if (image === null || typeof image !== "object") return null;
+      const attachment = image.attachment;
+      const attachmentId = attachment !== null && typeof attachment === "object" ? attachment.attachmentId : void 0;
+      if (typeof attachmentId !== "string" || attachmentId.length === 0) return null;
+      if (typeof useTrajectory !== "function") return null;
+      let snapshot;
+      try {
+        snapshot = useTrajectory((value) => value);
+      } catch {
+        return null;
+      }
+      const nodes =
+        snapshot !== null && typeof snapshot === "object" && Array.isArray(snapshot.eventNodes)
+          ? snapshot.eventNodes
+          : [];
+      const positions = [];
+      for (const node of nodes) {
+        if (node === null || typeof node !== "object") continue;
+        // Only messages the user sent carry the numbering contract.
+        if (node.kind !== "user" && node.kind !== "steering") continue;
+        const ids = contentImageIds(node.content);
+        const index = ids.indexOf(attachmentId);
+        if (index >= 0) positions.push({ index: index + 1, total: ids.length });
+      }
+      if (positions.length !== 1) return null;
+      return positions[0];
+    }
+
+    /**
+     * Install the gallery into `conversation.message.images`.
+     *
+     * The shipped attachment plugin registers that single slot at the default
+     * priority 0; a second registration at the same priority throws, so this entry
+     * must shadow it at a LOWER priority ("lowest renders"). Disposing this entry
+     * leaves the shipped one in place, which is the retirement path.
+     *
+     * @param options.ctx client plugin context.
+     * @param options.react the bundle's React.
+     * @param options.t locale lookup for this plugin's own labels.
+     * @returns disposer removing the entry (idempotent).
+     */
+    function installMessageImages({ ctx, react, t, priority = -1 }) {
+      const label = typeof t === "function" ? t : (key) => key;
+
+      /** One thumbnail: peek first frame, load/retry, click to open the lightbox. */
+      function Thumbnail(props) {
+        const image = props.image;
+        const load = props.load;
+        const compact = props.compact === true;
+        const badge = props.badge;
+        const attachment = image !== null && typeof image === "object" ? image.attachment : void 0;
+        const preview = image !== null && typeof image === "object" ? image.preview : void 0;
+        const [src, setSrc] = react.useState(() =>
+          attachment !== void 0 && typeof load.peek === "function" ? (load.peek(attachment) ?? null) : null,
+        );
+        const [failed, setFailed] = react.useState(false);
+        const [attempt, setAttempt] = react.useState(0);
+        const [open, setOpen] = react.useState(false);
+        react.useEffect(() => {
+          if (attachment === void 0) return void 0;
+          let live = true;
+          setFailed(false);
+          setSrc(typeof load.peek === "function" ? (load.peek(attachment) ?? null) : null);
+          void load(attachment)
+            .then((url) => {
+              if (live) setSrc(url);
+            })
+            .catch(() => {
+              if (live) setFailed(true);
+            });
+          return () => {
+            live = false;
+          };
+        }, [attachment, load, attempt]);
+        const name =
+          (preview !== void 0 && typeof preview.name === "string" ? preview.name : void 0) ??
+          (attachment !== void 0 && typeof attachment.name === "string" ? attachment.name : void 0) ??
+          label("messageImages.image");
+        const source = preview !== void 0 && typeof preview.url === "string" ? preview.url : src;
+        if (failed) {
+          return react.createElement(
+            "button",
+            {
+              type: "button",
+              className: "ax-mi-error",
+              "data-variant": compact ? "tile" : "single",
+              title: label("messageImages.retry"),
+              onClick: () => {
+                setAttempt((value) => value + 1);
+              },
+            },
+            label("messageImages.loadFailed"),
+          );
+        }
+        const frame = react.createElement(
+          "button",
+          {
+            type: "button",
+            className: "ax-mi-frame",
+            "data-variant": compact ? "tile" : "single",
+            title: label("messageImages.open"),
+            "aria-label": label("messageImages.openNamed") + name,
+            onClick: () => {
+              if (source !== null && source !== void 0) setOpen(true);
+            },
+          },
+          source === null || source === void 0
+            ? react.createElement("span", { className: "ax-mi-loading" }, label("messageImages.loading"))
+            : react.createElement("img", { src: source, alt: name }),
+        );
+        const children = [frame];
+        if (badge !== null && badge !== void 0) {
+          children.push(react.createElement("span", { className: "ax-mi-badge", key: "badge" }, badge));
+        }
+        if (open && source !== null && source !== void 0) {
+          children.push(
+            react.createElement(
+              "div",
+              {
+                className: "ax-mi-lightbox",
+                key: "lightbox",
+                role: "dialog",
+                "aria-label": label("messageImages.lightbox"),
+                onClick: () => {
+                  setOpen(false);
+                },
+              },
+              react.createElement("img", { src: source, alt: name }),
+            ),
+          );
+        }
+        return react.createElement("div", { className: "ax-mi-item" }, ...children);
+      }
+
+      /** The gallery slot component: thumbnails, with badges on user images only. */
+      function MessageImagesGallery(props) {
+        const images = Array.isArray(props.images) ? props.images : [];
+        const align = props.align === "start" ? "start" : "end";
+        const compact = props.compact === true || images.length > 1;
+        const t2 = (props && props.t) || label;
+        if (images.length === 0) return null;
+        return react.createElement(
+          "div",
+          { className: "ax-mi-gallery", "data-align": align },
+          ...images.map((image, index) => {
+            const ordinal = messageImageOrdinal({ useTrajectory: props.useTrajectory, image, align });
+            return react.createElement(Thumbnail, {
+              key: "image-" + index,
+              image,
+              load: props.loadImage,
+              compact,
+              badge: ordinal === null ? null : "第" + ordinal.index + "/共" + ordinal.total,
+            });
+          }),
+        );
+      }
+
+      let dispose = null;
+      let cancelled = false;
+      ctx.slots.inject("conversation.message.images", () => {
+        // The slot may mount after a disable already ran: honor the latest intent.
+        if (cancelled) return () => {};
+        dispose = ctx.slots.register(
+          {
+            name: "conversation.message.images",
+            // Lower than the shipped attachment plugin's default 0: a single slot
+            // refuses a same-priority second registration, and the lowest priority
+            // renders.
+            priority,
+          },
+          MessageImagesGallery,
+        );
+        return dispose;
+      });
+      return () => {
+        cancelled = true;
+        if (dispose === null) return;
+        const current = dispose;
+        dispose = null;
+        current();
+      };
+    }
+    /* @generated:message-images:end */
 
     /**
      * Client plugin body: register the settings page and the status chip.
@@ -3870,7 +4456,9 @@ window.__ModuleLoader__.load({
             // Declaring the Tool image gallery as a child is what authorizes
             // this entry's renderSlot to dispatch it; the official
             // conversation.message.images slot stays untouched.
-            children: { "tool.call.images": { kind: "single", scope: "session" } },
+            children: {
+              "tool.call.images": { kind: "single", scope: "session" },
+            },
           },
           VisionAnalyzeRow,
         ),
@@ -3912,6 +4500,43 @@ window.__ModuleLoader__.load({
           ImageLibraryButton,
         ),
       );
+      // Message-image gallery (enabled.messageImages). "aux" shadows the shipped
+      // gallery with the ordinal badge; "native" (the default, and any absent or
+      // unknown value) registers nothing, so the shipped gallery stays. Reading
+      // through the settings namespace keeps this host-free: an unknown key is
+      // passed through today, and if a future schema drops it the feature simply
+      // turns off instead of breaking the page.
+      let disposeMessageImages = null;
+      const applyMessageImagesMode = (mode) => {
+        if (mode === "aux") {
+          if (disposeMessageImages === null) disposeMessageImages = installMessageImages({ ctx, react, t: __t });
+          return;
+        }
+        if (disposeMessageImages !== null) {
+          const current = disposeMessageImages;
+          disposeMessageImages = null;
+          current();
+        }
+      };
+      const syncMessageImages = () =>
+        api.settings
+          .describe({})
+          .then((response) => {
+            const value = unwrapResponse(response);
+            const mode = value && value.value && value.value.enabled ? value.value.enabled.messageImages : void 0;
+            applyMessageImagesMode(mode === "aux" ? "aux" : "native");
+          })
+          .catch(() => applyMessageImagesMode("native"));
+      void syncMessageImages();
+      try {
+        if (ctx.remote && typeof ctx.remote.$on === "function") {
+          ctx.remote.$on("settings/document-updated", () => {
+            void syncMessageImages();
+          });
+        }
+      } catch {
+        /* settings change notifications are optional */
+      }
     }
     exports.apply = apply;
     exports.inject = inject;
