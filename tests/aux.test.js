@@ -3033,3 +3033,131 @@ test("事件记录: 检测函数在候选全部缺失时安全返回 false 不�
   const supported = await sessionEventsSupported(ctx.auxLlm);
   assert.equal(typeof supported, "boolean", "检测应返回布尔值且不抛错");
 });
+
+/** Wrap ctx.llm.stream so one model fails; returns the per-call route log. */
+function failRoute(ctx, failingModel, makeError) {
+  const original = ctx.llm.stream.bind(ctx.llm);
+  const calls = [];
+  ctx.llm.stream = (options) => {
+    calls.push(options.provider + "/" + options.model);
+    if (options.model === failingModel) {
+      // An async iterable whose first pull throws (a generator without yield
+      // trips eslint's require-yield).
+      return {
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              throw makeError();
+            },
+          };
+        },
+      };
+    }
+    return original(options);
+  };
+  return calls;
+}
+
+test("降级链: 主选限流后按序落到备选,事件记录整链与作答下标", async () => {
+  const { ctx } = await makeHarness({ tasks: { compress: { models: ["p/primary", "p/backup"] } } });
+  const calls = failRoute(ctx, "primary", () => {
+    const error = new Error("429 too many requests");
+    error.status = 429;
+    return error;
+  });
+  const session = makeSession();
+  const result = await ctx.auxLlm.call("compress", {
+    messages: [{ content: [{ type: "text", text: "hi" }] }],
+    session,
+  });
+  assert.equal(result.provider, "p");
+  assert.equal(result.model, "backup");
+  assert.deepEqual(calls, ["p/primary", "p/backup"], "应按序尝试链");
+  const event = session.events.find((entry) => entry.type === AUX_CALL_EVENT);
+  assert.deepEqual(event.data.candidates, ["p/primary", "p/backup", "opencode-go/deepseek-v4-flash"]);
+  assert.equal(event.data.selectedIndex, 1, "作答者是链上第 2 个候选");
+  assert.equal(event.data.fallbackUsed, true);
+});
+
+test("降级链: 冷却中的主选被跳过,不发起调用", async () => {
+  const { ctx } = await makeHarness({ tasks: { compress: { models: ["p/primary", "p/backup"] } } });
+  const calls = failRoute(ctx, "primary", () => new Error("must not be called"));
+  ctx.auxLlm._cooldown.recordFailure("p", "primary");
+  ctx.auxLlm._cooldown.recordFailure("p", "primary");
+  assert.equal(ctx.auxLlm._cooldown.recordFailure("p", "primary"), true, "三次失败进入冷却");
+  const result = await ctx.auxLlm.call("compress", {
+    messages: [{ content: [{ type: "text", text: "hi" }] }],
+    session: makeSession(),
+  });
+  assert.equal(result.model, "backup");
+  assert.deepEqual(calls, ["p/backup"], "冷却候选不得发起调用");
+});
+
+test("降级链: 能力门在链中间生效(文本候选跳过,图像候选作答)", async () => {
+  const { ctx } = await makeHarness({
+    tasks: { vision: { models: ["opencode-go/deepseek-v4-flash", "opencode-go/kimi-k2.7-code"] } },
+  });
+  const calls = failRoute(ctx, "never", () => new Error("unused"));
+  const session = makeSession();
+  const result = await ctx.auxLlm.call("vision", {
+    messages: [
+      {
+        content: [
+          { type: "image", attachment: { attachmentId: "a" } },
+          { type: "text", text: "q" },
+        ],
+      },
+    ],
+    session,
+  });
+  assert.equal(result.model, "kimi-k2.7-code");
+  assert.deepEqual(calls, ["opencode-go/kimi-k2.7-code"], "文本候选不得发起调用");
+  const event = session.events.find((entry) => entry.type === AUX_CALL_EVENT);
+  assert.deepEqual(event.data.candidates, ["opencode-go/deepseek-v4-flash", "opencode-go/kimi-k2.7-code"]);
+  assert.equal(event.data.selectedIndex, 1);
+});
+
+test("降级链: 单数配置等价于单元素链(向后兼容)", async () => {
+  const { ctx } = await makeHarness({ tasks: { compress: { provider: "p", model: "single" } } });
+  const row = ctx.auxLlm.describe().find((entry) => entry.task === "compress");
+  assert.deepEqual(row.chain, [{ provider: "p", model: "single" }]);
+  assert.equal(row.chainSource, "single");
+  assert.equal(row.singularIgnored, false);
+  assert.deepEqual(row.primary, { provider: "p", model: "single" });
+});
+
+test("降级链: models 优先于单数,status 输出整链与忽略警告", async () => {
+  const { ctx, commands } = await makeHarness({
+    tasks: { compress: { provider: "ignored", model: "ignored-model", models: ["p/one", "p/two"] } },
+  });
+  const row = ctx.auxLlm.describe().find((entry) => entry.task === "compress");
+  assert.deepEqual(row.chain, [
+    { provider: "p", model: "one" },
+    { provider: "p", model: "two" },
+  ]);
+  assert.equal(row.chainSource, "models");
+  assert.equal(row.singularIgnored, true);
+  assert.deepEqual(row.models, ["p/one", "p/two"]);
+  const out = await commands[0].handler({ agent: void 0, rawInput: "status" });
+  assert.equal(out.kind, "success");
+  assert.ok(out.text.includes("链: p/one → p/two"), out.text);
+  assert.ok(out.text.includes("单数 provider/model 被忽略"), out.text);
+});
+
+test("/aux model: 选择写成单元素链,可覆盖已有链", async () => {
+  const { ctx, commands } = await makeHarness({ tasks: { compress: { models: ["p/one", "p/two"] } } });
+  const replaced = [];
+  ctx.get("settings").replace = async (ns, section) => {
+    replaced.push({ ns, section });
+  };
+  const out = await commands[0].handler({ agent: void 0, rawInput: "model compress opencode-go/glm-5.2" });
+  assert.equal(out.kind, "success", out.text);
+  assert.match(out.text, /原降级链已替换为单元素/);
+  const entry = replaced[0].section.tasks.compress;
+  assert.deepEqual(entry.models, ["opencode-go/glm-5.2"], "选择必须落成单元素链(否则插件链仍会胜出)");
+  assert.equal(entry.provider, void 0);
+  assert.equal(entry.model, void 0);
+  assert.equal(replaced[0].ns, "aux");
+  // 其他任务条目必须原样保留(只改本任务)
+  assert.deepEqual(replaced[0].section.tasks.vision ?? {}, {});
+});

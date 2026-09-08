@@ -282,9 +282,14 @@ export async function handleAuxCommand(service, agent, rawInput) {
     );
     for (const entry of service.describe()) {
       const primary = entry.primary ? `${entry.primary.provider}/${entry.primary.model}` : "(未配置 → 主模型)";
+      const chain = Array.isArray(entry.chain) ? entry.chain : [];
+      const chainText = chain.length > 1 ? " | 链: " + chain.map((r) => `${r.provider}/${r.model}`).join(" → ") : "";
       lines.push(
-        `  - ${entry.label}(${entry.task}): ${primary} | timeout ${entry.timeoutMs}ms | 并发 ${entry.maxConcurrency}`,
+        `  - ${entry.label}(${entry.task}): ${primary}${chainText} | timeout ${entry.timeoutMs}ms | 并发 ${entry.maxConcurrency}`,
       );
+      if (entry.singularIgnored === true) {
+        lines.push(`      ⚠ tasks.${entry.task}.models 已配置 → 单数 provider/model 被忽略(仅链生效)`);
+      }
     }
     const recent = recentCalls(agent);
     if (recent.length > 0) {
@@ -669,12 +674,26 @@ export async function handleModelCommand(service, args) {
   }
   const currentSection = service._source?.() ?? {};
   const tasks = { ...(currentSection.tasks ?? {}) };
-  tasks[task] = { ...(tasks[task] ?? {}), provider, model };
+  // The choice is written as a single-entry chain: a chain wins over the
+  // singular fields, and only `models` can also override a chain coming from
+  // plugin config (clearing a settings-level list would not). Users extend the
+  // chain afterwards in the settings page's chain field.
+  // The effective chain (plugin + settings) tells the user whether their
+  // existing chain is being replaced, not just the settings-level list.
+  const previousChain = Array.isArray(service._merged?.[task]?.models) ? service._merged[task].models : [];
+  const nextEntry = { ...(tasks[task] ?? {}), models: [provider + "/" + model] };
+  delete nextEntry.provider;
+  delete nextEntry.model;
+  tasks[task] = nextEntry;
   try {
     await settings.replace(AUX_SETTINGS_NAMESPACE, { ...currentSection, tasks });
     // Recompute so the status view reflects the change immediately.
     service._recomputeMerged();
-    return { kind: "success", text: `辅助模型 [${task}] 已设为 ${provider}/${model},下一请求生效。` };
+    const replaced = previousChain.length > 1 ? "(原降级链已替换为单元素)" : "";
+    return {
+      kind: "success",
+      text: `辅助模型 [${task}] 已设为 ${provider}/${model}(单元素链)${replaced},下一请求生效。`,
+    };
   } catch (error) {
     return { kind: "error", text: `aux: 写入设置失败: ${error?.message ?? String(error)}` };
   }

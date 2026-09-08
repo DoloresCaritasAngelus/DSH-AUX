@@ -31,6 +31,7 @@ import {
   mergeTaskConfig,
   resolveConfig,
   resolvePrimaryRoute,
+  resolveRouteChain,
   route,
   shouldFallback,
   taskConcurrency,
@@ -532,20 +533,23 @@ export class AuxLlmService extends Service {
     const attempts = [];
     try {
       const mainRoute = await this._mainRoute(request);
-      const primary = resolvePrimaryRoute(definition, this.taskDefaults);
-      const candidates = [];
-      if (primary !== void 0) candidates.push(primary);
+      // Ordered auxiliary chain: `models` (when configured) else the singular
+      // provider/model, else the task default. Each candidate is tried in turn
+      // with the existing cooldown skip and image-capability gate.
+      const chain = resolveRouteChain(definition, this.taskDefaults);
+      const candidates = [...chain];
+      const candidateKeys = () => candidates.map((entry) => entry.provider + "/" + entry.model);
       // `visionFallbackToMain=false` disables falling back to the main model
-      // AFTER a configured vision aux route fails; when NO vision aux route is
+      // AFTER a configured vision aux chain fails; when NO vision aux route is
       // configured at all, the main model is the only option (not a fallback),
       // so keep it usable.
       const allowMainFallback =
         (request.allowMainFallback ?? this.fallbackToMain) &&
-        (task !== "vision" || this.visionFallbackToMain || primary === void 0);
+        (task !== "vision" || this.visionFallbackToMain || chain.length === 0);
       if (
         allowMainFallback &&
         mainRoute !== void 0 &&
-        !(primary !== void 0 && primary.provider === mainRoute.provider && primary.model === mainRoute.model)
+        !chain.some((entry) => entry.provider === mainRoute.provider && entry.model === mainRoute.model)
       ) {
         candidates.push(mainRoute);
       }
@@ -587,6 +591,11 @@ export class AuxLlmService extends Service {
             ok: true,
             durationMs: Date.now() - startedAt,
             fallbackUsed: attempts.length > 0,
+            // Which candidate answered, and the whole ordered chain it came
+            // from: the chain itself stays out of the privacy-minimized
+            // aux-status projection and lives only here + /aux status.
+            candidates: candidateKeys(),
+            selectedIndex: candidates.indexOf(candidate),
             inputChars: request.inputChars,
             outputChars: output.length,
             purpose: request.purpose,
@@ -630,6 +639,7 @@ export class AuxLlmService extends Service {
         durationMs: Date.now() - startedAt,
         errorCode: attempts.map((a) => a.kind).join(","),
         fallbackUsed: attempts.length > 1,
+        candidates: candidateKeys(),
         purpose: request.purpose,
         mode: request.mode ?? "aux",
       });
@@ -875,34 +885,40 @@ export class AuxLlmService extends Service {
     }
   }
 
+  /** One task's routing status row: primary, the full chain, and its source. */
+  _describeTask(task, definition, label) {
+    const chain = resolveRouteChain(definition, this.taskDefaults);
+    const primary = chain[0] ?? null;
+    const models = Array.isArray(definition?.models)
+      ? definition.models.filter((spec) => typeof spec === "string" && spec.length > 0)
+      : [];
+    const hasSingular = definition?.provider !== void 0 && definition?.model !== void 0;
+    return {
+      task,
+      label,
+      configured: definition?.provider !== void 0 || models.length > 0,
+      primary,
+      chain,
+      chainSource: models.length > 0 ? "models" : hasSingular ? "single" : primary === null ? "none" : "default",
+      // A non-empty chain makes the singular provider/model inert. Reported
+      // (not refused): an existing config must keep loading.
+      singularIgnored: models.length > 0 && hasSingular,
+      models,
+      timeoutMs: taskTimeoutMs(definition),
+      maxConcurrency: taskConcurrency(definition),
+    };
+  }
+
   /** Current per-task routing status (for /aux status and UIs). */
   describe() {
     const out = [];
     for (const task of AUX_TASKS) {
-      const definition = { task, ...(this._merged[task] ?? {}) };
-      const primary = resolvePrimaryRoute(definition, this.taskDefaults);
-      out.push({
-        task,
-        label: TASK_LABELS[task],
-        configured: definition?.provider !== void 0,
-        primary: primary ?? null,
-        timeoutMs: taskTimeoutMs(definition),
-        maxConcurrency: taskConcurrency(definition),
-      });
+      out.push(this._describeTask(task, { task, ...(this._merged[task] ?? {}) }, TASK_LABELS[task]));
     }
     // Custom tasks registered via registerTask/registerAuxTask also appear in
     // the status view (label defaults to the task key).
     for (const [key, definition] of this._customTasks) {
-      const customDef = { task: key, ...definition };
-      const primary = resolvePrimaryRoute(customDef, this.taskDefaults);
-      out.push({
-        task: key,
-        label: definition.label ?? key,
-        configured: definition?.provider !== void 0,
-        primary: primary ?? null,
-        timeoutMs: taskTimeoutMs(customDef),
-        maxConcurrency: taskConcurrency(customDef),
-      });
+      out.push(this._describeTask(key, { task: key, ...definition }, definition.label ?? key));
     }
     return out;
   }

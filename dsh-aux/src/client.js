@@ -49,8 +49,9 @@ window.__ModuleLoader__.load({
       ".ax-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 16px}",
       ".ax-row{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--dsw-alias-label-secondary);min-width:0}",
       ".ax-row label{font-size:12px;color:var(--dsw-alias-label-tertiary)}",
-      ".ax-row input,.ax-row select{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-strong);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}",
-      ".ax-row input:focus-visible,.ax-row select:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:1px}",
+      ".ax-row input,.ax-row select,.ax-row textarea{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-strong);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}",
+      ".ax-row textarea{font-family:inherit;resize:vertical}",
+      ".ax-row input:focus-visible,.ax-row select:focus-visible,.ax-row textarea:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:1px}",
       ".ax-hint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}",
       ".ax-field-head{display:flex;align-items:center;gap:6px;min-width:0}",
       ".ax-field-head[role=button]{cursor:pointer;border-radius:4px;padding:2px 4px;margin:-2px -4px}",
@@ -214,6 +215,8 @@ window.__ModuleLoader__.load({
       "field.concurrency": "并发上限",
       "field.maxChars": "maxChars (页面字符上限)",
       "field.reasoningEffort": "思考档位",
+      "field.models": "降级链 (provider/model,每行一条,按序尝试)",
+      "field.models.placeholder": "例如 volcengine-ark/minimax-m3\nopencode-go/kimi-k2.7-code",
       "placeholder.inheritModel": "(继承主模型)",
       "placeholder.inheritDefault": "(继承默认)",
       "subagent.mode": "模式",
@@ -450,6 +453,8 @@ window.__ModuleLoader__.load({
       "field.concurrency": "Max concurrency",
       "field.maxChars": "maxChars (page char limit)",
       "field.reasoningEffort": "Reasoning effort",
+      "field.models": "Fallback chain (provider/model, one per line, tried in order)",
+      "field.models.placeholder": "e.g. volcengine-ark/minimax-m3\nopencode-go/kimi-k2.7-code",
       "placeholder.inheritModel": "(Inherit main model)",
       "placeholder.inheritDefault": "(Inherit default)",
       "subagent.mode": "Mode",
@@ -891,6 +896,23 @@ window.__ModuleLoader__.load({
           return next;
         });
       };
+      /** Multi-line "provider/model" text -> ordered chain array (empty clears). */
+      const setTaskModels = (task, text) => {
+        const routes = String(text ?? "")
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+        setSaved(false);
+        setSaveError(null);
+        setDraft((d) => {
+          const next = structuredClone(d ?? {});
+          next.tasks = next.tasks ?? {};
+          next.tasks[task] = next.tasks[task] ?? {};
+          if (routes.length === 0) delete next.tasks[task].models;
+          else next.tasks[task].models = routes;
+          return next;
+        });
+      };
       const save = () => {
         setSaving(true);
         setSaveError(null);
@@ -919,6 +941,12 @@ window.__ModuleLoader__.load({
             if (val !== void 0 && val !== "") ops.push({ op: "set", path, value: Number(val) });
             else ops.push({ op: "unset", path });
           }
+          // Ordered fallback chain: written as-is; the server ignores the
+          // singular provider/model whenever the chain is non-empty.
+          const modelsPath = [...base, "models"];
+          if (Array.isArray(entry.models) && entry.models.length > 0)
+            ops.push({ op: "set", path: modelsPath, value: entry.models });
+          else ops.push({ op: "unset", path: modelsPath });
           const effort = entry.reasoningEffort;
           const effortPath = [...base, "reasoningEffort"];
           // 任务级 reasoningEffort 可以独立于 provider/model 存在
@@ -1174,6 +1202,18 @@ window.__ModuleLoader__.load({
                 modelOptionsFor(task).map((id) => ({ value: id, label: id })),
                 t("placeholder.inheritModel"),
               ),
+            ),
+            fieldRow(
+              task,
+              "models",
+              t("field.models"),
+              react.createElement("textarea", {
+                rows: 2,
+                value: Array.isArray(field(task, "models")) ? field(task, "models").join("\n") : "",
+                placeholder: t("field.models.placeholder"),
+                disabled: false,
+                onChange: (e) => setTaskModels(task, e.target.value),
+              }),
             ),
             fieldRow(
               task,

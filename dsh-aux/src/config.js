@@ -62,6 +62,9 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     vision: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
+      // Ordered fallback chain ("provider/model" per entry). When non-empty it
+      // wins over provider/model; those singular fields are then ignored.
+      models: z.array(z.string().min(1)),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1),
@@ -69,6 +72,9 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     web_extract: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
+      // Ordered fallback chain ("provider/model" per entry). When non-empty it
+      // wins over provider/model; those singular fields are then ignored.
+      models: z.array(z.string().min(1)),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       maxChars: z.number().step(1).min(1),
@@ -77,6 +83,9 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     web_crawl: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
+      // Ordered fallback chain ("provider/model" per entry). When non-empty it
+      // wins over provider/model; those singular fields are then ignored.
+      models: z.array(z.string().min(1)),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       maxChars: z.number().step(1).min(1),
@@ -85,6 +94,9 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     compress: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
+      // Ordered fallback chain ("provider/model" per entry). When non-empty it
+      // wins over provider/model; those singular fields are then ignored.
+      models: z.array(z.string().min(1)),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1),
@@ -92,6 +104,9 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     compaction: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
+      // Ordered fallback chain ("provider/model" per entry). When non-empty it
+      // wins over provider/model; those singular fields are then ignored.
+      models: z.array(z.string().min(1)),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1),
@@ -99,6 +114,9 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     skill: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
+      // Ordered fallback chain ("provider/model" per entry). When non-empty it
+      // wins over provider/model; those singular fields are then ignored.
+      models: z.array(z.string().min(1)),
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1),
@@ -163,6 +181,7 @@ export function projectSettings(settings) {
     tasks[task] = {
       ...(raw.provider !== void 0 ? { provider: raw.provider } : {}),
       ...(raw.model !== void 0 ? { model: raw.model } : {}),
+      ...(Array.isArray(raw.models) && raw.models.length > 0 ? { models: [...raw.models] } : {}),
       ...(raw.timeoutMs !== void 0 ? { timeoutMs: raw.timeoutMs } : {}),
       ...(raw.maxConcurrency !== void 0 ? { maxConcurrency: raw.maxConcurrency } : {}),
       ...(raw.reasoningEffort !== void 0 ? { reasoningEffort: raw.reasoningEffort } : {}),
@@ -237,6 +256,19 @@ export function validateAuxSettings(value) {
     const hasModel = entry?.model !== void 0;
     if (hasProvider !== hasModel) {
       throw new Error(`aux settings: tasks.${task} provider and model must be supplied together`);
+    }
+    // A malformed chain entry is refused here (shape error); a chain beside a
+    // singular route is NOT an error — the chain wins and /aux status warns.
+    if (Array.isArray(entry?.models)) {
+      for (const spec of entry.models) {
+        if (typeof spec !== "string" || spec.trim().length === 0) {
+          throw new Error(`aux settings: tasks.${task}.models must contain only non-empty "provider/model" strings`);
+        }
+        const slash = spec.trim().indexOf("/");
+        if (slash <= 0 || slash === spec.trim().length - 1) {
+          throw new Error(`aux settings: tasks.${task}.models entry "${spec}" must be "provider/model"`);
+        }
+      }
     }
   }
   for (const group of ["general", "vision"]) {
