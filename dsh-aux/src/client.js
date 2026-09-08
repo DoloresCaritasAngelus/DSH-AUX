@@ -234,6 +234,13 @@ window.__ModuleLoader__.load({
       "global.forceAuxVision": "强制原生图片也走 AUX 视觉 (forceAuxVision)",
       "global.visionFallbackToMain": "视觉辅助失败时降级到主模型 (visionFallbackToMain)",
       "global.showStatusChip": "在对话界面显示辅助模型状态芯片",
+      "global.visionRoute": "vision 交付路由 (visionRoute)",
+      "global.visionRoute.aux": "aux —— 始终用辅助视觉模型",
+      "global.visionRoute.native-when-capable": "native-when-capable —— 白名单路由交给主模型",
+      "global.visionRoute.auto": "auto —— 仅当辅助路由等于主路由时交给主模型",
+      "global.nativeRoutes": "native 交付白名单 (provider/model,每行一条)",
+      "global.nativeRoutes.placeholder": "例如 deepseek-official/deepseek-v4-flash-vision-exp",
+      "global.requestImagesMaxMiB": "派生请求缓存上限 MiB (0 = 关闭回收)",
 
       "group.platform": "平台开关",
       "group.platform.desc": "选择每个工具/桥接使用原生、AUX 还是未来深耕模式。",
@@ -463,6 +470,13 @@ window.__ModuleLoader__.load({
       "global.forceAuxVision": "Force native images through AUX vision (forceAuxVision)",
       "global.visionFallbackToMain": "Fall back to main model when vision fails (visionFallbackToMain)",
       "global.showStatusChip": "Show auxiliary model status chip in conversation UI",
+      "global.visionRoute": "Vision delivery route (visionRoute)",
+      "global.visionRoute.aux": "aux — always use the auxiliary vision model",
+      "global.visionRoute.native-when-capable": "native-when-capable — whitelisted routes go to the main model",
+      "global.visionRoute.auto": "auto — main model only when the aux route equals it",
+      "global.nativeRoutes": "Native delivery whitelist (provider/model, one per line)",
+      "global.nativeRoutes.placeholder": "e.g. deepseek-official/deepseek-v4-flash-vision-exp",
+      "global.requestImagesMaxMiB": "Request-image cache cap in MiB (0 = disable reclaim)",
 
       "group.platform": "Platform Switches",
       "group.platform.desc": "Choose native, AUX, or future deep-compat mode for each tool/bridge.",
@@ -949,6 +963,20 @@ window.__ModuleLoader__.load({
           if (draft.forceAuxVision) ops.push({ op: "set", path: ["forceAuxVision"], value: true });
           else ops.push({ op: "unset", path: ["forceAuxVision"] });
         }
+        if (draft?.visionRoute !== void 0) {
+          if (draft.visionRoute !== "aux") ops.push({ op: "set", path: ["visionRoute"], value: draft.visionRoute });
+          else ops.push({ op: "unset", path: ["visionRoute"] });
+        }
+        if (draft?.nativeRoutes !== void 0) {
+          if (Array.isArray(draft.nativeRoutes) && draft.nativeRoutes.length > 0)
+            ops.push({ op: "set", path: ["nativeRoutes"], value: draft.nativeRoutes });
+          else ops.push({ op: "unset", path: ["nativeRoutes"] });
+        }
+        if (draft?.requestImagesMaxMiB !== void 0) {
+          if (Number.isFinite(draft.requestImagesMaxMiB) && draft.requestImagesMaxMiB !== 256)
+            ops.push({ op: "set", path: ["requestImagesMaxMiB"], value: draft.requestImagesMaxMiB });
+          else ops.push({ op: "unset", path: ["requestImagesMaxMiB"] });
+        }
         if (draft?.visionFallbackToMain !== void 0) {
           if (draft.visionFallbackToMain === false)
             ops.push({ op: "set", path: ["visionFallbackToMain"], value: false });
@@ -1336,6 +1364,41 @@ window.__ModuleLoader__.load({
           next.skill = next.skill ?? {};
           if (value === "audit") delete next.skill.mode;
           else next.skill.mode = value;
+          return next;
+        });
+      };
+      const setVisionRoute = (value) => {
+        setSaved(false);
+        setSaveError(null);
+        setDraft((d) => {
+          const next = structuredClone(d ?? {});
+          if (value === "aux") delete next.visionRoute;
+          else next.visionRoute = value;
+          return next;
+        });
+      };
+      const setNativeRoutes = (text) => {
+        const routes = String(text ?? "")
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+        setSaved(false);
+        setSaveError(null);
+        setDraft((d) => {
+          const next = structuredClone(d ?? {});
+          if (routes.length === 0) delete next.nativeRoutes;
+          else next.nativeRoutes = routes;
+          return next;
+        });
+      };
+      const setRequestImagesMaxMiB = (text) => {
+        const value = Number.parseInt(String(text ?? ""), 10);
+        setSaved(false);
+        setSaveError(null);
+        setDraft((d) => {
+          const next = structuredClone(d ?? {});
+          if (!Number.isFinite(value) || value === 256) delete next.requestImagesMaxMiB;
+          else next.requestImagesMaxMiB = Math.max(0, value);
           return next;
         });
       };
@@ -1848,6 +1911,52 @@ window.__ModuleLoader__.load({
               return next;
             });
           }),
+          react.createElement(
+            "div",
+            { className: "ax-row" },
+            react.createElement("label", { htmlFor: "ax-vision-route" }, t("global.visionRoute")),
+            react.createElement(
+              "select",
+              {
+                id: "ax-vision-route",
+                value: draft?.visionRoute ?? "aux",
+                disabled: false,
+                onChange: (e) => setVisionRoute(e.target.value),
+              },
+              react.createElement("option", { value: "aux" }, t("global.visionRoute.aux")),
+              react.createElement(
+                "option",
+                { value: "native-when-capable" },
+                t("global.visionRoute.native-when-capable"),
+              ),
+              react.createElement("option", { value: "auto" }, t("global.visionRoute.auto")),
+            ),
+          ),
+          react.createElement(
+            "div",
+            { className: "ax-row" },
+            react.createElement("label", { htmlFor: "ax-native-routes" }, t("global.nativeRoutes")),
+            react.createElement("textarea", {
+              id: "ax-native-routes",
+              rows: 3,
+              placeholder: t("global.nativeRoutes.placeholder"),
+              value: Array.isArray(draft?.nativeRoutes) ? draft.nativeRoutes.join("\n") : "",
+              onChange: (e) => setNativeRoutes(e.target.value),
+            }),
+          ),
+          react.createElement(
+            "div",
+            { className: "ax-row" },
+            react.createElement("label", { htmlFor: "ax-request-images-cap" }, t("global.requestImagesMaxMiB")),
+            react.createElement("input", {
+              id: "ax-request-images-cap",
+              type: "number",
+              min: 0,
+              step: 1,
+              value: Number.isFinite(draft?.requestImagesMaxMiB) ? draft.requestImagesMaxMiB : 256,
+              onChange: (e) => setRequestImagesMaxMiB(e.target.value),
+            }),
+          ),
           switchRow(t("global.visionFallbackToMain"), draft?.visionFallbackToMain !== false, false, (e) => {
             setSaved(false);
             setSaveError(null);

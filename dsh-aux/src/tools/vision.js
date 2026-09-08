@@ -8,6 +8,7 @@ import { visionSystemPrompt } from "../prompt.js";
 import { resolveImageRef } from "../images/resolve.js";
 import { recordAttachmentOwnership } from "../images/ownership.js";
 import { recordAttachmentRefs } from "../images/attachment-refs.js";
+import { recordAuxEvent } from "../events.js";
 import { recordImageMemory } from "../images/memory.js";
 
 /** Run async work over an array with a bounded number of concurrent workers.
@@ -113,6 +114,7 @@ function nativeDeliveryNote(question) {
 
 /** Analyze exactly one image through the auxiliary vision route. */
 export async function analyzeOne(service, source, question, exec) {
+  const startedAt = Date.now();
   const ref = await resolveImageRef(service, source, exec);
   const delivery =
     typeof service.visionDelivery === "function"
@@ -131,11 +133,25 @@ export async function analyzeOne(service, source, question, exec) {
       recordAttachmentRefs(service, ref).catch(() => {});
     }
     // No auxiliary call and no image memory: native delivery carries no
-    // analysis conclusion, only the image itself.
+    // analysis conclusion, only the image itself. The delivery is still
+    // observable through the existing aux/llm-call event with mode="native"
+    // (no new event type, so no patch/whitelist change).
+    const provider = delivery.mainRoute?.provider ?? "";
+    const model = delivery.mainRoute?.model ?? "";
+    await recordAuxEvent(service, exec.agent?.session, {
+      task: "vision",
+      provider,
+      model,
+      ok: true,
+      durationMs: Date.now() - startedAt,
+      fallbackUsed: false,
+      purpose: "native-delivery",
+      mode: "native",
+    });
     return {
       analysis: nativeDeliveryNote(question),
-      provider: delivery.mainRoute?.provider ?? "",
-      model: delivery.mainRoute?.model ?? "",
+      provider,
+      model,
       attachment: ref,
       mode: "native",
     };

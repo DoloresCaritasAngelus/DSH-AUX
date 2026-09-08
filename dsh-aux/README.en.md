@@ -380,7 +380,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are all official DSH packages (bundled with the platform); no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (409 tests); file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (435 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 
@@ -388,6 +388,9 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **settings writability**: the settings page can read/write aux config; native on the DSH alpha line, rc.6 patch retired to `bridge/retired/`.
 - **session event registration channel**: `aux/llm-call` is written with `ignorable: true`; if the patch is missing, events are downgraded (not written) to protect session logs.
 - **session deletion synergy**: works with `dsh-plugin-session-delete` to clean up unreferenced images when a session is deleted.
+- **image ownership & delete safety**: a `session/event` ownership hook plus a `session/created` recovery barrier (in-memory log scan); deletions are refused globally while a live session is unbackfilled (fail-closed, visible in `/aux status`); reclaim moves objects into `objects/.trash/` (7-day recovery window).
+- **GC debt**: an `attachment-refs.json` sidecar plus official `imageHostPath` reclamation and full `.ext` hard-link cleanup; the derived `request-images/` cache is reclaimed by mtime LRU under a total cap (256 MiB by default, `requestImagesMaxMiB`).
+- **Vision delivery route**: `aux.visionRoute` (aux by default / native-when-capable / auto); native delivery only applies to routes whitelisted in `aux.nativeRoutes`, and `forceAuxVision` wins.
 - **subagent-bridge**: transparently takes over native `subagent` and `workflow` parallel `agent()` children.
 
 ### Minimal / Anchored Standard compatibility

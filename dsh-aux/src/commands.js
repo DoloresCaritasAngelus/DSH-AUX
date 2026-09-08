@@ -294,8 +294,11 @@ export async function handleAuxCommand(service, agent, rawInput) {
         const callState = call.ok ? "成功" : "失败";
         const fallback = call.fallbackUsed ? " (已降级)" : "";
         const error = call.ok ? "" : ` [${call.errorCode ?? "error"}]`;
+        // Delivery route: native entries are image hand-offs to the main
+        // model, not auxiliary-model calls (reuses the aux/llm-call event).
+        const mode = call.mode === "native" ? " [native 交付]" : "";
         lines.push(
-          `  - ${call.task}: ${call.provider}/${call.model} ${callState}${fallback}${error} ${call.durationMs}ms`,
+          `  - ${call.task}: ${call.provider}/${call.model} ${callState}${mode}${fallback}${error} ${call.durationMs}ms`,
         );
       }
     }

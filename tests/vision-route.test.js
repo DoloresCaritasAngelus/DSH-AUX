@@ -92,6 +92,7 @@ test("resolveVisionDelivery: auto 只在主路由 == 解析后的 aux 路由时 
 /** Service stub: records aux calls; attachment read returns a durable ref. */
 function makeStub({ delivery, ref, attachmentId } = {}) {
   const calls = [];
+  const appended = [];
   const attachments = {
     readImage: async (att) => ({
       ref: ref ?? { attachmentId: att.attachmentId, mediaType: "image/png", bytes: 8, width: 2, height: 2 },
@@ -99,6 +100,8 @@ function makeStub({ delivery, ref, attachmentId } = {}) {
   };
   const service = {
     _memoryQueue: Promise.resolve(),
+    // Pre-seeded so recordAuxEvent does not probe the deployed package.
+    _sessionEventsSupportedCache: true,
     ctx: { get: (key) => (key === "attachments" ? attachments : void 0) },
     async call(task, request) {
       calls.push({ task, request });
@@ -119,15 +122,18 @@ function makeStub({ delivery, ref, attachmentId } = {}) {
           attachmentId === void 0
             ? []
             : [{ type: "user/message", message: { content: [{ type: "image", attachment: { attachmentId } }] } }],
+        append(type, data) {
+          appended.push({ type, data });
+        },
       },
     },
   };
-  return { service, exec, calls };
+  return { service, exec, calls, appended };
 }
 
-test("analyzeOne: native 交付零辅助调用,形状含 mode 与主路由", async () => {
+test("analyzeOne: native 交付零辅助调用,形状含 mode 与主路由,并写 aux/llm-call 事件", async () => {
   const target = "sha256:" + "a".repeat(64);
-  const { service, exec, calls } = makeStub({
+  const { service, exec, calls, appended } = makeStub({
     delivery: { mode: "native", reason: "native-capable", mainRoute: MAIN },
     attachmentId: target,
   });
@@ -138,6 +144,14 @@ test("analyzeOne: native 交付零辅助调用,形状含 mode 与主路由", asy
   assert.equal(result.model, MAIN.model);
   assert.equal(result.attachment.attachmentId, target);
   assert.match(result.analysis, /原生视觉交付/);
+  // Observability without a new event type: the existing aux/llm-call event
+  // carries mode="native", so /aux history and the projection can show it.
+  assert.equal(appended.length, 1, "native 交付应写一条 aux/llm-call 事件");
+  assert.equal(appended[0].type, "aux/llm-call");
+  assert.equal(appended[0].data.mode, "native");
+  assert.equal(appended[0].data.provider, MAIN.provider);
+  assert.equal(appended[0].data.model, MAIN.model);
+  assert.equal(appended[0].data.purpose, "native-delivery");
 });
 
 test("analyzeOne: aux 交付照常调用辅助模型并标 mode=aux", async () => {
