@@ -17,12 +17,7 @@ import { randomUUID } from "node:crypto";
 import { listSessionSnapshots, readSessionEvents, sessionEvents } from "../session-utils.js";
 import { sessionImageRefs } from "./refs.js";
 import { attachmentRefFor, loadAttachmentRefs, recordAttachmentRefs } from "./attachment-refs.js";
-import {
-  IMAGE_EXTENSIONS,
-  extensionForMediaType,
-  objectPathForId,
-  objectsRootPath as dshObjectsRootPath,
-} from "./object-path.js";
+import { IMAGE_EXTENSIONS, objectPathForId } from "./object-path.js";
 import { DEFAULT_REQUEST_IMAGES_MAX_BYTES, sweepRequestImages } from "./request-images.js";
 /** Reclaimed objects are parked here before they are unrecoverable. */
 const TRASH_DIR_NAME = ".trash";
@@ -407,11 +402,12 @@ async function trashImageObject(objectsRoot, objectPath, ref) {
     if (error?.code === "ENOENT") return { ok: true, gone: true };
     return { ok: false, gone: false };
   }
-  // Companion .ext hard link: prefer the media type from the full ref; when
-  // the sidecar has no ref for this id, fall back to enumerating them.
-  const known = extensionForMediaType(ref?.mediaType);
-  const extensions = known === void 0 ? IMAGE_EXTENSIONS : [known];
-  for (const ext of extensions) {
+  // Companion .ext hard links: every known extension is unlinked, not just the
+  // one derived from ref.mediaType. They are hard links to the same inode, so
+  // a single stale link (older bridges defaulted unknown types to `.png`)
+  // would keep the data blocks alive even after the object itself moved.
+  void ref;
+  for (const ext of IMAGE_EXTENSIONS) {
     try {
       await unlinkFile(objectPath + ext);
     } catch {

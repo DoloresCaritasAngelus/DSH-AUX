@@ -165,3 +165,22 @@ test("object-path: 单模块持有对象命名规则", () => {
   assert.equal(extensionForMediaType("image/jpeg"), ".jpg");
   assert.equal(extensionForMediaType("image/bmp"), void 0);
 });
+test("cleanupSessionImages: 陈旧异扩展名硬链接一并删净(同 inode 才会真正回收)", async () => {
+  const fixture = await createImageFixture();
+  await withHome(fixture, async () => {
+    // Object is JPEG; an older bridge may have left a stale .png hard link.
+    const target = await fixture.writeObject(id("e"), { mediaType: "image/jpeg" });
+    const stale = target.file + ".png";
+    await fsPromises.link(target.file, stale);
+    await fixture.writeSessionImages({ "s-1": [id("e")] });
+    const service = makeService({
+      attachments: { imageHostPath: () => target.file },
+    });
+    await recordAttachmentRefs(service, refOf("e", "image/jpeg"));
+    await cleanupSessionImages(service, "s-1");
+
+    assert.equal(await exists(target.file), false, "对象本体应被回收");
+    assert.equal(await exists(target.extPath), false, "mediaType 对应的 .ext 应被删除");
+    assert.equal(await exists(stale), false, "陈旧异扩展名硬链接也必须删净");
+  });
+});
