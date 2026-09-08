@@ -85,6 +85,52 @@ const TARGETS = [
     file: AGENT_LOOP_FILE,
     mark: "image-bridge v2 (local patch)",
     states: [
+      // ── DSH 0.1.5-alpha.1 链路:同步 buildRequest + 新注释 + 五参签名 ──
+      // 桥接发生在冻结循环之后(A3):原消息冻结语义不变,只有真的改写时才冻结
+      // 桥接产物,且不把副本塞进 this.frozenMessages。
+      {
+        name: "v3-0.1.5",
+        detect: (d) =>
+          d.includes("image-bridge v2 (local patch)") &&
+          d.includes("const bridgedMessages = await this.bridgeImagesForModel(boundaryMessages") &&
+          d.includes("const request = await this.buildRequest(") &&
+          d.includes("forceAuxVision"),
+        action: "skip",
+      },
+      {
+        name: "callsite-0.1.5",
+        detect: (d) =>
+          d.includes("image-bridge v2 (local patch)") &&
+          d.includes("const bridgedMessages = await this.bridgeImagesForModel(boundaryMessages") &&
+          d.includes("const request = this.buildRequest("),
+        block: "const request = this.buildRequest(config, preparedCall, assembly.tools, startsRequestSeries, signal);",
+        replacement:
+          "const request = await this.buildRequest(config, preparedCall, assembly.tools, startsRequestSeries, signal);",
+        action: "replace",
+      },
+      {
+        name: "body-0.1.5",
+        detect: (d) =>
+          d.includes("image-bridge v2 (local patch)") &&
+          !d.includes("const bridgedMessages =") &&
+          d.includes("async buildRequest(config, preparedCall, tools, startsRequestSeries, signal) {") &&
+          d.includes("messages: boundaryMessages,"),
+        block:
+          "Object.freeze(boundaryMessages);\n\t\treturn markAgentLoopRequest(Object.freeze({\n\t\t\t...header.config,\n\t\t\tmessages: boundaryMessages,",
+        replacement:
+          "Object.freeze(boundaryMessages);\n\t\tconst bridgedMessages = await this.bridgeImagesForModel(boundaryMessages, config.provider, config.model, this.loopCtx.llm, signal);\n\t\tif (bridgedMessages !== boundaryMessages) deepFreeze(bridgedMessages);\n\t\treturn markAgentLoopRequest(Object.freeze({\n\t\t\t...header.config,\n\t\t\tmessages: bridgedMessages,",
+        action: "replace",
+      },
+      {
+        name: "original-0.1.5",
+        detect: (d) =>
+          d.includes("Log the resolved envelope and derive a frozen request from the admitted surface.") &&
+          d.includes("buildRequest(config, preparedCall, tools, startsRequestSeries, signal) {"),
+        block: await readFile(join(HERE, "orig-agent-loop-0.1.5-block.txt"), "utf8"),
+        replacement: await readFile(join(HERE, "patched-agent-loop-0.1.5-block.txt"), "utf8"),
+        action: "replace",
+      },
+      // ── DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 链路:8 参 async buildRequest ──
       {
         name: "v3",
         detect: (d) =>

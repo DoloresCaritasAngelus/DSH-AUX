@@ -1,0 +1,2 @@
+	/** Log the resolved envelope and derive a frozen request from the admitted surface. */
+	buildRequest(config, preparedCall, tools, startsRequestSeries, signal) {
