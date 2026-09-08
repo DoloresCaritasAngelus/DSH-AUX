@@ -135,11 +135,49 @@ interface AttachmentService {
 
 ---
 
-## 可选(低优先)—— 装饰出厂图片画廊
+## 请求 3 —— 给出厂消息图片画廊加序号(或允许装饰)
 
-`conversation.message.images` 是 **single** 槽,注册即 "replaces the shipped
-gallery",其 owner props 也没有 badge / overlay 钩子。想在官方画廊上加一个小序号
-角标的插件,只能重实现缩略图、灯箱、`loadImage` 与对齐。给这些 owner props 增加
-`badge` / `overlay` 入口(或把槽改成 chain 形态),就能让第三方**装饰而不是替换**
-官方画廊。上面两条请求并不依赖它;记录在此是因为它属于同一类缺口:缺失扩展点
-迫使消费者"接管"官方 UI。
+### 插件需要做什么
+
+用户可以在一条消息里粘贴多张图。模型被告知每张图在该消息中的位置
+("本条消息第N张/共M张",与消息内容同序),插件希望**人在画廊上看到同一套编号**,
+这样"第二张"对双方含义一致。前提是**不替换官方画廊**。
+
+### 现有缝为什么不可用
+
+- `conversation.message.images` 是 **single** 槽:注册即**替换**官方画廊
+  ("A registration replaces the shipped gallery; without one, images are omitted."
+  —— `packages/client/ui-chat/src/client/contract/slots.ts:190-194`)。
+- owner props 不带位置:`MessageImagesOwnerProps = { images, loadImage, align,
+  compact? }`(`packages/client/ui-conversation/src/client/contract/slots.ts:99-108`)。
+  **调用方其实有下标却丢掉了** —— `MessageItem.tsx:197-204` 逐图传
+  `images: [attachment.image]`;`AssistantMarkdown.tsx:112-115` 一次传一组。
+- 用默认 priority 注册会**抛错**(官方附件插件已占该槽:"single slot … already has
+  a registration … register at a different priority to shadow it (lowest renders)"
+  —— `packages/client/ui-slots/src/index.ts:839-843`)。因此"装饰者"只能以负
+  priority 注册 —— 这在结构上就是接管。
+- 现有变通(读 `useTrajectory().eventNodes` 再按 `attachmentId` 匹配)是间接的,
+  会让画廊订阅整条 trajectory,且**无法**给提交回显预览编号(它还没有附件 id)。
+
+### 建议 API
+
+任一即可:
+
+1. **把位置加进 owner props**:在现有 `images`/`align`/`compact` 旁增加
+   `index: number`(1 基)与 `total: number`,表示所属消息的图片序号与总数。
+   调用方本来就在算这两个值,纯数据、向后兼容。
+2. **或给一个装饰缝**:`decorate?(source, index, total): ReactNode`(或把槽改成
+   chain 形态),让第三方在官方缩略图外画一个角标,而不替换它。
+
+### 验收标准
+
+- 没有第三方注册时,画廊与今天**逐字节相同**;
+- 插件能在**不重实现**加载、重试、`peek`、灯箱、对齐与 aria 标签的前提下,加上
+  每图序号(或任意小装饰);
+- 序号与消息内容顺序一致(与桥接文本的编号同源)。
+
+### 不提供的后果
+
+任何只想要一个小角标的工具,都必须**接管官方画廊**:重实现缩略图加载/重试/
+`peek`、灯箱与对齐,以负 priority 影子注册,并随官方画廊演进而维持对齐。
+本插件今天正是这么做的,只是默认走官方画廊(开关默认 native)。

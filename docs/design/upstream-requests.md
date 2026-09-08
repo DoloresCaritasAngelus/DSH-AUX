@@ -161,13 +161,59 @@ explicitly asks consumers not to do.
 
 ---
 
-## Optional (lower priority) — decorate the shipped image gallery
+## Request 3 — Number (or decorate) the shipped message-image gallery
 
-`conversation.message.images` is a **single** slot whose registration
-"replaces the shipped gallery", and its owner props expose no badge or overlay
-hook, so a plugin that wants to add a small ordinal badge above the official
-gallery has to reimplement thumbnails, the lightbox, `loadImage` and alignment.
-A `badge` / `overlay` entry in those owner props (or a chain-shaped slot) would
-let third-party tools decorate the gallery instead of replacing it. This is not
-needed for the two requests above; it is recorded here because it is the same
-class of gap (a missing extension point that forces a takeover).
+### What dsh-aux needs to do
+
+A user can paste several images into one message. The model is told each image's
+position in that message ("本条消息第N张/共M张", same order as the message
+content), and the plugin would like the human to see the same numbering above
+the gallery, so "the second image" means the same thing to both. The plugin must
+not replace the shipped gallery to do it.
+
+### Why the current seams do not work
+
+- `conversation.message.images` is a **single** slot: a registration *replaces*
+  the shipped gallery ("A registration replaces the shipped gallery; without
+  one, images are omitted." — `packages/client/ui-chat/src/client/contract/slots.ts:190-194`).
+- The owner props carry no position: `MessageImagesOwnerProps = { images,
+  loadImage, align, compact? }` (`packages/client/ui-conversation/src/client/contract/slots.ts:99-108`).
+  The caller *has* the index and drops it — `MessageItem.tsx:197-204` maps the
+  message's attachments and passes `images: [attachment.image]` one image at a
+  time; `AssistantMarkdown.tsx:112-115` passes a whole group in one call.
+- Registering at the default priority **throws** while the shipped attachment
+  plugin occupies the slot ("single slot … already has a registration … register
+  at a different priority to shadow it (lowest renders)" —
+  `packages/client/ui-slots/src/index.ts:839-843`). A decorator must therefore
+  register at a negative priority, which is a takeover by construction.
+- The available workaround (read `useTrajectory().eventNodes` and match
+  `attachmentId`) is indirect, subscribes the gallery to the whole trajectory,
+  and cannot number a submission-echo preview (it has no attachment id yet).
+
+### Proposed API
+
+Either is sufficient:
+
+1. **Add the position to the owner props**: `index: number` (1-based) and
+   `total: number` for the owning message's image sequence, beside the existing
+   `images`/`align`/`compact`. The caller already computes both; they are pure
+   data and backward compatible.
+2. **Or a decoration seam**: `decorate?(source, index, total): ReactNode` (or a
+   chain-shaped variant of the slot) so a third party can draw a badge around
+   the shipped thumbnail without replacing it.
+
+### Acceptance criteria
+
+- With no third-party registration, the gallery is byte-for-byte today's.
+- A plugin can add a per-image ordinal (or any small decoration) without
+  reimplementing loading, retry, `peek`, the lightbox, alignment or aria labels.
+- The position matches the message content order (the same order the bridge text
+  numbers).
+
+### Impact if not provided
+
+Every tool that wants one small badge must take over the official gallery:
+reimplement thumbnail loading/retry/`peek`, the lightbox and alignment, register
+at a negative priority to shadow the shipped entry, and keep parity as the
+shipped gallery evolves. The plugin does exactly that today, behind a switch that
+defaults to the official gallery.
