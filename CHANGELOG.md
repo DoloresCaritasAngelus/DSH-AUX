@@ -2,6 +2,30 @@
 
 ## 未发布 (Unreleased)
 
+### vision 打磨与路由链(Phase 3)
+
+- **失败分类与自动重试**:多图分析中单张图片失败时,限流/超时/连接类失败在工具内**自动重试一次**;
+  仍失败则返回结构化 `error: { code, message, retryable }` 与指令式文案(说明原因、可否重试、下一步),
+  不再是一句陈述句;工具描述写明失败条目会给出原因与可否重试。错误码沿用 AUX 既有分类并附
+  DSH `LlmError` 映射(有意分歧:DSH 对 5xx `SERVER` 会重试,AUX 的 `other` 不重试)。
+- **直连路径 IP 钉扎**:`imageUrl` / `web_extract` / `web_crawl` 的直连请求改为把 SSRF 校验**同一次解析**
+  得到的公网地址钉到连接(`node:http(s)` + `lookup`),重定向逐跳同样钉扎;SNI 与 Host 保持,
+  代理 CONNECT 路径不变。此前校验与 `fetch` 各解析一次 DNS,存在 rebinding 窗口。
+- **多级降级链**:新增 `aux.tasks.<task>.models` 有序数组(主选 → 备1 → 备2 …),复用冷却跳过与
+  图像能力门;非空时单数 `provider/model` 被忽略(`/aux status` 给出警告);链尾仍按
+  `fallbackToMain` / `visionFallbackToMain` 考虑主模型;`/aux model` 写入单元素链,
+  设置页新增"降级链"多行控件;`aux/llm-call` 事件记录 `candidates` / `selectedIndex`。
+- **`imagePath` 魔数嗅探**:无扩展名(含点文件)按 PNG/JPEG/GIF87a/89a/RIFF-WEBP 签名判定格式,
+  与官方 `read_image` 对齐;未知非空扩展名在读取前拒绝;扩展名与字节不符时给出"声明 X / 字节 Y"的明确文案。
+- **动图契约对齐**:删除 vision system prompt 中"描述动图时序"的承诺(附件归一化只保留首帧),
+  工具描述写明"动图仅分析首帧"。
+- **`vision_analyze` 会话卡片**:客户端注册 `tool.call.toolview` 的 `key: 'vision_analyze'` 行,
+  显示 `【图N/共M】` 角标(消息内编号,与桥接文本同源)+ 缩略图 + 结论,失败项只出文本;
+  输出新增 `imageOrdinal`(消息级 / 调用级),`presentationMeta` 增加同序 `ordinals`。
+- **测试**:新增 `tests/image-path-media.test.js`、`tests/fetch-pinning.test.js`、
+  `tests/route-chain.test.js`、`tests/vision-ordinal.test.js`、`tests/vision-toolview.test.js`;
+  全量 435 → 483 条。
+
 ### 图片生命周期与 vision 原生交付
 
 - **归属与误删防护**:新增 `session/event` 归属钩子(递归工具产物图)与 `session/created`

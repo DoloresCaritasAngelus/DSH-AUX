@@ -387,6 +387,7 @@ const result = await ctx.auxLlm.call("compress", {
 - **GC 债**：旁挂 `attachment-refs.json` + 官方 `imageHostPath` 回收 + `.ext` 硬链接全量清理；派生 `request-images/` 按总量上限（默认 256 MiB，`requestImagesMaxMiB` 可配）做 mtime LRU 回收。
 - **vision 交付路由**：`aux.visionRoute` 可选 aux（默认）/ native-when-capable / auto；native 只对 `aux.nativeRoutes` 白名单内的路由生效，且 `forceAuxVision` 优先。
 - **多级降级链**：`aux.tasks.<task>.models` 是有序的 "provider/model" 数组（主选 → 备1 → 备2 …）；非空时单数 `provider/model` 被忽略（`/aux status` 会给出警告）。`/aux model <task> <provider/model>` 写入的是**单元素链**，多级链请在设置页"降级链"字段（每行一条）或 `settings.yaml` 中填写；链尾仍按 `fallbackToMain` / `visionFallbackToMain` 规则考虑主模型。
+- **vision 打磨(Phase 3)**：失败条目给出原因与可否重试（限流/超时/连接在工具内自动重试一次）；`imagePath` 无扩展名按魔数嗅探（与 `read_image` 对齐）；动图只分析首帧；直连请求把校验通过的 IP 钉到连接（关闭 DNS rebinding）；`aux.tasks.<task>.models` 多级降级链；`vision_analyze` 会话卡片显示 `【图N/共M】` 角标 + 缩略图 + 结论。
 - **subagent-bridge**：透明接管原生 `subagent` 与 `workflow` 并行 `agent()` 子代理。
 
 ### 极简 / Anchored Standard 兼容
