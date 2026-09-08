@@ -85,17 +85,43 @@ const unknownLlm = {
 };
 
 for (const [label, file] of SOURCES) {
-  test(`[${label}] bridgeImagesForModel: text-only 模型把 image block 转为路径文本`, async () => {
+  test(`[${label}] bridgeImagesForModel: text-only 模型把 image block 转为 attachmentId 锚点文本`, async () => {
     const fn = await extractBridge(file);
     if (fn === null) return test.skip(`${label}: 提取源不含 bridgeImagesForModel`);
     const out = await fn([makeMsg()], "p", "m", textOnlyLlm, undefined);
     const blocks = out[0].content;
     assert.equal(blocks.filter((b) => b.type === "image").length, 0, "image block 应被转换");
-    const pathText = blocks.find((b) => b.type === "text" && b.text.includes("本地路径"));
-    assert.ok(pathText, "应生成本地路径文本");
-    assert.ok(/.png/.test(pathText.text), "路径应带媒体类型扩展名");
-    assert.ok(pathText.text.includes("vision_analyze"), "应含 vision_analyze 提示");
-    assert.ok(pathText.text.includes("imagePath"), "应含 imagePath 参数提示");
+    const anchor = blocks.find((b) => b.type === "text" && b.text.includes("attachmentId=<"));
+    assert.ok(anchor, "应生成 attachmentId 锚点文本");
+    assert.ok(anchor.text.includes("本条消息第1张/共1张"), "应含本条消息编号锚点");
+    assert.ok(anchor.text.includes("attachmentId=<sha256:" + "ab".repeat(32) + ">"), "应带完整 attachmentId");
+    assert.ok(anchor.text.includes("vision_analyze"), "应含 vision_analyze 提示");
+    assert.ok(anchor.text.includes("attachmentId 参数"), "应提示用 attachmentId 参数查看");
+    assert.ok(!anchor.text.includes("本地路径"), "不应再依赖本地路径(硬链接失败/扩展名判型不再影响投递)");
+  });
+
+  test(`[${label}] bridgeImagesForModel: 编号按消息内出现顺序,逐消息重置`, async () => {
+    const fn = await extractBridge(file);
+    if (fn === null) return test.skip(`${label}: 提取源不含 bridgeImagesForModel`);
+    const img = (byte, mediaType) => ({
+      type: "image",
+      attachment: { attachmentId: "sha256:" + byte.repeat(32), mediaType },
+    });
+    const multi = { role: "user", content: [img("11", "image/png"), img("22", "image/jpeg")] };
+    const single = { role: "user", content: [img("33", "image/webp")] };
+    const out = await fn([multi, single], "p", "m", textOnlyLlm, undefined);
+    const labels = out.map((message) =>
+      message.content
+        .filter((b) => b.type === "text")
+        .map((b) => b.text)
+        .join("|"),
+    );
+    assert.match(labels[0], /本条消息第1张\/共2张/);
+    assert.match(labels[0], /本条消息第2张\/共2张/);
+    assert.match(labels[1], /本条消息第1张\/共1张/, "编号应按消息重置");
+    assert.ok(labels[0].indexOf("第1张") < labels[0].indexOf("第2张"), "编号应按出现顺序");
+    assert.ok(labels[0].includes("sha256:" + "11".repeat(32)), "第 1 张应带自己的 attachmentId");
+    assert.ok(labels[0].includes("sha256:" + "22".repeat(32)), "第 2 张应带自己的 attachmentId");
   });
 
   test(`[${label}] bridgeImagesForModel: 多模态模型保留原生 image block`, async () => {

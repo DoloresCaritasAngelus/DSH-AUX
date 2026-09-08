@@ -25,6 +25,7 @@ const APPLY = join(BRIDGE, "apply-patch.mjs");
 
 const ORIG_015 = readFileSync(join(BRIDGE, "orig-agent-loop-0.1.5-block.txt"), "utf8").trimEnd();
 const ORIG_ALPHA2 = readFileSync(join(BRIDGE, "orig-agent-loop-alpha2-block.txt"), "utf8").trimEnd();
+const OLD_TEXT_REGION = readFileSync(join(BRIDGE, "orig-agent-loop-anchor-text-block.txt"), "utf8").trimEnd();
 
 /** 0.1.5 形状的 buildRequest 尾部(冻结循环之后)。 */
 const TAIL_015 = [
@@ -71,6 +72,33 @@ function fakeRoot(variant) {
       ? ["class Agent {", "\tasync step() {", call, "\t\treturn request;", "\t}", ORIG_015, TAIL_015, "}"]
       : ["class Agent {", ORIG_ALPHA2, TAIL_ALPHA2, "}"];
   const file = join(dir, "index.js");
+  writeFileSync(file, lines.join("\n") + "\n");
+  return { root, file };
+}
+
+/** 建"已打补丁但仍是旧路径文本"的 fake 根,用于验证原地升级。 */
+function oldTextRoot() {
+  const root = mkdtempSync(join(tmpdir(), "dsh-aux-al-old-"));
+  const dir = join(root, "node_modules/@deepseek-ai/dsh-agent-loop/lib");
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, "index.js");
+  const lines = [
+    "class Agent {",
+    "\t/** image-bridge v2 (local patch) forceAuxVision */",
+    "\tasync bridgeImagesForModel(messages) {",
+    "\t\tconst rewritten = [];",
+    "\t\tfor (const message of messages) {",
+    "\t\t\tif (!Array.isArray(message?.content)) { rewritten.push(message); continue; }",
+    OLD_TEXT_REGION,
+    "\t\t\trewritten.push({ ...message, content });",
+    "\t\t}",
+    "\t\treturn rewritten;",
+    "\t}",
+    "\tasync request(boundaryMessages) {",
+    '\t\treturn { messages: await this.bridgeImagesForModel(boundaryMessages, "p", "m", this.loopCtx.llm, undefined) };',
+    "\t}",
+    "}",
+  ];
   writeFileSync(file, lines.join("\n") + "\n");
   return { root, file };
 }
@@ -171,6 +199,28 @@ test("0.1.2-alpha.2~rc.1:旧链路行为不变", () => {
     );
     assert.ok(!patched.includes("bridgedMessages"), "旧链路不得引入 0.1.5 变量");
     execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+test("旧路径文本部署:原地升级为 attachmentId 锚点文本", () => {
+  const { root, file } = oldTextRoot();
+  try {
+    const before = readFileSync(file, "utf8");
+    assert.ok(before.includes("本地路径"), "fixture 应为旧路径文本");
+    assert.ok(!before.includes("attachmentId=<"), "fixture 不应已含新锚点");
+
+    const real = runApply(root, false);
+    assert.match(real.stdout, /已应用 anchor-text 步骤/);
+    const patched = readFileSync(file, "utf8");
+    assert.ok(patched.includes("本条消息第"), "应升级为编号 + attachmentId 文本");
+    assert.ok(patched.includes("attachmentId=<"), "应带 attachmentId 锚点");
+    assert.ok(!patched.includes("本地路径"), "旧路径文本应消失");
+    execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
+
+    const second = runApply(root, false);
+    assert.match(second.stdout, /已是 v3,跳过/, "升级后应被识别为已打补丁");
+    assert.equal(readFileSync(file, "utf8"), patched, "二次应用不得再改动");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

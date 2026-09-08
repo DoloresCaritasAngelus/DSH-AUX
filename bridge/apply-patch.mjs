@@ -85,6 +85,18 @@ const TARGETS = [
     file: AGENT_LOOP_FILE,
     mark: "image-bridge v2 (local patch)",
     states: [
+      // 已打补丁但仍是旧桥接文本(路径式)的部署:原地升级为 attachmentId 锚点文本。
+      // 必须排在所有 skip 状态之前,否则旧文本部署会被判为"已打补丁"而永不更新。
+      {
+        name: "anchor-text",
+        detect: (d) =>
+          d.includes("image-bridge v2 (local patch)") &&
+          !d.includes("attachmentId=<") &&
+          d.includes("[用户上传了一张图片，本地路径: "),
+        block: await readFile(join(HERE, "orig-agent-loop-anchor-text-block.txt"), "utf8"),
+        replacement: await readFile(join(HERE, "patched-agent-loop-anchor-text-block.txt"), "utf8"),
+        action: "replace",
+      },
       // ── DSH 0.1.5-alpha.1 链路:同步 buildRequest + 新注释 + 五参签名 ──
       // 桥接发生在冻结循环之后(A3):原消息冻结语义不变,只有真的改写时才冻结
       // 桥接产物,且不把副本塞进 this.frozenMessages。
