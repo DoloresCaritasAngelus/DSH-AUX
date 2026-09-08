@@ -263,6 +263,12 @@ export async function handleAuxCommand(service, agent, rawInput) {
     }
     lines.push(`  - forceAuxVision: ${service.forceAuxVision ? "开启(原生图片也走 AUX 视觉)" : "关闭"}`);
     lines.push(
+      `  - visionRoute: ${service.visionRoute ?? "aux"}(native 白名单 ${(service.nativeRoutes ?? []).length} 条)`,
+    );
+    if (service.forceAuxVision === true && (service.visionRoute ?? "aux") !== "aux") {
+      lines.push("  - ⚠️ forceAuxVision 开启:visionRoute 的 native 分支不会生效(交付强制走 aux)");
+    }
+    lines.push(
       `  - visionFallbackToMain: ${service.visionFallbackToMain ? "开启(失败回退主模型)" : "关闭(视觉失败直接失败)"}`,
     );
     for (const entry of status.items ?? []) {

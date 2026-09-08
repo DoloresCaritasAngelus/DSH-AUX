@@ -10,7 +10,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **429**(2026-09-09)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **435**(2026-09-09)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 
@@ -59,6 +59,7 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/readme-sync.test.js` | 单一真相:包内 README == 根 README 生成快照(防漂移) |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
 | `tests/subagent-route.test.js` | subagent 路由判定(native/manual/vision-aware) |
+| `tests/vision-route.test.js` | vision 交付路由(P2):`resolveVisionDelivery` 决策矩阵(白名单/否定模态/forceAuxVision/auto 双条件)、native 零辅助调用、形状含 `mode`、交付失败点名 `visionRoute: 'aux'` |
 | `tests/vision-echo.test.js` | vision_analyze 轨迹回显(输出 schema 锁形/官方 read_image 形状对齐/Session 加载边) |
 | `tests/web-crawl.test.js` | web_crawl(robots/范围/hosts/seed/模式/预算) |
 | `tests/web-extract-fixes.test.js` | web_extract(编码/反爬/代理/重定向/SSRF/Teredo…) |

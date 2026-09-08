@@ -37,6 +37,7 @@ import {
   taskTimeoutMs,
 } from "./route.js";
 import { resolveSubagentRoute } from "./subagent-route.js";
+import { resolveVisionDelivery } from "./vision-route.js";
 import { stripThinkBlocks } from "./prompt.js";
 import {
   AUX_SETTINGS_NAMESPACE,
@@ -451,6 +452,8 @@ export class AuxLlmService extends Service {
     this._subagentSettings = settings.subagent ?? {};
     this.fallbackToMain = settings.fallbackToMain ?? true;
     this.forceAuxVision = settings.forceAuxVision ?? false;
+    this.visionRoute = settings.visionRoute ?? "aux";
+    this.nativeRoutes = Array.isArray(settings.nativeRoutes) ? [...settings.nativeRoutes] : [];
     // Derived request-image cache cap (MiB -> bytes); 0 disables the sweep.
     this.requestImagesMaxBytes = Math.max(0, settings.requestImagesMaxMiB ?? 256) * 1024 * 1024;
     this.visionFallbackToMain = settings.visionFallbackToMain ?? true;
@@ -559,6 +562,7 @@ export class AuxLlmService extends Service {
           errorCode: "no-route",
           fallbackUsed: false,
           purpose: request.purpose,
+          mode: request.mode ?? "aux",
         });
         throw new Error(`aux task "${task}": no route configured and no main model available`);
       }
@@ -586,6 +590,7 @@ export class AuxLlmService extends Service {
             inputChars: request.inputChars,
             outputChars: output.length,
             purpose: request.purpose,
+            mode: request.mode ?? "aux",
           });
           if (this.debugConfig?.fullToolTrace === true) {
             const max = this.debugConfig.maxDebugEventBytes ?? 65536;
@@ -626,6 +631,7 @@ export class AuxLlmService extends Service {
         errorCode: attempts.map((a) => a.kind).join(","),
         fallbackUsed: attempts.length > 1,
         purpose: request.purpose,
+        mode: request.mode ?? "aux",
       });
       if (this.debugConfig?.fullToolTrace === true) {
         const max = this.debugConfig.maxDebugEventBytes ?? 65536;
@@ -693,6 +699,56 @@ export class AuxLlmService extends Service {
   }
 
   /** Resolve the session's current main model route, when available. */
+  /**
+   * Resolve how one vision_analyze call is delivered.
+   *
+   * Gathers the facts (main route, resolved aux vision route, main-model
+   * modalities) and delegates the decision to the pure
+   * {@link resolveVisionDelivery}. Nothing here is cached: the main route can
+   * change per session and per turn.
+   *
+   * @param {object} exec Tool execution context.
+   * @returns {Promise<{ mode: "aux"|"native", reason: string, mainRoute?: object, auxRoute?: object, mainInputModalities?: ReadonlyArray<string> }>}
+   */
+  async visionDelivery(exec) {
+    const session = exec?.agent?.session;
+    let mainRoute;
+    try {
+      mainRoute = await this._mainRoute({ agent: exec?.agent, session });
+    } catch {
+      mainRoute = void 0;
+    }
+    let auxRoute;
+    try {
+      auxRoute = resolvePrimaryRoute(this._taskDefinition("vision"), this.taskDefaults);
+    } catch {
+      auxRoute = void 0;
+    }
+    let mainInputModalities;
+    if (mainRoute !== void 0) {
+      try {
+        const llm = this.ctx.get("llm");
+        const info = await llm?.resolveModelInfo?.(mainRoute.provider, mainRoute.model, exec?.signal);
+        mainInputModalities = info?.inputModalities;
+      } catch {
+        mainInputModalities = void 0;
+      }
+    }
+    return {
+      ...resolveVisionDelivery({
+        visionRoute: this.visionRoute,
+        nativeRoutes: this.nativeRoutes,
+        forceAuxVision: this.forceAuxVision,
+        mainRoute,
+        auxRoute,
+        mainInputModalities,
+      }),
+      mainRoute,
+      auxRoute,
+      mainInputModalities,
+    };
+  }
+
   async _mainRoute(request) {
     const agent = request.agent;
     const session = request.session;

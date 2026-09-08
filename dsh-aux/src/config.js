@@ -45,6 +45,13 @@ export const SESSION_IMAGE_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 export const AUX_SETTINGS_SCHEMA = z.object({
   fallbackToMain: z.boolean().default(true),
   forceAuxVision: z.boolean().default(false),
+  // How vision_analyze is delivered: always through the auxiliary model, or
+  // natively to a whitelisted image-capable main route ("auto" additionally
+  // requires the resolved aux route to equal the main route).
+  visionRoute: z.union([z.const("aux"), z.const("native-when-capable"), z.const("auto")]).default("aux"),
+  // Whitelist of "provider/model" routes allowed native delivery. Never infer
+  // capability from inputModalities alone (route-level defaultInput lies).
+  nativeRoutes: z.array(z.string()).default([]),
   // Derived request-image cache cap in MiB (0 disables the sweep). DSH never
   // expires these route variants itself; AUX enforces a total-size cap with
   // mtime LRU eviction.
@@ -146,6 +153,8 @@ export function projectSettings(settings) {
   const fallbackToMain = settings?.fallbackToMain ?? true;
   const forceAuxVision = settings?.forceAuxVision ?? false;
   const requestImagesMaxMiB = settings?.requestImagesMaxMiB ?? 256;
+  const visionRoute = settings?.visionRoute ?? "aux";
+  const nativeRoutes = Array.isArray(settings?.nativeRoutes) ? [...settings.nativeRoutes] : [];
   const visionFallbackToMain = settings?.visionFallbackToMain ?? true;
   const showStatusChip = settings?.showStatusChip ?? true;
   const tasks = {};
@@ -202,6 +211,8 @@ export function projectSettings(settings) {
   return {
     fallbackToMain,
     forceAuxVision,
+    visionRoute,
+    nativeRoutes,
     requestImagesMaxMiB,
     visionFallbackToMain,
     showStatusChip,

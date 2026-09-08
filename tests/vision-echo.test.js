@@ -92,8 +92,8 @@ test("trace echo: 多图 render 按序 text→image 交替,失败项只有 text"
   const value = {
     analyses: [
       { analysis: "one", provider: "prov", model: "mod", attachment: FULL_REF },
-      { analysis: "vision_analyze: image failed: boom", provider: "", model: "" },
-      { analysis: "three", provider: "prov", model: "mod", attachment: BARE_REF },
+      { analysis: "vision_analyze: image failed: boom", provider: "", model: "", mode: "aux" },
+      { analysis: "three", provider: "prov", model: "mod", attachment: BARE_REF, mode: "aux" },
     ],
     provider: "prov",
     model: "mod",
@@ -109,7 +109,7 @@ test("trace echo: 多图 render 按序 text→image 交替,失败项只有 text"
 
 test("trace echo: 输出 schema 锁形 —— ref 多一字段或少一必填字段都被拒", () => {
   const schema = captureVisionDefinition().output.schema;
-  const single = { analysis: "a", provider: "prov", model: "mod", attachment: FULL_REF };
+  const single = { analysis: "a", provider: "prov", model: "mod", mode: "aux", attachment: FULL_REF };
   assert.deepEqual(validateJsonSchemaValue(schema, single, "value"), [], "完整 ref 应通过");
   const extra = { ...single, attachment: { ...FULL_REF, extraField: 1 } };
   assert.ok(validateJsonSchemaValue(schema, extra, "value").length > 0, "多字段 ref 应被拒");
@@ -125,9 +125,10 @@ test("trace echo: 输出 schema 锁形 —— ref 多一字段或少一必填字
 test("trace echo: 输出 schema 接受无 attachment 的失败条目(多图)", () => {
   const schema = captureVisionDefinition().output.schema;
   const value = {
-    analyses: [{ analysis: "vision_analyze: image failed: boom", provider: "", model: "" }],
+    analyses: [{ analysis: "vision_analyze: image failed: boom", provider: "", model: "", mode: "aux" }],
     provider: "",
     model: "",
+    mode: "aux",
   };
   assert.deepEqual(validateJsonSchemaValue(schema, value, "value"), []);
 });

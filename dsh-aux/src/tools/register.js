@@ -105,6 +105,9 @@ export function registerAuxTools(service) {
                       analysis: { type: "string", required: true },
                       provider: { type: "string", required: true },
                       model: { type: "string", required: true },
+                      // Delivery route: "aux" (auxiliary model analyzed it) or
+                      // "native" (the image was handed to the main model).
+                      mode: { type: "string", required: true },
                       // Success entries only; failed images carry error text
                       // without an attachment.
                       attachment: IMAGE_REF_SCHEMA,
@@ -113,6 +116,9 @@ export function registerAuxTools(service) {
                 },
                 provider: { type: "string", required: true },
                 model: { type: "string", required: true },
+                // Delivery route: "aux" (auxiliary model analyzed it) or
+                // "native" (the image was handed to the main model).
+                mode: { type: "string", required: true },
                 attachment: IMAGE_REF_SCHEMA,
               },
             },

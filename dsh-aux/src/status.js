@@ -632,6 +632,14 @@ export async function collectPlatformStatus(service) {
 
   const warnings = [];
   const enabled = service._enabled ?? {};
+  if ((service.forceAuxVision ?? false) === true && (service.visionRoute ?? "aux") !== "aux") {
+    // forceAuxVision wins at delivery time; the configured route is dead.
+    warnings.push({
+      code: "force-aux-vision-overrides-route",
+      keys: ["forceAuxVision", "visionRoute"],
+      reason: "force-aux-vision-overrides-route",
+    });
+  }
   if (enabled.vision_analyze === "native" && enabled.imageBridge !== "native") {
     warnings.push({
       code: "vision-disabled-image-bridge-enabled",
@@ -653,6 +661,11 @@ export async function collectPlatformStatus(service) {
     },
     eventsSupported: events,
     patchLedger,
+    visionRoute: {
+      mode: service.visionRoute ?? "aux",
+      nativeRoutes: Array.isArray(service.nativeRoutes) ? [...service.nativeRoutes] : [],
+      forceAuxVision: service.forceAuxVision === true,
+    },
     imageLifecycle: {
       deletionReady: deletionBlockReason(service) === void 0,
       blockedReason: deletionBlockReason(service),

@@ -86,6 +86,7 @@ export async function runVision(service, args, exec) {
           analysis: `vision_analyze: image failed: ${entry.reason?.message ?? String(entry.reason)}`,
           provider: "",
           model: "",
+          mode: "aux",
         },
   );
   const firstOk = results.find((r) => r.provider !== "");
@@ -105,15 +106,48 @@ export function validImageItem(item) {
   return keys.length === 1;
 }
 
+/** Model-facing note for native delivery (the image block carries the image). */
+function nativeDeliveryNote(question) {
+  return `[原生视觉交付] 图片已作为附件随本次工具结果返回,请直接查看该图片后回答。问题: ${question}`;
+}
+
 /** Analyze exactly one image through the auxiliary vision route. */
 export async function analyzeOne(service, source, question, exec) {
   const ref = await resolveImageRef(service, source, exec);
+  const delivery =
+    typeof service.visionDelivery === "function"
+      ? await service.visionDelivery(exec)
+      : { mode: "aux", reason: "no-router" };
+  if (delivery.mode === "native") {
+    if (typeof ref?.attachmentId !== "string" || ref.attachmentId.length === 0) {
+      // Never silently fall back: a chosen-but-failed native delivery is
+      // visible to the caller, with the escape hatch named explicitly.
+      throw new Error(
+        "vision_analyze: native delivery requires a durable attachment ref — set aux.visionRoute: 'aux' to route images through the auxiliary vision model instead",
+      );
+    }
+    if (exec.agent?.session?.id !== void 0) {
+      recordAttachmentOwnership(service, exec.agent.session.id, ref.attachmentId);
+      recordAttachmentRefs(service, ref).catch(() => {});
+    }
+    // No auxiliary call and no image memory: native delivery carries no
+    // analysis conclusion, only the image itself.
+    return {
+      analysis: nativeDeliveryNote(question),
+      provider: delivery.mainRoute?.provider ?? "",
+      model: delivery.mainRoute?.model ?? "",
+      attachment: ref,
+      mode: "native",
+    };
+  }
   // Record ownership for disposal cleanup (session -> attachment id) and the
   // full ref for the GC sidecar (host-path seam + media-type .ext removal).
+  // Both are session-scoped: without a session there is nothing to reclaim
+  // against, and tests must not touch a real DSH_HOME.
   if (exec.agent?.session?.id !== void 0) {
     recordAttachmentOwnership(service, exec.agent.session.id, ref.attachmentId);
+    recordAttachmentRefs(service, ref).catch(() => {});
   }
-  recordAttachmentRefs(service, ref).catch(() => {});
   const messages = [
     createUserMessage({
       content: [
@@ -130,6 +164,7 @@ export async function analyzeOne(service, source, question, exec) {
     agent: exec.agent,
     signal: exec.signal,
     inputChars: question.length,
+    mode: "aux",
   });
   // Image memory: persist a compact record so a restarted main session can
   // recall what was looked at without re-analyzing. Best-effort.
@@ -140,5 +175,5 @@ export async function analyzeOne(service, source, question, exec) {
   // block: the trajectory view then shows what the auxiliary model actually
   // looked at (text-only main models are protected by the official
   // tool-result image projection). Pass-through only — never reshape.
-  return { analysis: result.text, provider: result.provider, model: result.model, attachment: ref };
+  return { analysis: result.text, provider: result.provider, model: result.model, attachment: ref, mode: "aux" };
 }

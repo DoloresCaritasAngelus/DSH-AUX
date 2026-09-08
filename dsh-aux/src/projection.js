@@ -22,6 +22,9 @@ const AUX_STATUS_SCHEMA = zodz.object({
       ok: zodz.boolean(),
       fallbackUsed: zodz.boolean(),
       durationMs: zodz.number(),
+      // Delivery route of the last call for this task ("aux" today; "native"
+      // is surfaced here once native delivery records its own event).
+      mode: zodz.string(),
     }),
   ),
 });
@@ -40,6 +43,7 @@ function applyAuxStatus(state, event) {
         ok: data.ok === true,
         fallbackUsed: data.fallbackUsed === true,
         durationMs: data.durationMs,
+        mode: typeof data.mode === "string" ? data.mode : "aux",
       },
     };
     return { tasks };

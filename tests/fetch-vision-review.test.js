@@ -99,17 +99,20 @@ test("vision_analyze multi-image: partial failure preserves successful analyses"
     analysis: "OK ok1",
     provider: "prov",
     model: "mod",
+    mode: "aux",
     attachment: { attachmentId: "ok1", mediaType: "image/png", bytes: 8, width: 2, height: 2 },
   });
   assert.deepEqual(result.analyses[1], {
     analysis: "vision_analyze: image failed: boom for bad1",
     provider: "",
     model: "",
+    mode: "aux",
   });
   assert.deepEqual(result.analyses[2], {
     analysis: "OK ok2",
     provider: "prov",
     model: "mod",
+    mode: "aux",
     attachment: { attachmentId: "ok2", mediaType: "image/png", bytes: 8, width: 2, height: 2 },
   });
 });
