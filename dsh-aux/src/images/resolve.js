@@ -4,7 +4,13 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/images/resolve
  */
-import { basename, mediaTypeForPath, mediaTypeFromContentType } from "../media.js";
+import {
+  basename,
+  extensionForPath,
+  mediaTypeForPath,
+  mediaTypeFromContentType,
+  sniffImageMediaType,
+} from "../media.js";
 import { fetchWithSsrf } from "../fetch.js";
 import { sessionEvents } from "../session-utils.js";
 import { sessionImageRefs } from "./refs.js";
@@ -88,9 +94,17 @@ export async function resolveImageRef(service, args, exec) {
     if (fs === void 0 || attachments === void 0) {
       throw new Error("vision_analyze: local image support requires the fs and attachment services");
     }
-    const mediaType = mediaTypeForPath(args.imagePath);
-    if (mediaType === void 0) {
-      throw new Error("vision_analyze: imagePath must end in .png/.jpg/.jpeg/.webp/.gif");
+    // A recognized extension declares the format; an extension-less path
+    // declares nothing and has its leading bytes sniffed after the read. An
+    // unknown non-empty extension is refused before any I/O, mirroring
+    // read_image: only the four supported extensions (or no extension at all)
+    // are accepted.
+    const declared = mediaTypeForPath(args.imagePath);
+    const extension = extensionForPath(args.imagePath);
+    if (declared === void 0 && extension !== "") {
+      throw new Error(
+        `vision_analyze: imagePath "${args.imagePath}" uses the ${extension} extension, which is not a supported image format — use .png/.jpg/.jpeg/.webp/.gif, or an extension-less file whose content is one of those formats`,
+      );
     }
     const target = await fs.resolve(args.imagePath, {
       ...(exec.agent?.session?.header?.cwd !== void 0 ? { cwd: exec.agent.session.header.cwd } : {}),
@@ -105,6 +119,20 @@ export async function resolveImageRef(service, args, exec) {
     }
     const byteCap = Math.min(attachments.imageLimits.maxImageBytes, attachments.imageLimits.maxMessageImageBytes);
     const data = await fs.readBytes(target, exec.signal, byteCap);
+    const sniffed = sniffImageMediaType(data);
+    const mediaType = declared ?? sniffed;
+    if (mediaType === void 0) {
+      throw new Error(
+        `vision_analyze: "${target.displayPath}" is not a supported image — the path declares no image extension and the bytes match none of the PNG/JPEG/WebP/GIF signatures`,
+      );
+    }
+    // A declared extension that disagrees with the bytes is refused with both
+    // facts named; a silent save would store the image under the wrong type.
+    if (declared !== void 0 && sniffed !== void 0 && sniffed !== declared) {
+      throw new Error(
+        `vision_analyze: "${target.displayPath}" declares ${declared} by its extension, but the bytes are ${sniffed} — rename the file to match its actual format or convert it`,
+      );
+    }
     try {
       return await attachments.saveImage({ data, mediaType, name: basename(target.displayPath) });
     } catch (error) {

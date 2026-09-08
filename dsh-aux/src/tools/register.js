@@ -75,7 +75,11 @@ export function registerAuxTools(service) {
               type: "string",
               description: "Session attachment id of an image already attached to this conversation.",
             },
-            imagePath: { type: "string", description: "Path to a local PNG/JPEG/WebP/GIF image file." },
+            imagePath: {
+              type: "string",
+              description:
+                "Path to a local PNG/JPEG/WebP/GIF image file. A path without a recognized extension is accepted; the format is detected from the file's leading bytes, so normalized attachment files can be passed directly.",
+            },
             imageUrl: { type: "string", description: "URL of a remote image to fetch and analyze." },
             images: {
               type: "array",
