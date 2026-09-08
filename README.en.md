@@ -209,6 +209,7 @@ node scripts/doctor.mjs    # post-update health check (does not modify anything)
 | `/aux patch` | Install all patches required by the current DSH and self-heal |
 | `/aux patch --json` | Same, with structured step results |
 | `/aux model <task> [provider/model]` | View / set a task's auxiliary model (writes a single-entry chain; use the settings page's "Fallback chain" field for more levels) |
+| `/aux models [--json]` | Per-route image capability (true / false / unknown; feeds the settings picker) |
 | `/aux vision <path> <question...>` | Directly view an image from the command line |
 | `/aux test <task>` | Self-test a task route |
 | `/aux memory [n]` | View recent image analysis memory |
@@ -270,7 +271,10 @@ This settings page turns both into **visible status**: it tells you each tool/br
 
 ### What else the settings page can do
 
-Web → Settings → Auxiliary Models. Configure per-task model, timeout, concurrency, `maxChars`, and **reasoning effort** for `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. The page is grouped into collapsible "Tool Tasks / Bridge Tasks / Subagents / Global / Platform Switches" sections and follows the DSH language (zh/en).
+Web → Settings → Auxiliary Models. Configure per-task model, timeout, concurrency, `maxChars`, and **reasoning effort** for `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. The page is split into "Overview / Routing & models / Task models & fallback chains / Tools & bridge switches / Images & cache / Debug & diagnostics / Advanced" sections, with **only Overview expanded by default**; each task shows a one-line summary (chain / timeout / concurrency) until you press "Edit", and timeouts, concurrency, `maxChars`, and reasoning effort live under "Advanced". Follows the DSH language (zh/en).
+
+- **Model picker**: collapsible provider groups (first expanded, header shows selected n/m) + multi-select + an ordered chain below (move up/down, remove) + manual entry; the six tasks' fallback chains and the native whitelist share one component, and every native row is annotated with its image capability (true / no-image in amber / unknown in grey, sourced from `/aux models`).
+- **Message image gallery**: `enabled.messageImages` defaults to `native` (shipped gallery); with `aux` the user message thumbnails carry a `第N/共M` badge (only when ≥2 images) while every other behavior stays the same (first-frame cache / loading / retry / full-size click / aria).
 
 - **Status chip**: the composer shows the latest auxiliary call (task, duration, whether it fell back).
 - **Diagnostics & repair**: each tool/bridge shows a status dot, patch badge, and unavailable reason; missing patches can be re-applied in one click, with restart detection after writing.

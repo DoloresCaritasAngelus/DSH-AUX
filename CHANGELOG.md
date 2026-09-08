@@ -2,6 +2,29 @@
 
 ## 未发布 (Unreleased)
 
+### 消息图片角标与设置页重构(Phase 4)
+
+- **消息图片角标**:客户端注册 `conversation.message.images`,渲染官方缩略图 + `第N/共M`
+  角标(仅用户消息、仅 ≥2 张;同一 id 命中多条消息或拿不到会话轨迹时不显示);
+  保留首帧缓存、加载中、失败重试、点击大图与 aria 标签。单槽注册以 `priority: -1`
+  影子官方条目,注销后官方图库自动回来。开关 `enabled.messageImages`(默认 `native` =
+  不注册),设置页「图片与缓存」可选 `aux`。
+- **设置页分区与渐进披露**:分区为 概览 / 路由与模型 / 任务模型与降级链 / 工具与桥接开关 /
+  图片与缓存 / 调试与诊断 / 高级,默认只展开「概览」;每个任务默认一行摘要(链 / 超时 /
+  并发),点「编辑」才展开;`timeoutMs` / `maxConcurrency` / `maxChars` / `reasoningEffort`
+  收进「高级」——功能一个不减。
+- **共享模型选择器**:可折叠供应商分组(默认展开第一组、记住展开状态、组头显示已选 n/共 m)
+  + 组内多选 + 下方链排序(↑/↓/删除)+ 手动输入;6 个任务的 `models` 与 `nativeRoutes`
+  复用同一组件,数据形状不变(`["provider/model"]`)。
+- **`/aux models [--json]`**:只读命令,对目录里每个 `provider/model` 解析 `inputModalities`,
+  返回 tri-state `imageCapable`(true / false / null=未知,空模态列表不当作否定能力);
+  按 provider+model 进程内缓存并在 `llm/adapters-updated` 时失效;设置页的 native 白名单
+  每行据此标注(image / 未声明 image 标黄 / 未知标灰)。
+- **上游 Request 3**:`docs/design/upstream-requests.md` 与 `.zh.md` 新增「消息图片画廊的
+  序号 / 装饰缝」请求(`MessageImagesOwnerProps` 增加 `index`/`total`,或提供 decorate 钩子),
+  附源码证据;仍未提交上游。
+- **测试**:新增 `tests/message-images.test.js`、`tests/message-images-module.test.js`、
+  `tests/aux-models-command.test.js`、`tests/settings-picker.test.js`;全量 502 → 510 条。
 ### 修复
 
 - **用户消息图片查找失效(P0)**:`user/message` 事件的 `data` 就是扁平 `UserMessage`
