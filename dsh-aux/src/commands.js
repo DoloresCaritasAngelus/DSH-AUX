@@ -23,7 +23,7 @@ import { runVision } from "./tools/vision.js";
 import { runWebExtract } from "./tools/web-extract.js";
 import { runWebCrawl } from "./tools/web-crawl.js";
 import { runCompress } from "./tools/compress.js";
-import { sessionEvents } from "./session-utils.js";
+import { listSessionSnapshots, readSessionEvents, sessionEvents } from "./session-utils.js";
 
 /** Human-readable reason text for a status item/issue. */
 function statusReasonText(reason) {
@@ -217,7 +217,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
     if (!Number.isInteger(days) || days <= 0) {
       return { kind: "error", text: "用法: /aux gc-images [days] — 清理超过 N 天的附件图片(默认 30)" };
     }
-    return await gcImages(days);
+    return await gcImages(service, days);
   }
   if (sub === "model") {
     return await handleModelCommand(service, args.slice(1));
@@ -402,18 +402,15 @@ async function resolveDebugTarget(service, raw, currentId) {
   } catch {
     sp = void 0;
   }
-  if (!sp || typeof sp.list !== "function") {
+  if (!sp) {
     return { error: { kind: "error", text: "sessionPersistence 不可用,无法解析目标会话" } };
   }
-  let headers;
-  try {
-    headers = await sp.list();
-  } catch (error) {
-    return { error: { kind: "error", text: "读取会话列表失败: " + (error?.message ?? String(error)) } };
-  }
+  // Stored-session snapshots carry their metadata under `header` on the 0.1.5
+  // handle seam and inline on the older list API; normalize once here.
+  const headers = (await listSessionSnapshots(sp)).map((entry) => entry?.header ?? entry ?? {});
   const exact = headers.find((h) => h.id === token);
   if (exact !== void 0) return { id: exact.id, label: exact.id };
-  const idMatches = headers.filter((h) => h.id.startsWith(token));
+  const idMatches = headers.filter((h) => typeof h.id === "string" && h.id.startsWith(token));
   if (idMatches.length === 1) return { id: idMatches[0].id, label: idMatches[0].id };
   if (idMatches.length > 1) {
     return {
@@ -496,15 +493,14 @@ export async function handleDebugCommand(service, agent, args) {
     } catch {
       sp = void 0;
     }
-    if (!sp || typeof sp.inspect !== "function") {
+    if (!sp) {
       return { kind: "error", text: "sessionPersistence 不可用,无法读取目标会话" };
     }
-    try {
-      const inspection = await sp.inspect(targetId);
-      events = inspection?.events ?? [];
-    } catch (error) {
-      return { kind: "error", text: `读取会话 ${targetLabel} 失败: ${error?.message ?? String(error)}` };
+    const stored = await readSessionEvents(sp, targetId);
+    if (stored === void 0) {
+      return { kind: "error", text: `读取会话 ${targetLabel} 失败: 持久化日志不可读` };
     }
+    events = stored;
   }
   const debugEvents = events.filter((event) => event?.type === AUX_DEBUG_EVENT);
   if (debugEvents.length === 0) {

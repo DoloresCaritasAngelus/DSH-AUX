@@ -4,6 +4,7 @@
  * @module @dolorescaritasangelus/dsh-aux/images/gc
  */
 import { lstat as lstatFile, readdir, stat as statFile, unlink as unlinkFile } from "node:fs/promises";
+import { sweepTrash } from "./ownership.js";
 
 /**
  * Garbage-collect pasted-image attachments older than `days` days.
@@ -17,10 +18,11 @@ import { lstat as lstatFile, readdir, stat as statFile, unlink as unlinkFile } f
  * decides when to reclaim space. Content addressing means the same image
  * pasted many times is one object, so growth is slower than it looks.
  *
+ * @param {object} service The AUX service (for the trash sweep).
  * @param days cutoff age in days (default 30).
  * @returns a command result describing what was removed.
  */
-export async function gcImages(days) {
+export async function gcImages(service, days) {
   const home = process.env.DSH_HOME || (process.env.HOME ? process.env.HOME + "/.dsh" : void 0);
   if (home === void 0) return { kind: "error", text: "aux: cannot locate DSH_HOME for attachment cleanup" };
   const objectsRoot = home + "/attachments/v1/objects";
@@ -69,8 +71,15 @@ export async function gcImages(days) {
   } catch (error) {
     return { kind: "error", text: `aux: attachment GC failed: ${error?.message ?? String(error)}` };
   }
+  // Reclaimed objects parked in .trash/ become unrecoverable once the
+  // recovery window closes; sweeping here keeps the store bounded even when
+  // the periodic reconcile is not running (headless one-shot commands).
+  const trash = await sweepTrash(service).catch(() => ({ removed: 0, bytes: 0 }));
   return {
     kind: "success",
-    text: `附件清理完成: 扫描 ${scanned} 个文件, 删除 ${removed} 个超过 ${days} 天的附件 (${(removedBytes / 1024 / 1024).toFixed(1)} MB)${failed > 0 ? `, ${failed} 个失败` : ""}。`,
+    text:
+      `附件清理完成: 扫描 ${scanned} 个文件, 删除 ${removed} 个超过 ${days} 天的附件 (${(removedBytes / 1024 / 1024).toFixed(1)} MB)` +
+      `${failed > 0 ? `, ${failed} 个失败` : ""};` +
+      `回收站清出 ${trash.removed} 个已过恢复窗口的对象 (${(trash.bytes / 1024 / 1024).toFixed(1)} MB)。`,
   };
 }

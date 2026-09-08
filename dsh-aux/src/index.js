@@ -74,7 +74,13 @@ import {
   shouldUsePreStepAuxGuide,
 } from "./bootstrap.js";
 import { registerAuxTools } from "./tools/register.js";
-import { onSessionDisposed, reconcileSessionImages } from "./images/ownership.js";
+import {
+  noteLiveSession,
+  onSessionDisposed,
+  recordAttachmentOwnership,
+  reconcileSessionImages,
+} from "./images/ownership.js";
+import { eventImageRefs } from "./images/refs.js";
 import { handleAuxCommand } from "./commands.js";
 import { prepareCompactionMessages } from "./compaction-messages.js";
 import { attachSkillBridge } from "./skill-bridge.js";
@@ -303,6 +309,10 @@ export class AuxLlmService extends Service {
     this._sessionImages = new Map();
     this._sessionImagesLoaded = false;
     this._sessionImagesDirty = false;
+    // Live-session ownership barrier: deletions are refused (fail-closed)
+    // while any live session's history scan is in flight or has failed.
+    this._liveBackfillPending = new Set();
+    this._liveBackfillFailed = new Set();
     // Serialize image-memory journal writes: the journal is a read-modify-
     // write file, and multi-image analysis runs records in parallel — a
     // concurrent race would drop entries (last writer wins).
@@ -339,7 +349,25 @@ export class AuxLlmService extends Service {
       publishPlatformStatus(this).catch(() => {});
       publishImageLibrary(this).catch(() => {});
     });
+    // Ownership hook: record every image reference a session produces,
+    // incrementally, including images nested inside tool results. Constructor
+    // seeds never fire `session/event` (replay/fork/resume enter through
+    // construction), so `session/created` backfills the history once.
+    ctx.on("session/event", (session, event) => {
+      const sessionId = session?.id ?? session?.sessionId;
+      if (sessionId === void 0) return;
+      for (const ref of eventImageRefs(event)) {
+        const attachmentId = ref?.attachmentId;
+        if (typeof attachmentId === "string" && attachmentId.length > 0) {
+          recordAttachmentOwnership(this, String(sessionId), attachmentId);
+        }
+      }
+    });
     ctx.on("session/created", (session) => {
+      // Recovery barrier: scan the in-memory log before the session is
+      // treated as a known owner (a resumed session's constructor seed is its
+      // full stored log — no disk I/O needed).
+      noteLiveSession(this, session);
       publishPlatformStatusToSession(this, session).catch(() => {});
       publishImageLibraryToSession(this, session).catch(() => {});
     });

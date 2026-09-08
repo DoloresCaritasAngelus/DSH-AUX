@@ -13,6 +13,7 @@ import { stat } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { resolvePackageFile, readPackageFile } from "./bridge-locate.js";
 import { imageBridgeStatus } from "./image-bridge.js";
+import { deletionBlockReason } from "./images/ownership.js";
 import { subagentBridgeStatus, workflowBridgeStatus } from "./subagent-bridge.js";
 import { isCompactionBridgeInstalled, isCompactionTaskConfigured } from "./compaction-bridge.js";
 import { isSkillTaskConfigured, skillBridgeStatus } from "./skill-bridge.js";
@@ -244,6 +245,39 @@ function item(entry) {
  * Status for one model-facing tool. Tools are available whenever the plugin
  * is mounted; only the user's mode switch changes their state.
  */
+/**
+ * Status for the image-lifecycle delete gate.
+ *
+ * `ready` means every live session's image ownership is known and deletion may
+ * proceed; `frozen` is the fail-closed state — an unbackfilled live session's
+ * references are unknowable, so no deletion is allowed until the retry
+ * succeeds. The state is self-healing and observable here.
+ */
+function imageLifecycleStatusItem(service) {
+  const blockedReason = deletionBlockReason(service);
+  if (blockedReason === void 0) {
+    return item({
+      key: "imageLifecycle",
+      kind: "lifecycle",
+      mode: "aux",
+      state: "enabled",
+      reason: "ownership-complete",
+      action: "none",
+    });
+  }
+  // "unknown" (not "unavailable"): the gate is self-healing and must not be
+  // swept into the patch/issue flow.
+  return item({
+    key: "imageLifecycle",
+    kind: "lifecycle",
+    mode: "aux",
+    state: "unknown",
+    reason: "ownership-unknown",
+    action: "wait",
+    detail: blockedReason,
+  });
+}
+
 function toolStatus(service, key) {
   const mode = service.toolBridgeMode(key);
   if (mode === "native") {
@@ -571,6 +605,7 @@ export async function collectPlatformStatus(service) {
   const items = [];
   for (const key of TOOL_KEYS) items.push(toolStatus(service, key));
   items.push(imageBridgeStatusItem(service, image));
+  items.push(imageLifecycleStatusItem(service));
   items.push(filePatchBridgeStatusItem(service, "subagentBridge", sub));
   items.push(filePatchBridgeStatusItem(service, "workflowBridge", workflow));
   items.push(compactionBridgeStatusItem(service));
@@ -618,6 +653,10 @@ export async function collectPlatformStatus(service) {
     },
     eventsSupported: events,
     patchLedger,
+    imageLifecycle: {
+      deletionReady: deletionBlockReason(service) === void 0,
+      blockedReason: deletionBlockReason(service),
+    },
     items,
     warnings,
     issues,

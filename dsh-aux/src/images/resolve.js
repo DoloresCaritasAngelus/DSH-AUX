@@ -7,6 +7,7 @@
 import { basename, mediaTypeForPath, mediaTypeFromContentType } from "../media.js";
 import { fetchWithSsrf } from "../fetch.js";
 import { sessionEvents } from "../session-utils.js";
+import { sessionImageRefs } from "./refs.js";
 
 /** Read a response body as bytes, aborting as soon as the cap is exceeded. */
 async function readBytesCapped(response, byteCap) {
@@ -53,22 +54,26 @@ export async function resolveImageRef(service, args, exec) {
     attachments = void 0;
   }
   if (args.attachmentId !== void 0 && args.attachmentId.length > 0) {
-    // Find the durable ref in the session's user messages.
+    // Search every message-producing event, recursing into tool results: a
+    // tool-produced image (read_image, the vision_analyze echo) is referenced
+    // by the same durable id but never appears in a user message.
     const agent = exec.agent;
     const session = agent?.session;
-    const events = sessionEvents(session);
-    for (const event of events) {
-      if (event.type !== "user/message") continue;
-      const content = event.message?.content ?? event.data?.message?.content ?? [];
-      for (const block of content) {
-        if (block?.type === "image" && String(block.attachment?.attachmentId) === String(args.attachmentId)) {
-          if (attachments === void 0) throw new Error("vision_analyze: no attachment service mounted");
-          const stored = await attachments.readImage(block.attachment, exec.signal);
-          return stored.ref;
-        }
+    const wanted = String(args.attachmentId);
+    const found = sessionImageRefs(sessionEvents(session)).find((ref) => String(ref.attachmentId) === wanted);
+    if (found !== void 0) {
+      if (attachments === void 0) throw new Error("vision_analyze: no attachment service mounted");
+      try {
+        const stored = await attachments.readImage(found, exec.signal);
+        return stored.ref;
+      } catch (error) {
+        throw new Error(
+          `vision_analyze: attachment "${wanted}" is referenced by this session but its stored image is no longer available — it may have been reclaimed by attachment GC`,
+          { cause: error },
+        );
       }
     }
-    throw new Error(`vision_analyze: attachment "${args.attachmentId}" not found in this session's messages`);
+    throw new Error(`vision_analyze: attachment "${wanted}" not found in this session's messages`);
   }
   if (args.imagePath !== void 0 && args.imagePath.length > 0) {
     // Path confinement/symlink safety is intentionally delegated to the host

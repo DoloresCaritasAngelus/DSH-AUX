@@ -10,7 +10,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **409**(2026-09-09)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **421**(2026-09-09)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 
@@ -53,6 +53,7 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/image-commands.test.js` | `/aux images` 与 `/aux image` 命令层 |
 | `tests/image-locate.test.js` | 图片定位:最近 user/message seq 与 vision_analyze callId/callSeq |
 | `tests/session-compat.test.js` | Session API 兼容:旧 `.events` / 新 `snapshotEvents()` 覆盖 bootstrap/history/debug/locate/resolve |
+| `tests/image-lifecycle.test.js` | 图片生命周期(P3):`collectImageRefs` 递归工具产物、persistence shim(新 `list/open` + 旧 `listSnapshots/inspect`)、恢复屏障与 fail-closed 全局拒删、`.trash` 回收与清扫、`resolveImageRef` 递归与"已回收"文案 |
 | `tests/session-append-ignorable.test.js` | P7 append ignorable:每个变体的信封语义、surface 元数据共存、变体表两处同步、0.1.5 端到端(AUX → 补丁后的 append → `ignorable:true`) |
 | `tests/readme-sync.test.js` | 单一真相:包内 README == 根 README 生成快照(防漂移) |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |

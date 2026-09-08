@@ -9,7 +9,7 @@
  * @module @dolorescaritasangelus/dsh-aux/images/locate
  */
 import { loadSessionImages } from "./ownership.js";
-import { sessionEvents } from "../session-utils.js";
+import { readSessionEvents as readStoredSessionEvents, sessionEvents } from "../session-utils.js";
 
 /** Attachment ids are content-addressed: `sha256:<64 hex>`. */
 const HASH_ID_RE = /^sha256:([a-f0-9]{64})$/;
@@ -73,8 +73,8 @@ function contentOfUserEvent(event) {
 
 /**
  * Read a session's events from the supplied live session first, then fall
- * back to `sessionPersistence.inspect`. Returns null when the session is not
- * readable (live session absent and persistence inspect missing/failing).
+ * back to the stored log through the persistence shim (0.1.5 `open/read`,
+ * older `inspect`). Returns null when the session is not readable.
  */
 async function readSessionEvents(service, sessionId, opts = {}) {
   const liveSession = opts?.liveSession;
@@ -90,18 +90,8 @@ async function readSessionEvents(service, sessionId, opts = {}) {
   } catch {
     persistence = void 0;
   }
-  if (persistence === void 0 || persistence === null || typeof persistence.inspect !== "function") {
-    return null;
-  }
-  try {
-    const inspection = await persistence.inspect(sessionId);
-    if (inspection !== null && inspection !== void 0 && Array.isArray(inspection.events)) {
-      return inspection.events;
-    }
-  } catch {
-    return null;
-  }
-  return null;
+  const stored = await readStoredSessionEvents(persistence, sessionId);
+  return Array.isArray(stored) ? stored : null;
 }
 
 /**
