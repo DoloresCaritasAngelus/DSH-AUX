@@ -386,6 +386,9 @@ async function applyOne(target, dryRun) {
   for (let i = 0; i < target.states.length + 3; i++) {
     const state = target.states.find((candidate) => candidate.detect(data));
     if (state === void 0) {
+      // 按设计保持退出码 0:install.sh 用 `set -e`,非零会直接中断安装,把
+      // "未知版本先跳过、不破坏部署"退化成"装不上"。该信号由输出文本承载 ——
+      // ci-fake-dsh.mjs 与 self-heal.mjs 都以正则门禁匹配这句话(见 TESTING.md)。
       log(`${target.label} 跳过(版本不匹配,未找到已知代码块): ${file}`);
       return;
     }

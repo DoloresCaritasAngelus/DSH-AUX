@@ -1,6 +1,7 @@
-# dsh-aux bridge 补丁(DSH 0.1.2 线)
+# dsh-aux bridge 补丁(DSH 0.1.5 线)
 
-> **主分支只支持 DSH `0.1.2-alpha.2` ~ `0.1.2-rc.1`**。
+> **主分支支持 DSH `0.1.5-alpha.1`(单版本)**;`0.1.2-alpha.2` ~ `0.1.2-rc.1` 冻结在
+> `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 分支(主支的 0.1.2 锚点块作为兼容遗留保留)。
 > 旧版(rc.6 ~ 0.1.1-rc.2)的 host-apiproxy / settings 补丁已退役到
 > [bridge/retired/](./retired/README.md)，legacy 分支仍完整保留。
 > 安装 dsh-aux 时随 `install.sh` 一并应用（非可选）；仅装插件本体的，单独运行本目录脚本补上。
@@ -10,7 +11,7 @@
 让纯文本对话模型也能接收用户粘贴的图片，同时让用户在 UI 里看到自己发的图片缩略图：
 
 - DSH alpha 架构中，图片能力门控在 `dsh-api-session-controller`；
-- `dsh-agent-loop` 负责模型输入边界，可把 image block 改写为 `vision_analyze` 路径文本；
+- `dsh-agent-loop` 负责模型输入边界，可把 image block 改写为 `attachmentId` 锚点文本；
 - 多模态模型默认原生看图，`forceAuxVision` 开启后强制走 AUX 视觉。
 
 ## 补丁清单（当前主支）
@@ -51,10 +52,15 @@ node apply-patch.mjs        # 自动识别状态:原始 → 已补丁 / 中间�
 
 - **桥接链路**：
   1. `dsh-api-session-controller` 允许含图会话选择纯文本模型；
-  2. `dsh-agent-loop` 在模型输入边界按模态改写：多模态原生保留，纯文本/`forceAuxVision` 改写为 `vision_analyze`。
-- **硬链接而非符号链接**：附件对象无扩展名，补丁在其旁创建 `<sha256>.png/.jpg/…` 硬链接。
+  2. `dsh-agent-loop` 在模型输入边界按模态改写：多模态原生保留，纯文本/`forceAuxVision` 改写为
+     `[本条消息第N张/共M张, attachmentId=<sha256:…>]` 锚点文本。
+- **硬链接(保留但已不承载投递)**：附件对象无扩展名，补丁仍在其旁创建 `<sha256>.png/.jpg/…` 硬链接；
+  自 0.1.5 线起投递文本改用 `attachmentId`，硬链接失败或扩展名判型不再影响模型能否收到图片。
 - **补丁文件**：
-  - `orig-agent-loop-alpha2-block.txt` / `patched-agent-loop-alpha2-block.txt`
+  - `orig-agent-loop-alpha2-block.txt` / `patched-agent-loop-alpha2-block.txt`（0.1.2 线，8 参 async `buildRequest`）
+  - `orig-agent-loop-0.1.5-block.txt` / `patched-agent-loop-0.1.5-block.txt`（0.1.5 线，同步五参 → async）
+  - `orig-agent-loop-anchor-text-block.txt` / `patched-agent-loop-anchor-text-block.txt`（旧路径文本 → attachmentId 锚点文本的原地升级）
+  - `orig-session-append-0.1.5-block.txt` / `patched-session-append-0.1.5-block.txt`
   - `orig-session-controller-prompt-block.txt` / `patched-session-controller-prompt-block.txt`
   - `orig-subagent-schema-alpha2-block.txt` / `patched-subagent-schema-alpha2-block.txt`
   - `orig-subagent-request-alpha2-block.txt` / `patched-subagent-request-alpha2-block.txt`

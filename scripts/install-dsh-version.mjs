@@ -5,13 +5,12 @@
  *
  * DSH-AUX is not published to npm; this script only swaps the local
  * `@deepseek-ai/*` devDependencies used by the test suite so we can run the
- * same tests against DSH 0.1.2 lines (0.1.2-alpha.2 through 0.1.2-rc.1) in
+ * same tests against the supported DSH line (main branch: 0.1.5-alpha.1) in
  * GitHub Actions without a full containerized DSH.
  *
  * Usage:
- *   node scripts/install-dsh-version.mjs --version 0.1.2-alpha.2
- *   node scripts/install-dsh-version.mjs --version 0.1.2-alpha.3 --keep
- *   node scripts/install-dsh-version.mjs --version 0.1.2-rc.1 --keep
+ *   node scripts/install-dsh-version.mjs --version 0.1.5-alpha.1
+ *   node scripts/install-dsh-version.mjs --version 0.1.5-alpha.1 --keep
  *
  * --keep keeps the modified package.json (useful when debugging CI locally).
  */
@@ -59,6 +58,7 @@ const DSH_VERSIONED_PACKAGES = [
 // this repo, but adding it explicitly for every line makes the matrix robust
 // when the repository's default package.json changes.
 const EXTRA_DEV_PACKAGES = {
+  "0.1.5-alpha.1": ["dsh-api-session-controller"],
   "0.1.2-alpha.2": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
   "0.1.2-alpha.3": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
   "0.1.2-alpha.4": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
@@ -67,7 +67,7 @@ const EXTRA_DEV_PACKAGES = {
 };
 
 // Alpha lines no longer include dsh-host-apiproxy; the workspace devDependencies
-// already target 0.1.2-alpha.3 and install-dsh-version only swaps the line.
+// carry the current supported line and install-dsh-version only swaps it.
 
 // All @deepseek-ai/dsh-* packages share the DSH release line. Forcing them all
 // (including transitive packages such as dsh-system-prompt) to the same version

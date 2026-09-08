@@ -44,14 +44,12 @@ jobs:
         run: node scripts/ci-fake-dsh.mjs
 
   # 包级 DSH 版本兼容矩阵:不需要容器,直接用 npm 切换 @deepseek-ai/* 版本。
-  # 当前验证支持:0.1.2-alpha.2 ~ 0.1.2-rc.1。旧版见 legacy 分支。
-  # 注:0.1.2-alpha.1 只有 GitHub release,没有对应 npm 包发布,无法进入 npm 矩阵。
-  # 注:alpha.4/alpha.5/rc.1 在 AUX 相关包代码一致,仍分别保留以锁定发布线。
+  # 主支只支持 0.1.5-alpha.1(单版本);0.1.2 线冻结在 legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1。
   compat:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        dsh-version: [0.1.2-alpha.2, 0.1.2-alpha.3, 0.1.2-alpha.4, 0.1.2-alpha.5, 0.1.2-rc.1]
+        dsh-version: [0.1.5-alpha.1]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

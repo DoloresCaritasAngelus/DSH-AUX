@@ -115,3 +115,26 @@ test("dry-run 与真实应用结论一致:块匹配时 dry-run 零写盘、真�
     rmSync(root, { recursive: true, force: true });
   }
 });
+test("版本不匹配:按设计返回退出码 0,由输出文本承载信号", () => {
+  const root = mkdtempSync(join(tmpdir(), "dsh-aux-dryrun-unknown-"));
+  try {
+    const dir = join(root, "node_modules/@deepseek-ai/dsh-api-session-controller/lib");
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, "index.js");
+    // 既不含 detect 特征串,也不含任何已知步骤块 ⇒ 走"版本不匹配"分支。
+    writeFileSync(file, "export const unknown = true;\n");
+    const before = readFileSync(file, "utf8");
+
+    const dry = runApply(root, true);
+    const real = runApply(root, false);
+    // install.sh 用 set -e:这里若改成非零退出会把"未知版本先跳过"变成"装不上",
+    // 因此退出码固定为 0,兼容性信号由文本门禁(CI/自愈的正则)承担。
+    assert.equal(dry.status, 0, "dry-run 版本不匹配应保持退出码 0");
+    assert.equal(real.status, 0, "真实应用版本不匹配应保持退出码 0");
+    assert.match(dry.stdout, /版本不匹配,未找到已知代码块/);
+    assert.match(real.stdout, /版本不匹配,未找到已知代码块/);
+    assert.equal(readFileSync(file, "utf8"), before, "未知版本不得改动目标文件");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

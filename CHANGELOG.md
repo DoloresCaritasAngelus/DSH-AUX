@@ -2,6 +2,26 @@
 
 ## 未发布 (Unreleased)
 
+### DSH 0.1.5-alpha.1 兼容(主支单版本)
+
+- **补丁重切(P1/P2/P7)**:
+  - `dsh-agent-loop` 图像桥接锚点重切到 0.1.5 的同步五参 `buildRequest`:插入桥接方法并把签名改 async,
+    桥接在冻结循环之后进行且仅在真的改写时 `deepFreeze` 产物,唯一调用点补 `await`;0.1.2 的 8 参链路保持原状。
+  - `dsh-api-session-controller` 准入闸步骤块改为忽略行首缩进匹配(0.1.5 的 `using` 绑定多包一层 `try`
+    使每行多一个前导 tab),同一份锚点块同时命中 0.1.2 与 0.1.5。
+  - `dsh-session` append ignorable 新增 0.1.5 变体(post-event `validateSessionEventData` + 重入守卫);
+    `patch-session-ignorable.mjs` 与 `self-heal.mjs` 两份变体表同步登记。
+- **桥接投递文本**改为 `[本条消息第N张/共M张, attachmentId=<sha256:…>。可用 vision_analyze 的 attachmentId 参数查看]`:
+  不再依赖 `.ext` 硬链接路径与扩展名判型;已打补丁的旧部署由新增 `anchor-text` 状态原地升级。
+- **`apply-patch --dry-run` 结论保真**:dry-run 改为与真实应用同判据(先校验步骤块再判定可升级),
+  不再把"检测命中但块不匹配"报成可升级;版本不匹配仍按设计返回退出码 0(由 CI/自愈的文本门禁承担信号)。
+- **兼容矩阵**:主支只支持 `0.1.5-alpha.1`;CI compat 矩阵、根 devDependencies 与 `TESTING.md` 基线同步切换;
+  `0.1.2-alpha.2 ~ 0.1.2-rc.1` 冻结在 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1`。
+  peerDependencies 范围保持不变(兼容矩阵是支持声明,不是安装闸)。
+- **测试**:新增 `tests/bridge-dry-run.test.js`、`tests/bridge-block-match.test.js`、
+  `tests/agent-loop-anchor.test.js`、`tests/session-append-ignorable.test.js`;
+  `tests/bridge.test.js` 的提取源改为仓库内补丁块(此前在 CI 中静默 skip)。
+
 ## 0.4.4 (2026-09-06) — vision_analyze 轨迹回显
 
 - **`vision_analyze` 轨迹回显**(轨迹可见性增强,不改变分析行为):

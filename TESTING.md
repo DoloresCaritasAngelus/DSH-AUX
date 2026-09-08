@@ -10,7 +10,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **370**(2026-09-04)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **409**(2026-09-09)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 
@@ -23,10 +23,12 @@ node scripts/ci-fake-dsh.mjs                                  # fake DSH 根 + b
 node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + 实际补丁 + doctor(CI 专用)
 ```
 
-- 当前 DSH 兼容矩阵:`0.1.2-alpha.2` / `0.1.2-alpha.3` / `0.1.2-alpha.4` / `0.1.2-alpha.5` / `0.1.2-rc.1`。
+- 当前 DSH 兼容矩阵:`0.1.5-alpha.1`(主支单版本)。
+- `0.1.2-alpha.2` ~ `0.1.2-rc.1` 已冻结:使用 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 分支 / `v0.4.4-legacy` Release。
 - 旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）请使用 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 分支 / `v0.4.1-legacy` Release。
-- `0.1.2-alpha.1` 只有 GitHub release,没有对应 npm 包发布,因此无法进入 npm 矩阵;
-  源码差异仍纳入研究,但 CI 绿门以 npm 可安装版本为准。
+- 注:本机 `.npmrc` 指向 `registry.npmmirror.com`,该镜像对 0.1.5 线滞后
+  (例如缺 `@deepseek-ai/dsh-user-approval@0.1.5-alpha.1`);本地验证请加
+  `--registry https://registry.npmjs.org`,CI 默认即官方源。
 
 ## 测试文件清单
 
@@ -35,6 +37,9 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/aux.test.js` | 服务装配/路由/命令(/aux status、history、model、test、vision…)/事件/GC |
 | `tests/bridge.test.js` | image-bridge `bridgeImagesForModel`(纯文本→路径文本、多模态保留、保守转换、透传) |
 | `tests/bridge-target.test.js` | bridge 目标路径安全校验(`assertSafeTarget`)+ `DSH_ROOT` fake 部署覆盖(`deployedFile`) |
+| `tests/bridge-dry-run.test.js` | `apply-patch --dry-run` 结论保真:块不匹配零写盘、与真实应用结论/退出码一致、块匹配时 dry-run 零写盘 |
+| `tests/bridge-block-match.test.js` | 步骤块匹配忽略行首缩进(0.1.5 `using` 多包一层 try):漂移下仍落盘、首行沿用目标缩进、无漂移行为不变 |
+| `tests/agent-loop-anchor.test.js` | agent-loop 锚点重切:0.1.5 三步链路(桥接方法/async 化/A3 改写/调用点 await)、A3 冻结形状、幂等、0.1.2 旧链路、旧文本原地升级 |
 | `tests/compression.test.js` | `compress_text` 压缩逻辑与 schema |
 | `tests/core-review.test.js` | 核心链路评审回归(路由/降级/能力门) |
 | `tests/fetch-vision-review.test.js` | 抓取/视觉链路回归 |
@@ -48,6 +53,7 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/image-commands.test.js` | `/aux images` 与 `/aux image` 命令层 |
 | `tests/image-locate.test.js` | 图片定位:最近 user/message seq 与 vision_analyze callId/callSeq |
 | `tests/session-compat.test.js` | Session API 兼容:旧 `.events` / 新 `snapshotEvents()` 覆盖 bootstrap/history/debug/locate/resolve |
+| `tests/session-append-ignorable.test.js` | P7 append ignorable:每个变体的信封语义、surface 元数据共存、变体表两处同步、0.1.5 端到端(AUX → 补丁后的 append → `ignorable:true`) |
 | `tests/readme-sync.test.js` | 单一真相:包内 README == 根 README 生成快照(防漂移) |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
 | `tests/subagent-route.test.js` | subagent 路由判定(native/manual/vision-aware) |
@@ -77,6 +83,9 @@ node bridge/self-heal.mjs --dry-run            # 应全部"已打/跳过",无"�
 node bridge/install-start-hook.mjs <start-dsh.sh> <repo> --dry-run
 node bridge/apply-patch.mjs --dry-run
 node bridge/patch-session-ignorable.mjs --dry-run
+# apply-patch 在"版本不匹配(未找到已知代码块)"时**按设计返回退出码 0**:
+# install.sh 用 `set -e`,非零会直接中断安装;该信号由输出文本承载 ——
+# ci-fake-dsh.mjs 与 self-heal.mjs 都以正则门禁匹配"版本不匹配/步骤块未命中"。
 # rc.6 settings 补丁已退役(bridge/retired/),主支不再 dry-run
 ./install.sh --dry-run                          # 一键安装流程预览
 node scripts/doctor.mjs                         # 部署健康检查(symlink/profile/补丁/白名单/版本)
