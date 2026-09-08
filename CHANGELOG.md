@@ -2,6 +2,18 @@
 
 ## 未发布 (Unreleased)
 
+### 修复
+
+- **用户消息图片查找失效(P0)**:`user/message` 事件的 `data` 就是扁平 `UserMessage`
+  (官方 `packages/core/session/src/types.ts:297`;读取归一化见 `index.ts:335`),而图片提取
+  统一按 `event.data?.message` 读取 ⇒ 对用户粘贴的图恒返回空。影响三条:`vision_analyze` 的
+  `attachmentId` 入口找不到、图片库归属登记不到(被判 orphan)、会话卡片角标退化。现按事件
+  类型归一化(`user/message` → `event.message ?? event.data`;`tool/result` →
+  `data.message ?? event.message`),并保留派生 live 形状的容错;`agent/inbox/spliced` 的
+  `inserted` 明确不计入(随后会成为 `user/message`,计入会重复)。新增
+  `tests/user-message-image.test.js`,并把 6 个测试文件中自造的嵌套 `data.message`
+  fixture 校正为真实会话日志形状。
+
 ### vision 打磨与路由链(Phase 3)
 
 - **失败分类与自动重试**:多图分析中单张图片失败时,限流/超时/连接类失败在工具内**自动重试一次**;
