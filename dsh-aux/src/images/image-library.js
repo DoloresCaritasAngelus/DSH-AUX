@@ -9,21 +9,7 @@ import { liveSessionIds, loadArchivedSessionIds, loadSessionImages } from "./own
 import { imageMemoryPath } from "./memory.js";
 import { scanObjectFiles } from "./fs-utils.js";
 import { loadRetained } from "./retention.js";
-
-const HASH_ID_RE = /^sha256:([a-f0-9]{64})$/;
-const OBJECT_FILE_RE = /^([a-f0-9]{64})(?:\.(png|jpg|jpeg|webp|gif))?$/;
-const EXTENSION_MEDIA_TYPES = Object.freeze({
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp",
-  gif: "image/gif",
-});
-
-/** Resolve the DSH home used by AUX attachment paths. */
-function homePath() {
-  return process.env.DSH_HOME || (process.env.HOME ? process.env.HOME + "/.dsh" : void 0);
-}
+import { EXTENSION_MEDIA_TYPES, dshHome, objectFileInfo, objectPathForId } from "./object-path.js";
 
 /**
  * Derive the extensionless object file path for an attachment id.
@@ -33,12 +19,7 @@ function homePath() {
  * is not a SHA-256 attachment or DSH_HOME cannot be located.
  */
 export function deriveObjectPath(attachmentId) {
-  const home = homePath();
-  if (home === void 0) return void 0;
-  const match = typeof attachmentId === "string" ? HASH_ID_RE.exec(attachmentId) : null;
-  if (match === null) return void 0;
-  const hash = match[1];
-  return home + "/attachments/v1/objects/" + hash.slice(0, 2) + "/" + hash;
+  return objectPathForId(attachmentId);
 }
 
 /** Read `image-memory.json` without mutating it; missing/corrupt => []. */
@@ -140,7 +121,7 @@ function entryMatchesQuery(entry, query) {
 
 /** Assemble every image library entry from disk/scan state. */
 async function buildImageLibraryEntries(service) {
-  const home = homePath();
+  const home = dshHome();
   const [ownershipMap, liveIds, archivedIds, memoryEntries, retainedSet, scanned] = await Promise.all([
     loadSessionImages().catch(() => new Map()),
     liveSessionIds(service),
@@ -161,10 +142,10 @@ async function buildImageLibraryEntries(service) {
   // One entry per hash; base object and extension hardlink share the identity.
   const byHash = new Map();
   for (const file of scanned) {
-    const match = typeof file.fileName === "string" ? OBJECT_FILE_RE.exec(file.fileName) : null;
-    if (match === null) continue;
-    const hash = match[1];
-    const extension = match[2];
+    const info = objectFileInfo(file.fileName);
+    if (info === void 0) continue;
+    const hash = info.hash;
+    const extension = info.mediaType;
     let draft = byHash.get(hash);
     if (draft === void 0) {
       draft = {

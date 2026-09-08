@@ -45,6 +45,10 @@ export const SESSION_IMAGE_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 export const AUX_SETTINGS_SCHEMA = z.object({
   fallbackToMain: z.boolean().default(true),
   forceAuxVision: z.boolean().default(false),
+  // Derived request-image cache cap in MiB (0 disables the sweep). DSH never
+  // expires these route variants itself; AUX enforces a total-size cap with
+  // mtime LRU eviction.
+  requestImagesMaxMiB: z.number().step(1).min(0).default(256),
   visionFallbackToMain: z.boolean().default(true),
   showStatusChip: z.boolean().default(true),
   tasks: z.object({
@@ -141,6 +145,7 @@ export const AUX_SETTINGS_SCHEMA = z.object({
 export function projectSettings(settings) {
   const fallbackToMain = settings?.fallbackToMain ?? true;
   const forceAuxVision = settings?.forceAuxVision ?? false;
+  const requestImagesMaxMiB = settings?.requestImagesMaxMiB ?? 256;
   const visionFallbackToMain = settings?.visionFallbackToMain ?? true;
   const showStatusChip = settings?.showStatusChip ?? true;
   const tasks = {};
@@ -197,6 +202,7 @@ export function projectSettings(settings) {
   return {
     fallbackToMain,
     forceAuxVision,
+    requestImagesMaxMiB,
     visionFallbackToMain,
     showStatusChip,
     tasks,

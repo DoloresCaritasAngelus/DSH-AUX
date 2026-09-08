@@ -81,6 +81,7 @@ import {
   reconcileSessionImages,
 } from "./images/ownership.js";
 import { eventImageRefs } from "./images/refs.js";
+import { recordAttachmentRefs } from "./images/attachment-refs.js";
 import { handleAuxCommand } from "./commands.js";
 import { prepareCompactionMessages } from "./compaction-messages.js";
 import { attachSkillBridge } from "./skill-bridge.js";
@@ -356,12 +357,15 @@ export class AuxLlmService extends Service {
     ctx.on("session/event", (session, event) => {
       const sessionId = session?.id ?? session?.sessionId;
       if (sessionId === void 0) return;
-      for (const ref of eventImageRefs(event)) {
+      const refs = eventImageRefs(event);
+      for (const ref of refs) {
         const attachmentId = ref?.attachmentId;
         if (typeof attachmentId === "string" && attachmentId.length > 0) {
           recordAttachmentOwnership(this, String(sessionId), attachmentId);
         }
       }
+      // Full refs feed the GC sidecar (host-path seam + media-type .ext).
+      recordAttachmentRefs(this, refs).catch(() => {});
     });
     ctx.on("session/created", (session) => {
       // Recovery barrier: scan the in-memory log before the session is
@@ -447,6 +451,8 @@ export class AuxLlmService extends Service {
     this._subagentSettings = settings.subagent ?? {};
     this.fallbackToMain = settings.fallbackToMain ?? true;
     this.forceAuxVision = settings.forceAuxVision ?? false;
+    // Derived request-image cache cap (MiB -> bytes); 0 disables the sweep.
+    this.requestImagesMaxBytes = Math.max(0, settings.requestImagesMaxMiB ?? 256) * 1024 * 1024;
     this.visionFallbackToMain = settings.visionFallbackToMain ?? true;
     this.showStatusChip = settings.showStatusChip ?? true;
     const defaultEnabled = {

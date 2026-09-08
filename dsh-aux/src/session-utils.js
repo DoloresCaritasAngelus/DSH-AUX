@@ -46,15 +46,21 @@ export function hasSnapshotEvents(session) {
  *   metadata lives under `header`.
  * - Old API (<= 0.1.2): `persistence.listSnapshots()`.
  *
- * Enumeration is best-effort: a missing service, a missing method, or a
- * failing call degrades to an empty list instead of throwing.
+ * Enumeration is best-effort by default: a missing service, a missing method,
+ * or a failing call degrades to an empty list instead of throwing. Callers
+ * that must distinguish "no stored sessions" from "could not read storage"
+ * (the fail-closed delete gate) pass `{ strict: true }` and get the error.
  *
  * @param {object|null|undefined} persistence The sessionPersistence service.
  * @param {AbortSignal|undefined} signal Optional cancellation.
+ * @param {{ strict?: boolean }} [options] Throw instead of degrading to [].
  * @returns {Promise<ReadonlyArray<object>>} Stored-session snapshots.
  */
-export async function listSessionSnapshots(persistence, signal) {
-  if (persistence === null || persistence === void 0) return [];
+export async function listSessionSnapshots(persistence, signal, { strict = false } = {}) {
+  if (persistence === null || persistence === void 0) {
+    if (strict) throw new Error("sessionPersistence is unavailable");
+    return [];
+  }
   const options = signal === void 0 ? void 0 : { signal };
   try {
     if (typeof persistence.list === "function") {
@@ -65,9 +71,11 @@ export async function listSessionSnapshots(persistence, signal) {
       const snapshots = await persistence.listSnapshots();
       return Array.isArray(snapshots) ? snapshots : [];
     }
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return [];
   }
+  if (strict) throw new Error("sessionPersistence exposes no list API");
   return [];
 }
 

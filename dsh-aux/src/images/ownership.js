@@ -16,9 +16,14 @@ import {
 import { randomUUID } from "node:crypto";
 import { listSessionSnapshots, readSessionEvents, sessionEvents } from "../session-utils.js";
 import { sessionImageRefs } from "./refs.js";
-
-/** Companion hard links the image bridge may have created next to an object. */
-const IMAGE_EXTENSIONS = Object.freeze([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+import { attachmentRefFor, loadAttachmentRefs, recordAttachmentRefs } from "./attachment-refs.js";
+import {
+  IMAGE_EXTENSIONS,
+  extensionForMediaType,
+  objectPathForId,
+  objectsRootPath as dshObjectsRootPath,
+} from "./object-path.js";
+import { DEFAULT_REQUEST_IMAGES_MAX_BYTES, sweepRequestImages } from "./request-images.js";
 /** Reclaimed objects are parked here before they are unrecoverable. */
 const TRASH_DIR_NAME = ".trash";
 /** Recovery window for trashed objects (swept by reconcile / gc-images). */
@@ -27,6 +32,35 @@ export const TRASH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Resolve the DSH home used by AUX attachment paths. */
 function dshHome() {
   return process.env.DSH_HOME || (process.env.HOME ? process.env.HOME + "/.dsh" : void 0);
+}
+
+/** Attachments service (the official host-path seam), when mounted. */
+function attachmentsService(service) {
+  try {
+    return service?._imageCtx?.get?.("attachments") ?? service?.ctx?.get?.("attachments");
+  } catch {
+    return void 0;
+  }
+}
+
+/**
+ * Resolve one object's host path.
+ *
+ * Prefers the official `attachments.imageHostPath(ref)` seam (needs a full
+ * ref); falls back to the legacy id derivation only when the sidecar has no
+ * ref for this id — a missing sidecar must never block a deletion.
+ */
+function imageObjectPath(service, objectsRoot, ref) {
+  const attachments = attachmentsService(service);
+  if (attachments !== void 0 && typeof attachments.imageHostPath === "function" && typeof ref?.mediaType === "string") {
+    try {
+      const hostPath = attachments.imageHostPath(ref);
+      if (typeof hostPath === "string" && hostPath.length > 0) return hostPath;
+    } catch {
+      /* invalid ref: fall through to the legacy derivation */
+    }
+  }
+  return objectPathForId(ref?.attachmentId, objectsRoot);
 }
 
 /** Path to the workspace registry state (archive set). */
@@ -263,11 +297,14 @@ export function noteLiveSession(service, session) {
   const sessionId = String(raw);
   const { pending, failed } = lifecycleState(service);
   pending.add(sessionId);
+  const refs = sessionImageRefs(sessionEvents(session));
   const ids = new Set();
-  for (const ref of sessionImageRefs(sessionEvents(session))) {
+  for (const ref of refs) {
     const attachmentId = ref?.attachmentId;
     if (typeof attachmentId === "string" && attachmentId.length > 0) ids.add(attachmentId);
   }
+  // Full refs feed the GC sidecar (host-path seam + media-type .ext removal).
+  recordAttachmentRefs(service, refs).catch(() => {});
   // Returns the settlement promise so callers/tests can await the barrier;
   // the lifecycle hook itself fires and forgets it.
   return Promise.all([...ids].map((attachmentId) => recordAttachmentOwnershipStrict(service, sessionId, attachmentId)))
@@ -283,18 +320,41 @@ export function noteLiveSession(service, session) {
 }
 
 /**
- * Drop a session from the live lifecycle bookkeeping.
+ * Release a disposed session from the live lifecycle bookkeeping — but only
+ * once it is really gone from the persistence layer.
  *
- * Called on disposal: the session is no longer live, so it must not keep the
- * global fail-closed gate closed forever. Its already-recorded ownership stays
- * in the map and is reclaimed by the normal cleanup path; anything the failed
- * scan missed simply leaks (never a wrong deletion).
+ * A session that still exists in storage (the user closed a tab without
+ * deleting it) can come back with its log intact: its images must keep the
+ * global fail-closed gate closed until the backfill succeeds, otherwise
+ * another session's cleanup could reclaim them and break that log on resume
+ * (the R5 scenario). Unreadable storage is treated as "still stored".
+ *
+ * @param {object} service The AUX service.
+ * @param {string} sessionId The disposed session id.
+ * @returns {Promise<boolean>} true when the session was released.
  */
-export function forgetLiveSession(service, sessionId) {
-  const { pending, failed } = lifecycleState(service);
+export async function releaseLiveSession(service, sessionId) {
   const id = String(sessionId);
+  const { pending, failed } = lifecycleState(service);
+  if (!pending.has(id) && !failed.has(id)) return true;
+  let persistence;
+  try {
+    persistence = service.ctx.get("sessionPersistence");
+  } catch {
+    persistence = void 0;
+  }
+  let snapshots;
+  try {
+    snapshots = await listSessionSnapshots(persistence, void 0, { strict: true });
+  } catch {
+    // Storage unreadable: indistinguishable from "still stored" — fail-closed.
+    return false;
+  }
+  const stillStored = snapshots.some((entry) => String(entry?.header?.id ?? entry?.id) === id);
+  if (stillStored) return false;
   pending.delete(id);
   failed.delete(id);
+  return true;
 }
 
 /**
@@ -332,7 +392,7 @@ async function backfillFromStoredLog(service, sessionId) {
  * @returns {Promise<{ ok: boolean, gone: boolean }>} `gone` marks an object
  *   that was already absent (nothing to reclaim, not a failure).
  */
-async function trashImageObject(objectsRoot, objectPath) {
+async function trashImageObject(objectsRoot, objectPath, ref) {
   const trashRoot = objectsRoot + "/" + TRASH_DIR_NAME;
   try {
     await mkdirDir(trashRoot, { recursive: true });
@@ -347,7 +407,11 @@ async function trashImageObject(objectsRoot, objectPath) {
     if (error?.code === "ENOENT") return { ok: true, gone: true };
     return { ok: false, gone: false };
   }
-  for (const ext of IMAGE_EXTENSIONS) {
+  // Companion .ext hard link: prefer the media type from the full ref; when
+  // the sidecar has no ref for this id, fall back to enumerating them.
+  const known = extensionForMediaType(ref?.mediaType);
+  const extensions = known === void 0 ? IMAGE_EXTENSIONS : [known];
+  for (const ext of extensions) {
     try {
       await unlinkFile(objectPath + ext);
     } catch {
@@ -491,6 +555,11 @@ export async function reconcileSessionImages(service) {
     }
   }
   await sweepTrash(service).catch(() => ({ removed: 0, bytes: 0 }));
+  await sweepRequestImages(service, {
+    maxBytes: Number.isFinite(service.requestImagesMaxBytes)
+      ? service.requestImagesMaxBytes
+      : DEFAULT_REQUEST_IMAGES_MAX_BYTES,
+  }).catch(() => ({ removed: 0, bytes: 0, scanned: 0, totalBytes: 0 }));
   const map = await loadSessionImages();
   if (map.size === 0) return;
   const live = await liveSessionIds(service);
@@ -543,11 +612,14 @@ export function onSessionDisposed(service, session) {
   // Process shutdown disposes every session at once — not a user delete.
   if (service._shuttingDown === true) return;
   installShutdownHook(service);
-  // The session is no longer live: it must not hold the global fail-closed
-  // gate closed forever. Anything its failed scan missed leaks, never
-  // mis-deletes.
-  forgetLiveSession(service, sid);
-  cleanupSessionImages(service, sid);
+  // Release the session from the live gate only when storage no longer has it;
+  // a still-stored session keeps the gate closed so its images survive until
+  // the reconcile retries the backfill from the stored log.
+  releaseLiveSession(service, sid)
+    .catch(() => false)
+    .finally(() => {
+      cleanupSessionImages(service, sid);
+    });
 }
 
 /** Delete one disposed session's unreferenced images and update the map. */
@@ -560,6 +632,7 @@ export async function cleanupSessionImages(service, sessionId) {
     const home = process.env.DSH_HOME || (process.env.HOME ? process.env.HOME + "/.dsh" : void 0);
     if (home === void 0) return;
     const objectsRoot = home + "/attachments/v1/objects";
+    const refs = await loadAttachmentRefs(service);
     const map = await loadSessionImages();
     const memory = service._sessionImages;
     const diskMine = map.get(sessionId);
@@ -607,14 +680,15 @@ export async function cleanupSessionImages(service, sessionId) {
     for (const attachmentId of mine) {
       const referencedElsewhere = hasOtherReference(map, memory, sessionId, attachmentId);
       if (referencedElsewhere) continue;
-      const match = /^sha256:([a-f0-9]{64})$/.exec(String(attachmentId));
-      if (match === null) {
+      // Reclaim through the official host-path seam when the sidecar has the
+      // full ref; only an unknown id falls back to the legacy derivation.
+      const ref = refs.get(String(attachmentId)) ?? { attachmentId: String(attachmentId) };
+      const objectPath = imageObjectPath(service, objectsRoot, ref);
+      if (objectPath === void 0) {
         retry.add(attachmentId);
         continue;
       }
-      const hash = match[1];
-      const real = objectsRoot + "/" + hash.slice(0, 2) + "/" + hash;
-      const outcome = await trashImageObject(objectsRoot, real);
+      const outcome = await trashImageObject(objectsRoot, objectPath, ref);
       if (outcome.ok) removed += 1;
       else retry.add(attachmentId);
     }

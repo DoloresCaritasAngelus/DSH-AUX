@@ -5,6 +5,7 @@
  */
 import { lstat as lstatFile, readdir, stat as statFile, unlink as unlinkFile } from "node:fs/promises";
 import { sweepTrash } from "./ownership.js";
+import { DEFAULT_REQUEST_IMAGES_MAX_BYTES, sweepRequestImages } from "./request-images.js";
 
 /**
  * Garbage-collect pasted-image attachments older than `days` days.
@@ -75,11 +76,17 @@ export async function gcImages(service, days) {
   // recovery window closes; sweeping here keeps the store bounded even when
   // the periodic reconcile is not running (headless one-shot commands).
   const trash = await sweepTrash(service).catch(() => ({ removed: 0, bytes: 0 }));
+  const derived = await sweepRequestImages(service, {
+    maxBytes: Number.isFinite(service?.requestImagesMaxBytes)
+      ? service.requestImagesMaxBytes
+      : DEFAULT_REQUEST_IMAGES_MAX_BYTES,
+  }).catch(() => ({ removed: 0, bytes: 0, scanned: 0, totalBytes: 0 }));
   return {
     kind: "success",
     text:
       `附件清理完成: 扫描 ${scanned} 个文件, 删除 ${removed} 个超过 ${days} 天的附件 (${(removedBytes / 1024 / 1024).toFixed(1)} MB)` +
       `${failed > 0 ? `, ${failed} 个失败` : ""};` +
-      `回收站清出 ${trash.removed} 个已过恢复窗口的对象 (${(trash.bytes / 1024 / 1024).toFixed(1)} MB)。`,
+      `回收站清出 ${trash.removed} 个已过恢复窗口的对象 (${(trash.bytes / 1024 / 1024).toFixed(1)} MB);` +
+      `请求派生缓存 ${derived.scanned} 个 / ${(derived.totalBytes / 1024 / 1024).toFixed(1)} MB,LRU 回收 ${derived.removed} 个 (${(derived.bytes / 1024 / 1024).toFixed(1)} MB)。`,
   };
 }

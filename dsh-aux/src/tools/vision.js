@@ -7,6 +7,7 @@ import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { visionSystemPrompt } from "../prompt.js";
 import { resolveImageRef } from "../images/resolve.js";
 import { recordAttachmentOwnership } from "../images/ownership.js";
+import { recordAttachmentRefs } from "../images/attachment-refs.js";
 import { recordImageMemory } from "../images/memory.js";
 
 /** Run async work over an array with a bounded number of concurrent workers.
@@ -107,10 +108,12 @@ export function validImageItem(item) {
 /** Analyze exactly one image through the auxiliary vision route. */
 export async function analyzeOne(service, source, question, exec) {
   const ref = await resolveImageRef(service, source, exec);
-  // Record ownership for disposal cleanup (session -> attachment id).
+  // Record ownership for disposal cleanup (session -> attachment id) and the
+  // full ref for the GC sidecar (host-path seam + media-type .ext removal).
   if (exec.agent?.session?.id !== void 0) {
     recordAttachmentOwnership(service, exec.agent.session.id, ref.attachmentId);
   }
+  recordAttachmentRefs(service, ref).catch(() => {});
   const messages = [
     createUserMessage({
       content: [

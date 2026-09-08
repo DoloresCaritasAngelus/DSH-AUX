@@ -10,16 +10,14 @@
  */
 import { loadSessionImages } from "./ownership.js";
 import { readSessionEvents as readStoredSessionEvents, sessionEvents } from "../session-utils.js";
+import { hashOfAttachmentId as hashOfId } from "./object-path.js";
 
-/** Attachment ids are content-addressed: `sha256:<64 hex>`. */
-const HASH_ID_RE = /^sha256:([a-f0-9]{64})$/;
 /** Match the hash in an object-store path, with or without an extension. */
 const PATH_HASH_RE = /([a-f0-9]{64})(?:\.(?:png|jpe?g|webp|gif))?$/i;
 
 /** Extract the 64-hex hash from an attachment id, or null. */
 function hashOfAttachmentId(attachmentId) {
-  const match = typeof attachmentId === "string" ? HASH_ID_RE.exec(attachmentId) : null;
-  return match === null ? null : match[1];
+  return hashOfId(attachmentId) ?? null;
 }
 
 /** Extract the 64-hex hash from an object-store image path, or null. */

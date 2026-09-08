@@ -17,6 +17,7 @@ import {
   deletionBlockReason,
   deletionReady,
   noteLiveSession,
+  releaseLiveSession,
   sweepTrash,
 } from "../dsh-aux/src/images/ownership.js";
 import { resolveImageRef } from "../dsh-aux/src/images/resolve.js";
@@ -25,8 +26,11 @@ const hash = (ch) => ch.repeat(64);
 const id = (ch) => "sha256:" + hash(ch);
 const refOf = (ch, mediaType = "image/png") => ({ attachmentId: id(ch), mediaType, name: ch + ".png" });
 
-/** Minimal service matching ownership.js's surface. */
-function makeService() {
+/**
+ * Minimal service matching ownership.js's surface.
+ * @param {{ stored?: string[] }} [options] ids the persistence layer reports.
+ */
+function makeService({ stored = [] } = {}) {
   return {
     _sessionImages: new Map(),
     _sessionImagesLoaded: false,
@@ -37,7 +41,13 @@ function makeService() {
     ctx: {
       get(name) {
         if (name === "sessions") return { list: () => [] };
-        if (name === "sessionPersistence") return { listSnapshots: async () => [] };
+        if (name === "sessionPersistence") {
+          return {
+            async list() {
+              return stored.map((sessionId) => ({ header: { id: sessionId } }));
+            },
+          };
+        }
         return void 0;
       },
     },
@@ -379,4 +389,30 @@ test("R5:恢复窗口内另一会话删除 —— 未回填会话引用的图不
     process.env.DSH_HOME = prevHome;
     await fixture.cleanup();
   }
+});
+test("releaseLiveSession: 会话仍在存储时保留在 failed,GC 继续冻结", async () => {
+  const service = makeService({ stored: ["s-live"] });
+  service._liveBackfillFailed.add("s-live");
+  assert.equal(await releaseLiveSession(service, "s-live"), false, "仍存在于存储的会话不得释放");
+  assert.equal(deletionReady(service), false, "必须继续 fail-closed");
+});
+
+test("releaseLiveSession: 会话已从存储删除时释放并解冻", async () => {
+  const service = makeService({ stored: [] });
+  service._liveBackfillFailed.add("s-gone");
+  assert.equal(await releaseLiveSession(service, "s-gone"), true);
+  assert.equal(deletionReady(service), true);
+  assert.equal(service._liveBackfillFailed.size, 0);
+});
+
+test("releaseLiveSession: 持久层不可读时保留(fail-closed)", async () => {
+  const service = makeService();
+  service.ctx = {
+    get() {
+      throw new Error("persistence unavailable");
+    },
+  };
+  service._liveBackfillFailed.add("s-x");
+  assert.equal(await releaseLiveSession(service, "s-x"), false);
+  assert.equal(deletionReady(service), false);
 });
