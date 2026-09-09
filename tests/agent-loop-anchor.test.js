@@ -117,6 +117,20 @@ function runApply(root, dryRun) {
   }
 }
 
+/** 跑 apply-patch --rollback(不抛异常;返回 stdout 与退出码)。 */
+function runRollback(root) {
+  try {
+    const stdout = execFileSync(process.execPath, [APPLY, "--rollback"], {
+      cwd: REPO,
+      env: { ...process.env, DSH_ROOT: root },
+      encoding: "utf8",
+    });
+    return { stdout, status: 0 };
+  } catch (error) {
+    return { stdout: `${error.stdout ?? ""}`, status: error.status };
+  }
+}
+
 test("0.1.5:三步落盘(桥接方法 + async 化 / A3 改写 / 调用点 await)", () => {
   const { root, file } = fakeRoot("0.1.5");
   try {
@@ -203,6 +217,31 @@ test("0.1.2-alpha.2~rc.1:旧链路行为不变", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+test("anchor-text 升级判定不被注释里的 attachmentId=< 击穿(块匹配判据)", () => {
+  const { root, file } = oldTextRoot();
+  try {
+    // 旧实现用 `!d.includes("attachmentId=<")` 做负向门:文件里任意位置出现该
+    // 字符串(哪怕只是一行注释)都会让升级被跳过,旧路径文本永久留存。
+    const withComment = readFileSync(file, "utf8").replace(
+      "class Agent {",
+      "class Agent {\n\t// note: 新锚点形如 attachmentId=<sha256:…>,此处只是注释",
+    );
+    assert.notEqual(withComment, readFileSync(file, "utf8"), "fixture 应注入含击穿串的注释");
+    writeFileSync(file, withComment);
+    assert.ok(withComment.includes("attachmentId=<"), "fixture 应含击穿串");
+    assert.ok(withComment.includes("本地路径"), "fixture 仍是旧路径文本");
+
+    const real = runApply(root, false);
+    assert.match(real.stdout, /已应用 anchor-text 步骤/, "注释不得阻止 anchor-text 升级");
+    const patched = readFileSync(file, "utf8");
+    assert.ok(patched.includes("本条消息第"), "应升级为编号 + attachmentId 文本");
+    assert.ok(!patched.includes("本地路径"), "旧路径文本应被替换");
+    execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("旧路径文本部署:原地升级为 attachmentId 锚点文本", () => {
   const { root, file } = oldTextRoot();
   try {
@@ -221,6 +260,88 @@ test("旧路径文本部署:原地升级为 attachmentId 锚点文本", () => {
     const second = runApply(root, false);
     assert.match(second.stdout, /已是 v3,跳过/, "升级后应被识别为已打补丁");
     assert.equal(readFileSync(file, "utf8"), patched, "二次应用不得再改动");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * 漂移(链中间锚点失配)下的整体回滚断言:文件逐字节不变、退出码 1、日志不撒谎。
+ * @param from 原始 fixture
+ * @param mutate 注入漂移的替换函数
+ */
+function assertWholeRollback(mutate, driftLabel) {
+  const { root, file } = fakeRoot("0.1.5");
+  try {
+    const pristine = readFileSync(file, "utf8");
+    const drifted = mutate(pristine);
+    assert.notEqual(drifted, pristine, `fixture 应注入漂移: ${driftLabel}`);
+    writeFileSync(file, drifted);
+
+    const dry = runApply(root, true);
+    const real = runApply(root, false);
+    for (const [mode, out] of [
+      ["dry-run", dry.stdout],
+      ["real", real.stdout],
+    ]) {
+      assert.match(out, /步骤块未命中/, `${mode} 应报告步骤块未命中`);
+      assert.match(out, /整体回滚/, `${mode} 应声明整体回滚`);
+      assert.doesNotMatch(out, /已打补丁/, `${mode} 失配时不得声称已打补丁`);
+      assert.doesNotMatch(out, /可从 .* 升级/, `${mode} 失配时不得声称可升级`);
+    }
+    assert.equal(dry.status, real.status, "dry-run 与真实应用退出码应一致");
+    assert.notEqual(dry.status, 0, "失配应非零退出(install.sh set -e 会显式中止)");
+    assert.equal(real.status, 1, "失配应退出码 1");
+    assert.doesNotMatch(real.stdout, /完成。请重启 DSH 生效/, "失败时不得报完成");
+    assert.equal(readFileSync(file, "utf8"), drifted, "真实应用不得落盘(逐字节保持应用前状态)");
+
+    // 二次 apply 不愈合也不累积:仍失败、文件仍不变。
+    const second = runApply(root, false);
+    assert.equal(second.status, 1, "二次 apply 仍应失败");
+    assert.match(second.stdout, /步骤块未命中/);
+    assert.equal(readFileSync(file, "utf8"), drifted, "二次 apply 不得落盘");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test("漂移(第 3 步调用点参数):dry/real 同判据,整体回滚且文件逐字节不变", () => {
+  assertWholeRollback(
+    (src) =>
+      src.replace(
+        "const request = this.buildRequest(config, preparedCall, assembly.tools, startsRequestSeries, signal);",
+        "const request = this.buildRequest(config, preparedCall, assembly.tools2, startsRequestSeries, signal);",
+      ),
+    "callsite assembly.tools → assembly.tools2",
+  );
+});
+
+test("漂移(第 2 步 envelope 行):整体回滚,不落半补丁", () => {
+  assertWholeRollback(
+    (src) => src.replace("\t\t\t...header.config,", "\t\t\t...header.config /* upstream drift */,"),
+    "envelope ...header.config",
+  );
+});
+
+test("apply-patch --rollback 只弹自己的备份,不误弹 self-heal 备份", () => {
+  const { root, file } = fakeRoot("0.1.5");
+  try {
+    const pristine = readFileSync(file, "utf8");
+    const real = runApply(root, false);
+    assert.match(real.stdout, /已打补丁/, "fixture 应可正常落盘");
+    const patched = readFileSync(file, "utf8");
+    assert.ok(patched.includes("image-bridge v2 (local patch)"), "落盘后应含补丁标记");
+
+    // 伪造 self-heal 备份:名字以 index.js.bak-selfheal- 开头,字典序排在
+    // index.js.bak-<数字时间戳> 之后 ⇒ 旧的"前缀 + 字典序弹出"会优先弹它,
+    // 把"已打补丁"状态当成回滚目标(静默无效)。
+    writeFileSync(join(dirname(file), "index.js.bak-selfheal-2026-09-09T00-00-00-000Z"), patched);
+
+    const res = runRollback(root);
+    assert.equal(res.status, 0, "回滚应正常完成");
+    const rolled = readFileSync(file, "utf8");
+    assert.ok(!rolled.includes("image-bridge v2 (local patch)"), "回滚后不得仍含补丁标记");
+    assert.equal(rolled, pristine, "回滚应逐字节回到 pristine");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

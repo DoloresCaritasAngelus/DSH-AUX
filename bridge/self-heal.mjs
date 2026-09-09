@@ -25,7 +25,7 @@
  *   node bridge/self-heal.mjs --dry-run  # 只报告会做什么,不写盘
  * 被 ~/dsh/start-dsh.sh 在启动 DSH 前调用;失败不致命(继续启动)。
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -36,7 +36,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deployedFile, guardPackageFile, guardTarget } from "./target.js";
 import { planFormatV0Patch } from "./format-admissions.mjs";
@@ -94,10 +94,18 @@ function ensureSymlink(root) {
 function runNode(script, args = []) {
   const argv = [script, ...args];
   if (DRY) argv.push("--dry-run");
-  const out = execFileSync(process.execPath, argv, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  // spawnSync:子脚本以非零退出(如步骤块未命中后的整体回滚)时,仍要完成输出
+  // 转发与门禁告警;execFileSync 会直接抛错,把失配上下文吞成一行异常。
+  // 自愈是启动前置步骤:失败只 WARN,由 main() 的 step() 兜底,不中断 DSH 启动。
+  const res = spawnSync(process.execPath, argv, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const out = `${res.stdout ?? ""}${res.stderr ?? ""}`;
   for (const line of out.split("\n")) if (line.trim()) log(`  ${line.trim()}`);
-  if (/(版本不匹配|未找到已知代码块|无法自动补|缺失块|替换失败)/.test(out)) {
+  if (/(版本不匹配|未找到已知代码块|无法自动补|缺失块|替换失败|步骤块未命中)/.test(out)) {
     log("⚠️ 检测到补丁/自愈不匹配——当前 DSH 版本可能与 dsh-aux 不兼容,请运行 ./update.sh 或更新 dsh-aux");
+  }
+  if (res.status !== 0) {
+    const detail = argv.slice(1).join(" ");
+    log(`⚠️ ${basename(script)} 退出码 ${res.status}${detail ? `(${detail})` : ""}——自愈失败不致命,继续启动`);
   }
 }
 

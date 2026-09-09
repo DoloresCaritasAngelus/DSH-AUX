@@ -13,7 +13,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -113,12 +113,86 @@ for (const origFile of origBlocks) {
   });
 }
 
-test("append 变体表在 patch-session-ignorable.mjs 与 self-heal.mjs 两处同步", () => {
-  for (const script of ["patch-session-ignorable.mjs", "self-heal.mjs"]) {
-    const source = readFileSync(join(BRIDGE, script), "utf8");
-    for (const origFile of origBlocks) {
-      assert.ok(source.includes(origFile), `${script} 缺少 append 变体 ${origFile}`);
-    }
+/** 解析 patch-session-ignorable.mjs 的 APPEND_VARIANTS 登记表 → [orig, patched][]。 */
+function p7VariantPairs() {
+  const source = readFileSync(join(BRIDGE, "patch-session-ignorable.mjs"), "utf8");
+  return [...source.matchAll(/origFile:\s*"([^"]+)",\s*patchedFile:\s*"([^"]+)"/g)].map((m) => [m[1], m[2]]);
+}
+
+/** 解析 self-heal.mjs 的 appendVariants 登记表 → [orig, patched][]。 */
+function selfHealVariantPairs() {
+  const source = readFileSync(join(BRIDGE, "self-heal.mjs"), "utf8");
+  return [...source.matchAll(/\[\s*"[^"]+",\s*"(orig-[^"]+)",\s*"(patched-[^"]+)"\s*\]/g)].map((m) => [m[1], m[2]]);
+}
+
+test("append 变体表两处同步:orig→patched 必须成对一致(不只锁文件名)", () => {
+  const p7Pairs = p7VariantPairs();
+  const selfHealPairs = selfHealVariantPairs();
+  assert.equal(p7Pairs.length, origBlocks.length, "patch-session-ignorable.mjs 登记表条数应与磁盘 orig 块一致");
+  assert.deepEqual(selfHealPairs, p7Pairs, "两处登记表必须逐条 orig→patched 配对一致");
+  assert.deepEqual(
+    p7Pairs.map(([orig]) => orig).sort(),
+    [...origBlocks].sort(),
+    "登记表须覆盖磁盘上全部 orig-session-append* 块",
+  );
+});
+
+test("P7 --rollback 只弹自己写下的备份,不误弹 self-heal 备份", () => {
+  const root = mkdtempSync(join(tmpdir(), "dsh-aux-p7-rb-"));
+  try {
+    const dir = join(root, "node_modules/@deepseek-ai/dsh-session/lib");
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, "index.js");
+    const orig = readFileSync(join(BRIDGE, "orig-session-append-0.1.5-block.txt"), "utf8").trim();
+    writeFileSync(file, `class Session {\n\t${orig}\n\t}\n}\n`);
+
+    execFileSync(process.execPath, [join(BRIDGE, "patch-session-ignorable.mjs")], {
+      cwd: REPO,
+      env: { ...process.env, DSH_ROOT: root },
+      encoding: "utf8",
+    });
+    const patched = readFileSync(file, "utf8");
+    assert.ok(patched.includes(MARK), "P7 应落盘");
+
+    // 伪造 self-heal 备份(内容 = 已 P7 状态)。名字以 index.js.bak-selfheal- 开头,
+    // 字典序排在 index.js.bak-<数字时间戳> 之后 ⇒ 旧的"前缀 + 字典序弹出"会弹它,
+    // 回滚后目标仍含 P7 标记(静默无效)。
+    writeFileSync(join(dir, "index.js.bak-selfheal-2026-09-09T00-00-00-000Z"), patched);
+
+    execFileSync(process.execPath, [join(BRIDGE, "patch-session-ignorable.mjs"), "--rollback"], {
+      cwd: REPO,
+      env: { ...process.env, DSH_ROOT: root },
+      encoding: "utf8",
+    });
+    const rolled = readFileSync(file, "utf8");
+    assert.ok(!rolled.includes(MARK), "回滚后不得仍含 P7 标记(误弹 self-heal 备份会静默无效)");
+    assert.ok(rolled.includes(SIGNATURE), "回滚结果应是 pristine 的 append 原块");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("P7 版本不匹配保持退出码 0(install.sh set -e 兼容),信号由文本承载", () => {
+  const root = mkdtempSync(join(tmpdir(), "dsh-aux-p7-unknown-"));
+  try {
+    const dir = join(root, "node_modules/@deepseek-ai/dsh-session/lib");
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, "index.js");
+    const before = "export const unknown = true;\n";
+    writeFileSync(file, before);
+
+    const res = spawnSync(process.execPath, [join(BRIDGE, "patch-session-ignorable.mjs")], {
+      cwd: REPO,
+      env: { ...process.env, DSH_ROOT: root },
+      encoding: "utf8",
+    });
+    // install.sh 用 set -e:非零退出会中断整个安装,把"未知版本先跳过"变成"装不上"。
+    // 与 apply-patch.mjs 的版本不匹配策略统一为 0,兼容性信号由文本门禁承担。
+    assert.equal(res.status, 0, "版本不匹配应保持退出码 0");
+    assert.match(res.stdout, /版本不匹配,缺失 append 原块/);
+    assert.equal(readFileSync(file, "utf8"), before, "版本不匹配不得改动目标文件");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 test("端到端:AUX 写 aux/llm-call 经补丁后的 append,信封含 ignorable", async () => {

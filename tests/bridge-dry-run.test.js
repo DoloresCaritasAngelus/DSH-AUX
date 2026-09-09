@@ -88,9 +88,14 @@ test("dry-run 与真实应用结论一致:块不匹配时两者都失败且都�
     const real = runApply(root, false);
     assert.match(dry.stdout, /步骤块未命中/);
     assert.match(real.stdout, /步骤块未命中/);
+    assert.match(dry.stdout, /整体回滚/, "失配应声明整体回滚");
+    assert.doesNotMatch(dry.stdout, /可从 .* 升级/, "失配时 dry-run 不得报可升级");
     assert.doesNotMatch(real.stdout, /已打补丁/, "块不匹配时不得落盘");
+    assert.doesNotMatch(real.stdout, /完成。请重启 DSH 生效/, "失败时不得报完成");
     assert.equal(readFileSync(file, "utf8"), before, "真实应用失败后目标文件应保持原样");
     assert.equal(dry.status, real.status, "dry-run 与真实应用退出码应一致");
+    assert.equal(real.status, 1, "步骤块失配应退出码 1(install.sh set -e 显式中止)");
+    assert.equal(dry.status, 1, "dry-run 与真实应用同判据");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

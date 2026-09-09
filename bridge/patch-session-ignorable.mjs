@@ -20,6 +20,11 @@
  *   node patch-session-ignorable.mjs            # apply
  *   node patch-session-ignorable.mjs --dry-run  # check only
  *   node patch-session-ignorable.mjs --rollback # roll back
+ *
+ * 退出码(与 apply-patch.mjs 统一,见 TESTING.md「补丁/自愈失败面」):
+ *   0  已打补丁 / 已是补丁状态 / 版本不匹配跳过 / --rollback 完成。
+ *      版本不匹配保持 0:install.sh 用 `set -e`,非零会中断整个安装。
+ *   1  替换失败(部分应用)⇒ 已回滚;或 --rollback 时目标/备份缺失。
  */
 import { readFile, writeFile, copyFile, readdir, access } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -38,6 +43,10 @@ const TARGET = guardTarget(
   "dsh-session-ignorable",
 );
 const MARK = "dsh-aux ignorable (local patch)";
+/** 本工具专属备份 tag:--rollback 只认自己写下的备份,不弹 self-heal 的 .bak-selfheal-*。 */
+const BACKUP_PREFIX = "index.js.bak-ignorable-";
+/** 兼容本工具旧版无 tag 备份名 index.js.bak-<ISO 时间戳>;.bak-selfheal- 不匹配该形状。 */
+const LEGACY_BACKUP_RE = /^index\.js\.bak-\d{4}-\d{2}-\d{2}T/;
 /** dsh-aux session event name; also used as a fingerprint for rc.7+ clean packages. */
 const AUX_CALL_EVENT = "aux/llm-call";
 
@@ -89,7 +98,9 @@ if (rollbackMode) {
     log("目标不存在");
     process.exit(1);
   }
-  const baks = (await readdir(dirname(TARGET))).filter((f) => f.startsWith("index.js.bak-") && !f.includes(".node"));
+  const baks = (await readdir(dirname(TARGET))).filter(
+    (f) => (f.startsWith(BACKUP_PREFIX) || LEGACY_BACKUP_RE.test(f)) && !f.includes(".node"),
+  );
   baks.sort().reverse();
   if (baks.length === 0) {
     log("无备份可回滚");
@@ -125,8 +136,11 @@ for (const variant of APPEND_VARIANTS) {
 }
 const appendVariant = appendVariants.find((variant) => data.includes(variant.origText));
 if (appendVariant === void 0) {
+  // 退出码 0(与 apply-patch 的"版本不匹配"策略统一):install.sh 用 set -e,
+  // 非零会把"未知版本先跳过"变成"装不上";兼容性信号由文本承载 —— self-heal
+  // 与 ci-fake-dsh 都以正则门禁匹配"版本不匹配"。真正的部分应用回滚仍是 1。
   log("版本不匹配,缺失 append 原块: alpha.2/3、alpha.4+/rc.1 与 0.1.5 均未命中");
-  process.exit(1);
+  process.exit(0);
 }
 const steps = [[appendVariant.name, appendVariant.origText, appendVariant.patchedText]];
 if (whitelistApplicable) steps.push(["白名单", await block(WHITELIST_STEP[1]), await block(WHITELIST_STEP[2])]);
@@ -139,7 +153,7 @@ if (dryRun) {
 }
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-const bak = join(dirname(TARGET), "index.js.bak-" + stamp);
+const bak = join(dirname(TARGET), BACKUP_PREFIX + stamp);
 await copyFile(TARGET, bak);
 log("备份: " + bak);
 let patched = data;

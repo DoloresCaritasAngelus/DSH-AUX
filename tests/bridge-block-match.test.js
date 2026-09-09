@@ -14,7 +14,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -88,6 +88,39 @@ test("无缩进漂移时行为不变(4 tab 落盘)", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("self-heal:补丁失配只 WARN 不中断启动(退出码 0),并转发失配输出与子进程退出码", () => {
+  const { root, file } = fakeRoot(0);
+  try {
+    // 内容漂移:detect 命中但步骤块不匹配 ⇒ apply-patch 退出码 1。
+    const pristine = readFileSync(file, "utf8");
+    const drifted = pristine.replace("this.agents.selectionFor(agent).current;", "this.agents.selectionFor(agent);");
+    assert.notEqual(drifted, pristine, "fixture 应注入漂移");
+    writeFileSync(file, drifted);
+
+    const res = spawnSync(process.execPath, [join(REPO, "bridge/self-heal.mjs")], {
+      cwd: REPO,
+      env: { ...process.env, DSH_ROOT: root },
+      encoding: "utf8",
+    });
+    assert.equal(res.status, 0, "自愈失败不得中断 DSH 启动");
+    assert.match(res.stdout, /步骤块未命中/, "应转发 apply-patch 的失配输出");
+    assert.match(res.stdout, /⚠️ 检测到补丁\/自愈不匹配/, "应给出不兼容告警");
+    assert.match(res.stdout, /退出码 1/, "应转发子进程退出码");
+    assert.equal(readFileSync(file, "utf8"), drifted, "自愈失败不得改动目标文件");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("self-heal 告警门禁与 ci-fake-dsh 对齐:均须覆盖 步骤块未命中", () => {
+  // 步骤块未命中是 apply-patch 失配的主信号:ci-fake-dsh 门禁已含该项,
+  // self-heal 的自愈告警正则漏项会静默吞掉失配(review #2)。
+  const selfHeal = readFileSync(join(REPO, "bridge/self-heal.mjs"), "utf8");
+  const ciFake = readFileSync(join(REPO, "scripts/ci-fake-dsh.mjs"), "utf8");
+  assert.match(selfHeal, /步骤块未命中/, "self-heal 告警正则须覆盖步骤块未命中");
+  assert.match(ciFake, /步骤块未命中/, "ci-fake-dsh 门禁正则须覆盖步骤块未命中(对齐参照)");
 });
 
 test("dry-run 与真实应用一致:缩进漂移下 dry-run 报可升级且零写盘", () => {
