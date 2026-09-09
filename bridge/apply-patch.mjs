@@ -29,7 +29,14 @@
  * 用法:
  *   node apply-patch.mjs            # 应用/升级补丁(自动定位、备份、替换、校验)
  *   node apply-patch.mjs --dry-run  # 只检查,不修改
- *   node apply-patch.mjs --rollback # 回滚到最近一次备份(各目标各自回滚)
+ *   node apply-patch.mjs --rollback # 回滚到最近一次本工具备份(各目标各自回滚)
+ *
+ * 退出码(策略见 TESTING.md「补丁/自愈失败面」):
+ *   0  已打补丁 / 已是补丁状态 / 版本不匹配跳过 / --rollback 完成。
+ *      版本不匹配保持 0:install.sh 用 `set -e`,非零会把"未知版本先跳过、
+ *      不破坏部署"退化成"装不上";该信号由输出文本承载(ci-fake-dsh 与
+ *      self-heal 以正则门禁匹配)。
+ *   1  步骤块失配或替换失败 ⇒ 该目标整体回滚到应用前状态,不落半补丁。
  */
 import { readFile, writeFile, copyFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -39,6 +46,19 @@ import { execFileSync } from "node:child_process";
 import { deployedFile, guardTarget } from "./target.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+// anchor-text 旧文本原地升级块:提前载入,detect 与 replace 共用同一判据
+// (blockPattern),不再用"文本里出现过 attachmentId=<"这种负向门 —— 该门可被
+// 一行注释击穿,令旧路径文本永久留存。
+const ANCHOR_TEXT_ORIG_BLOCK = await readFile(join(HERE, "orig-agent-loop-anchor-text-block.txt"), "utf8");
+const ANCHOR_TEXT_PATCHED_BLOCK = await readFile(join(HERE, "patched-agent-loop-anchor-text-block.txt"), "utf8");
+
+// 本工具专属备份 tag:--rollback 只认自己写下的备份,避免弹出 self-heal 的
+// .bak-selfheal-*(字典序 "s" 排最前,回滚会变成静默 no-op)。
+const BACKUP_PREFIX = "index.js.bak-bridge-";
+// 兼容本工具旧版本写下的无 tag 备份名(index.js.bak-<ISO 时间戳>);
+// self-heal 的 .bak-selfheal- 不匹配该形状,故不会被弹出。
+const LEGACY_BACKUP_RE = /^index\.js\.bak-\d{4}-\d{2}-\d{2}T/;
 
 // ── 目标文件 ────────────────────────────────────────────────────────────────
 // 不写死任何用户绝对路径:按部署形态相对解析(symlink / 源码树),并在读写前
@@ -85,6 +105,64 @@ const TARGETS = [
     file: AGENT_LOOP_FILE,
     mark: "image-bridge v2 (local patch)",
     states: [
+      // 已打补丁但仍是旧桥接文本(路径式)的部署:原地升级为 attachmentId 锚点文本。
+      // 必须排在所有 skip 状态之前,否则旧文本部署会被判为"已打补丁"而永不更新。
+      {
+        name: "anchor-text",
+        // 判据 = 真实旧块命中(与 block 替换同一 blockPattern)。旧的
+        // "!d.includes(\"attachmentId=<\")" 负向门只要文件里任何位置出现该字符串
+        // (例如一行注释)就会让升级被跳过,旧路径文本永久留存,已删除。
+        detect: (d) => blockPattern(ANCHOR_TEXT_ORIG_BLOCK).test(d),
+        block: ANCHOR_TEXT_ORIG_BLOCK,
+        replacement: ANCHOR_TEXT_PATCHED_BLOCK,
+        action: "replace",
+      },
+      // ── DSH 0.1.5-alpha.1 链路:同步 buildRequest + 新注释 + 五参签名 ──
+      // 桥接发生在冻结循环之后(A3):原消息冻结语义不变,只有真的改写时才冻结
+      // 桥接产物,且不把副本塞进 this.frozenMessages。
+      {
+        name: "v3-0.1.5",
+        detect: (d) =>
+          d.includes("image-bridge v2 (local patch)") &&
+          d.includes("const bridgedMessages = await this.bridgeImagesForModel(boundaryMessages") &&
+          d.includes("const request = await this.buildRequest(") &&
+          d.includes("forceAuxVision"),
+        action: "skip",
+      },
+      {
+        name: "callsite-0.1.5",
+        detect: (d) =>
+          d.includes("image-bridge v2 (local patch)") &&
+          d.includes("const bridgedMessages = await this.bridgeImagesForModel(boundaryMessages") &&
+          d.includes("const request = this.buildRequest("),
+        block: "const request = this.buildRequest(config, preparedCall, assembly.tools, startsRequestSeries, signal);",
+        replacement:
+          "const request = await this.buildRequest(config, preparedCall, assembly.tools, startsRequestSeries, signal);",
+        action: "replace",
+      },
+      {
+        name: "body-0.1.5",
+        detect: (d) =>
+          d.includes("image-bridge v2 (local patch)") &&
+          !d.includes("const bridgedMessages =") &&
+          d.includes("async buildRequest(config, preparedCall, tools, startsRequestSeries, signal) {") &&
+          d.includes("messages: boundaryMessages,"),
+        block:
+          "Object.freeze(boundaryMessages);\n\t\treturn markAgentLoopRequest(Object.freeze({\n\t\t\t...header.config,\n\t\t\tmessages: boundaryMessages,",
+        replacement:
+          "Object.freeze(boundaryMessages);\n\t\tconst bridgedMessages = await this.bridgeImagesForModel(boundaryMessages, config.provider, config.model, this.loopCtx.llm, signal);\n\t\tif (bridgedMessages !== boundaryMessages) deepFreeze(bridgedMessages);\n\t\treturn markAgentLoopRequest(Object.freeze({\n\t\t\t...header.config,\n\t\t\tmessages: bridgedMessages,",
+        action: "replace",
+      },
+      {
+        name: "original-0.1.5",
+        detect: (d) =>
+          d.includes("Log the resolved envelope and derive a frozen request from the admitted surface.") &&
+          d.includes("buildRequest(config, preparedCall, tools, startsRequestSeries, signal) {"),
+        block: await readFile(join(HERE, "orig-agent-loop-0.1.5-block.txt"), "utf8"),
+        replacement: await readFile(join(HERE, "patched-agent-loop-0.1.5-block.txt"), "utf8"),
+        action: "replace",
+      },
+      // ── DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 链路:8 参 async buildRequest ──
       {
         name: "v3",
         detect: (d) =>
@@ -123,7 +201,7 @@ const TARGETS = [
       },
     ],
     patched: await readFile(join(HERE, "patched-agent-loop-alpha2-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-",
+    backupPrefix: BACKUP_PREFIX,
   },
   {
     label: "dsh-api-session-controller (prompt)",
@@ -140,7 +218,7 @@ const TARGETS = [
       },
     ],
     patched: await readFile(join(HERE, "patched-session-controller-prompt-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-",
+    backupPrefix: BACKUP_PREFIX,
   },
   {
     label: "dsh-tool-subagent (schema)",
@@ -159,7 +237,7 @@ const TARGETS = [
       },
     ],
     patched: await readFile(join(HERE, "patched-subagent-schema-alpha2-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-",
+    backupPrefix: BACKUP_PREFIX,
   },
   {
     label: "dsh-tool-subagent (request)",
@@ -181,7 +259,7 @@ const TARGETS = [
       },
     ],
     patched: await readFile(join(HERE, "patched-subagent-request-alpha2-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-",
+    backupPrefix: BACKUP_PREFIX,
   },
   {
     label: "dsh-workflow-worker-thread",
@@ -201,7 +279,7 @@ const TARGETS = [
       },
     ],
     patched: await readFile(join(HERE, "patched-workflow-startchild-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-",
+    backupPrefix: BACKUP_PREFIX,
   },
   {
     label: "dsh-tool-skill (schema)",
@@ -217,12 +295,36 @@ const TARGETS = [
       },
     ],
     patched: await readFile(join(HERE, "patched-skill-tool-block.txt"), "utf8"),
-    backupPrefix: "index.js.bak-",
+    backupPrefix: BACKUP_PREFIX,
   },
 ];
 
 function log(msg) {
   console.log(`[dsh-image-bridge] ${msg}`);
+}
+
+/** Escape a string for literal use inside a RegExp. */
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Build a pattern that matches `block` in a deployed package while ignoring the
+ * leading indentation of every line after the first. The first line is matched
+ * literally, exactly like the previous `String.replace(block.trim(), ...)` call:
+ * its own leading whitespace was already stripped by `trim()`, so the match
+ * starts at the first non-blank character and the replacement keeps the target
+ * file's original indentation on its first line.
+ *
+ * DSH rebuilds the same code at different nesting depths (0.1.5 compiles `using`
+ * bindings inside one more `try`, which adds a leading tab to every line of the
+ * session-controller admission gate), so an exact-indentation match silently
+ * degrades into "步骤块未命中" after an upstream upgrade.
+ */
+function blockPattern(block) {
+  const [first, ...rest] = block.trim().split("\n");
+  const tail = rest.map((line) => `\n[ \t]*${escapeRegExp(line.replace(/^[ \t]+/, ""))}`).join("");
+  return new RegExp(escapeRegExp(first) + tail);
 }
 
 // Keep one backup per physical file for the lifetime of one apply-patch run.
@@ -278,7 +380,11 @@ async function rollbackOne(target) {
     return;
   }
   const dir = dirname(file);
-  const baks = (await readdir(dir)).filter((f) => f.startsWith(target.backupPrefix) && !f.includes(".node"));
+  // 只认本工具写下的备份(专属 tag 或本工具旧版的无 tag 形状),不弹 self-heal 等
+  // 其它工具的 .bak-selfheal-*(否则回滚会静默无效)。
+  const baks = (await readdir(dir)).filter(
+    (f) => (f.startsWith(target.backupPrefix) || LEGACY_BACKUP_RE.test(f)) && !f.includes(".node"),
+  );
   baks.sort().reverse();
   if (baks.length === 0) {
     log(`${target.label} 无备份可回滚`);
@@ -291,6 +397,16 @@ async function rollbackOne(target) {
   syntaxCheck(file, target.label);
 }
 
+/** 本次运行是否有目标以失败收场(步骤块失配 / 替换失败 / 写盘或语法失败)。 */
+let failed = false;
+
+/**
+ * 对一个目标执行状态机。
+ *
+ * 落盘时机只有一个:状态机走到 `action === "skip"`(链路完成)。中途任何一步
+ * 失配都不允许把内存里的"部分补丁"写回 —— 整体回滚到应用前状态并置退出码 1,
+ * 否则会留下语法通过但运行期损坏的半补丁,且二次 apply 无法愈合。
+ */
 async function applyOne(target, dryRun) {
   const file = target.file;
   if (!existsSync(file)) {
@@ -300,72 +416,81 @@ async function applyOne(target, dryRun) {
   let data = await readFile(file, "utf8");
   let bak;
   let applied = 0;
+  let fromState;
   for (let i = 0; i < target.states.length + 3; i++) {
     const state = target.states.find((candidate) => candidate.detect(data));
     if (state === void 0) {
+      if (applied > 0) {
+        // 已走了一半却无状态可匹配:同属"无法按当前锚点完成",整体回滚,不静默丢弃。
+        log(`${target.label} 状态机中断(已应用 ${applied} 步后无匹配状态),整体回滚: ${file}`);
+        if (!dryRun && bak !== void 0) await restoreBackup(file, bak, target.label);
+        failed = true;
+        process.exitCode = 1;
+        return;
+      }
+      // 按设计保持退出码 0:install.sh 用 `set -e`,非零会直接中断安装,把
+      // "未知版本先跳过、不破坏部署"退化成"装不上"。该信号由输出文本承载 ——
+      // ci-fake-dsh.mjs 与 self-heal.mjs 都以正则门禁匹配这句话(见 TESTING.md)。
       log(`${target.label} 跳过(版本不匹配,未找到已知代码块): ${file}`);
       return;
     }
     if (state.action === "skip") {
-      if (applied > 0) {
-        try {
-          await writeFile(file, data);
-        } catch (error) {
-          log(`${target.label} 写盘失败: ${error?.message ?? error}`);
-          await restoreBackup(file, bak, target.label);
-          process.exitCode = 1;
-          return;
-        }
-        log(`${target.label} 已打补丁(${applied} 步): ${file}`);
-        if (!syntaxCheck(file, target.label)) {
-          await restoreBackup(file, bak, target.label);
-          log(`${target.label} 语法检查失败,已恢复备份`);
-        }
-      } else {
+      if (applied === 0) {
         log(`${target.label} 已是 ${state.name},跳过: ${file}`);
+        return;
       }
-      return;
-    }
-    if (dryRun) {
-      log(`[dry-run] ${target.label} 可从 ${state.name} 升级: ${file}`);
-      return;
-    }
-    if (bak === void 0) bak = await backupTarget(file, target.backupPrefix, target.label);
-    const patched = data.replace(state.block.trim(), (state.replacement ?? target.patched).trim());
-    if (patched === data) {
-      log(`${target.label} ${state.name} 步骤块未命中,停止推进(避免假成功空转)`);
-      if (applied > 0 || bak !== void 0) {
+      // 链路完成:只有到达 skip 态才允许落盘并声明"已打补丁"。
+      if (dryRun) {
+        log(`[dry-run] ${target.label} 可从 ${fromState} 升级(${applied} 步): ${file}`);
+        return;
+      }
+      try {
+        await writeFile(file, data);
+      } catch (error) {
+        log(`${target.label} 写盘失败: ${error?.message ?? error}`);
         await restoreBackup(file, bak, target.label);
-        log(`${target.label} 已回滚部分补丁`);
+        failed = true;
+        process.exitCode = 1;
+        return;
       }
-      break;
+      log(`${target.label} 已打补丁(${applied} 步): ${file}`);
+      if (!syntaxCheck(file, target.label)) {
+        await restoreBackup(file, bak, target.label);
+        log(`${target.label} 语法检查失败,已恢复备份`);
+        failed = true;
+        process.exitCode = 1;
+      }
+      return;
     }
-    if (!patched.includes(target.mark)) {
-      log(`${target.label} 补丁块未生效(替换失败),回滚`);
-      await restoreBackup(file, bak, target.label);
-      process.exit(1);
-    }
-    data = patched;
-    applied += 1;
-    log(`${target.label} 已应用 ${state.name} 步骤`);
-  }
-  if (applied > 0) {
-    try {
-      await writeFile(file, data);
-    } catch (error) {
-      log(`${target.label} 写盘失败: ${error?.message ?? error}`);
-      await restoreBackup(file, bak, target.label);
+    // dry-run 不提前返回:先按真实应用的判据校验步骤块,再给出结论。
+    if (bak === void 0 && !dryRun) bak = await backupTarget(file, target.backupPrefix, target.label);
+    const patched = data.replace(blockPattern(state.block), (state.replacement ?? target.patched).trim());
+    if (patched === data) {
+      // 步骤块失配 = 该链路无法按当前锚点完成:整体回滚,绝不把内存里的部分补丁写回。
+      // dry-run 与真实应用同判据(均不落盘、均非零退出),区别于"版本不匹配"的跳过语义。
+      log(`${target.label} ${state.name} 步骤块未命中(已完成 ${applied} 步),整体回滚到应用前状态(不落半补丁): ${file}`);
+      if (!dryRun && bak !== void 0) await restoreBackup(file, bak, target.label);
+      failed = true;
       process.exitCode = 1;
       return;
     }
-    log(`${target.label} 已打补丁(${applied} 步): ${file}`);
-    if (!syntaxCheck(file, target.label)) {
-      await restoreBackup(file, bak, target.label);
-      log(`${target.label} 语法检查失败,已恢复备份`);
+    if (!patched.includes(target.mark)) {
+      log(`${target.label} 补丁块未生效(替换失败),整体回滚`);
+      if (!dryRun && bak !== void 0) await restoreBackup(file, bak, target.label);
+      failed = true;
+      process.exitCode = 1;
+      return;
     }
-  } else {
-    log(`${target.label} 跳过(无可应用步骤)`);
+    if (fromState === void 0) fromState = state.name;
+    data = patched;
+    applied += 1;
+    if (!dryRun) log(`${target.label} 已应用 ${state.name} 步骤`);
   }
+  // 循环耗尽仍未到达 skip 态:状态机未收敛(正常输入不可达),防御性整体回滚。
+  log(`${target.label} 状态机未收敛(已应用 ${applied} 步仍未完成),整体回滚`);
+  if (!dryRun && bak !== void 0) await restoreBackup(file, bak, target.label);
+  failed = true;
+  process.exitCode = 1;
 }
 
 const dryRun = process.argv.includes("--dry-run");
@@ -375,4 +500,10 @@ if (rollbackMode) {
   process.exit(0);
 }
 for (const target of TARGETS) await applyOne(target, dryRun);
-log(dryRun ? "dry-run 完成" : "完成。请重启 DSH 生效。");
+if (failed) {
+  // 失败面不冒充"完成"(退出码 1;install.sh 的 set -e 会显式中止)。
+  log("失败:有目标未完成(已整体回滚,未写入部分补丁);请检查上方日志。");
+  process.exitCode = 1;
+} else {
+  log(dryRun ? "dry-run 完成" : "完成。请重启 DSH 生效。");
+}

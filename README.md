@@ -11,7 +11,7 @@
 ![Version](https://img.shields.io/badge/version-0.4.4-blue)
 ![Tests](https://img.shields.io/badge/tests-370-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--rc.1-0078D4)
+![Platform](https://img.shields.io/badge/DSH-0.1.5--alpha.1-0078D4)
 
 </div>
 
@@ -208,7 +208,7 @@ node scripts/doctor.mjs    # 更新后健康检查（不修改任何文件）
 | `/aux debug <目标> [N]` | 跨会话查看（@this / session id / 前缀 / cwd） |
 | `/aux patch` | 一键安装当前 DSH 所需全部补丁并自愈 |
 | `/aux patch --json` | 同上，返回结构化步骤结果 |
-| `/aux model <task> [provider/model]` | 查看 / 设置某任务的辅助模型 |
+| `/aux model <task> [provider/model]` | 查看 / 设置某任务的辅助模型（设置时写成单元素降级链；多级链用设置页"降级链"字段） |
 | `/aux vision <path> <question...>` | 命令行直接看图 |
 | `/aux test <task>` | 自检某任务路由 |
 | `/aux memory [n]` | 查看最近图片分析记忆 |
@@ -371,17 +371,23 @@ const result = await ctx.auxLlm.call("compress", {
 
 ## 兼容性与依赖
 
-- **平台**：DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1（已验证 0.1.2-alpha.2 / 0.1.2-alpha.3 / 0.1.2-alpha.4 / 0.1.2-alpha.5 / 0.1.2-rc.1）；Node ≥ 20。
+- **平台**：DSH 0.1.5-alpha.1（主支单版本）；Node ≥ 20。
+- **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 用户**：请使用永久分支 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 或 Release `v0.4.4-legacy`。
 - **旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）用户**：请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。主支不再支持这些版本。
 - **运行时零第三方依赖**：peerDependencies 全部是 DSH 官方包（环境自带），无 `dependencies`。
-- **测试零依赖**：`node --test tests/*.test.js`（370 项；文件清单与基线见 `TESTING.md`）。
+- **测试零依赖**：`node --test tests/*.test.js`（569 项；文件清单与基线见 `TESTING.md`）。
 
 ### 集成组件
 
 - **image-bridge**：让纯文本主模型也能直接粘贴图片，UI 保留缩略图；`npm update` 后需重跑 `bridge/apply-patch.mjs`。
-- **settings 可写性**：设置页可读写 aux 配置；DSH 0.1.2 线为原生能力，rc.6 旧补丁已退役到 `bridge/retired/`。
-- **会话事件注册通道**：`aux/llm-call` 以 `ignorable: true` 标记写入；未装补丁时自动降级不写事件，保护会话日志。
+- **settings 可写性**：设置页可读写 aux 配置；DSH alpha 线为原生能力，rc.6 旧补丁已退役到 `bridge/retired/`。
+- **会话事件注册通道**：`aux/llm-call` 等四个隐藏事件以 `ignorable: true` 标记写入；未装补丁时自动降级不写事件，保护会话日志。DSH 0.1.5 起会话迁移用冻结词表校验历史事件，自愈新增 **P12**（放行 `aux/*`）与 **P13**（放行官方历史写法，上游收编后自退役）；`dsh-aux/src/event-shapes.js` 是事件字段的单一真相，写入未登记字段会告警并让测试失败。
 - **会话删除协同**：配合 `dsh-plugin-session-delete`，删除会话时自动清理无引用图片。
+- **图片归属与误删防护**：`session/event` 归属钩子 + `session/created` 恢复屏障（内存日志扫描）；屏障未完成/失败时全局拒绝删除（fail-closed，`/aux status` 可观测）；回收进 `objects/.trash/`（7 天恢复窗口）。
+- **GC 债**：旁挂 `attachment-refs.json` + 官方 `imageHostPath` 回收 + `.ext` 硬链接全量清理；派生 `request-images/` 按总量上限（默认 256 MiB，`requestImagesMaxMiB` 可配）做 mtime LRU 回收。
+- **vision 交付路由**：`aux.visionRoute` 可选 aux（默认）/ native-when-capable / auto；native 只对 `aux.nativeRoutes` 白名单内的路由生效，且 `forceAuxVision` 优先。
+- **多级降级链**：`aux.tasks.<task>.models` 是有序的 "provider/model" 数组（主选 → 备1 → 备2 …）；非空时单数 `provider/model` 被忽略（`/aux status` 会给出警告）。`/aux model <task> <provider/model>` 写入的是**单元素链**，多级链请在设置页"降级链"字段（每行一条）或 `settings.yaml` 中填写；链尾仍按 `fallbackToMain` / `visionFallbackToMain` 规则考虑主模型。
+- **vision 打磨(Phase 3)**：失败条目给出原因与可否重试（限流/超时/连接在工具内自动重试一次）；`imagePath` 无扩展名按魔数嗅探（与 `read_image` 对齐）；动图只分析首帧；直连请求把校验通过的 IP 钉到连接（关闭 DNS rebinding）；`aux.tasks.<task>.models` 多级降级链；`vision_analyze` 会话卡片显示 `【图N/共M】` 角标 + 缩略图 + 结论。
 - **subagent-bridge**：透明接管原生 `subagent` 与 `workflow` 并行 `agent()` 子代理。
 
 ### 极简 / Anchored Standard 兼容
@@ -398,7 +404,7 @@ const result = await ctx.auxLlm.call("compress", {
 | [TESTING.md](./TESTING.md) | 测试文件清单与基线 |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 贡献指南 |
 | [CREDITS.md](./CREDITS.md) | 借鉴来源与致谢 |
-| [docs/design/](./docs/design/) | 专项设计文档（图库 / 桥接 / 抓取 / 视觉代理 / 会话附件 GC） |
+| [docs/design/](./docs/design/) | 专项设计文档（图库 / 桥接 / 抓取 / 视觉代理 / 会话附件 GC / 上游请求） |
 | [docs/archive/](./docs/archive/) | v0.1 时代过程文档存档（PRD / 评审 / 上游提案） |
 | [AI.md](./dsh-aux/AI.md) | 给 AI 代理的安装指南 |
 
@@ -414,7 +420,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 **Q3：dsh-aux 需要配置模型才能用吗？**
 
-不需要。dsh-aux 是**零配置**的：不配任何模型也能跑，辅助任务会自动回退到会话主模型。你可以随时通过设置页或 `/aux model <task> <provider/model>` 为某个任务指定专用模型。
+不需要。dsh-aux 是**零配置**的：不配任何模型也能跑，辅助任务会自动回退到会话主模型。你可以随时通过设置页或 `/aux model <task> <provider/model>` 为某个任务指定专用模型；需要多级兜底时，在设置页"降级链"字段或 `aux.tasks.<task>.models` 里按序填写多个 "provider/model"。
 
 ## 相关项目
 

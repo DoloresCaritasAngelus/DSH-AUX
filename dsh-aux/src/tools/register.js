@@ -39,6 +39,20 @@ const IMAGE_REF_SCHEMA = {
   },
 };
 
+/** Where one analyzed image sits: inside its user message (the bridge's
+ * "本条消息第N张/共M张" numbering) or inside this single tool call. */
+const IMAGE_ORDINAL_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  description:
+    "Display ordinal of this image: scope 'message' matches the bridge numbering of the user message it came from; 'call' is the position inside this tool call.",
+  properties: {
+    scope: { type: "string", required: true, enum: ["message", "call"] },
+    index: { type: "integer", required: true },
+    total: { type: "integer", required: true },
+  },
+};
+
 /** Register the auxiliary tools. */
 export function registerAuxTools(service) {
   const ctx = service.ctx;
@@ -69,13 +83,17 @@ export function registerAuxTools(service) {
         defineTool({
           name: "vision_analyze",
           description:
-            "Look at one image (or several via the images array) with the auxiliary vision model and answer a SPECIFIC question about it/them. Always state exactly what you need to know in the question parameter (extract text, count objects, read a chart, check a color, compare elements) — never ask for a generic description, because the vision model answers your intent, not a caption. If the returned description misses a detail you need, call again with a more specific question about that detail. If the same image (same attachmentId) was already analyzed with the same question in this session, reuse that earlier result instead of re-analyzing. Provide one of attachmentId (a session image attachment), imagePath (a local image file), imageUrl (a remote image URL), or an images array (each entry exactly one of those three keys; analyzed in parallel — useful for comparing multiple images with one question).",
+            "Look at one image (or several via the images array) with the auxiliary vision model and answer a SPECIFIC question about it/them. Always state exactly what you need to know in the question parameter (extract text, count objects, read a chart, check a color, compare elements) — never ask for a generic description, because the vision model answers your intent, not a caption. If the returned description misses a detail you need, call again with a more specific question about that detail. If the same image (same attachmentId) was already analyzed with the same question in this session, reuse that earlier result instead of re-analyzing. Provide one of attachmentId (a session image attachment), imagePath (a local image file), imageUrl (a remote image URL), or an images array (each entry exactly one of those three keys; analyzed in parallel — useful for comparing multiple images with one question). Animated GIFs are analyzed from their first frame only: motion, timing, and later frames are not visible to the model. A failed image in the images array is reported with its reason and whether a retry can help — never drop it silently: retry that image or tell the user what is missing.",
           parameters: {
             attachmentId: {
               type: "string",
               description: "Session attachment id of an image already attached to this conversation.",
             },
-            imagePath: { type: "string", description: "Path to a local PNG/JPEG/WebP/GIF image file." },
+            imagePath: {
+              type: "string",
+              description:
+                "Path to a local PNG/JPEG/WebP/GIF image file. A path without a recognized extension is accepted; the format is detected from the file's leading bytes, so normalized attachment files can be passed directly.",
+            },
             imageUrl: { type: "string", description: "URL of a remote image to fetch and analyze." },
             images: {
               type: "array",
@@ -105,15 +123,38 @@ export function registerAuxTools(service) {
                       analysis: { type: "string", required: true },
                       provider: { type: "string", required: true },
                       model: { type: "string", required: true },
+                      // Delivery route: "aux" (auxiliary model analyzed it) or
+                      // "native" (the image was handed to the main model).
+                      mode: { type: "string", required: true },
                       // Success entries only; failed images carry error text
                       // without an attachment.
                       attachment: IMAGE_REF_SCHEMA,
+                      // Success entries only: where this image sits for the user.
+                      imageOrdinal: IMAGE_ORDINAL_SCHEMA,
+                      // Failed entries only: the machine-readable reason.
+                      // `code` is the AUX failure kind (route.js
+                      // classifyFailure), `retryable` mirrors the in-tool
+                      // retry decision (rate-limit/timeout/connection).
+                      error: {
+                        type: "object",
+                        additionalProperties: false,
+                        description: "Present on failed entries only: why it failed and whether a retry can help.",
+                        properties: {
+                          code: { type: "string", required: true },
+                          message: { type: "string", required: true },
+                          retryable: { type: "boolean", required: true },
+                        },
+                      },
                     },
                   },
                 },
                 provider: { type: "string", required: true },
                 model: { type: "string", required: true },
+                // Delivery route: "aux" (auxiliary model analyzed it) or
+                // "native" (the image was handed to the main model).
+                mode: { type: "string", required: true },
                 attachment: IMAGE_REF_SCHEMA,
+                imageOrdinal: IMAGE_ORDINAL_SCHEMA,
               },
             },
             // Trace echo: each successful analysis is followed by the image it
@@ -133,16 +174,26 @@ export function registerAuxTools(service) {
                 ...(value.attachment !== void 0 ? [{ type: "image", attachment: value.attachment }] : []),
               ];
             },
-            // Forward-compatible declaration (no official consumer yet): the
-            // refs ride along with the result so a future generalized tool
-            // image card can pick them up without a format change.
-            presentationMeta: (_args, value) => ({
-              attachments: Array.isArray(value.analyses)
-                ? value.analyses.map((entry) => entry.attachment).filter((ref) => ref !== void 0)
-                : value.attachment !== void 0
-                  ? [value.attachment]
-                  : [],
-            }),
+            // The refs plus their display ordinals ride along with the result
+            // so the AUX toolview card (tool.call.toolview key
+            // "vision_analyze") can label each thumbnail without parsing the
+            // content text. `ordinals` stays index-aligned with `attachments`
+            // (failed entries contribute neither).
+            presentationMeta: (_args, value) => {
+              const attachments = [];
+              const ordinals = [];
+              const entries = Array.isArray(value.analyses)
+                ? value.analyses
+                : value.attachment === void 0
+                  ? []
+                  : [{ attachment: value.attachment, imageOrdinal: value.imageOrdinal }];
+              for (const entry of entries) {
+                if (entry.attachment === void 0) continue;
+                attachments.push(entry.attachment);
+                ordinals.push(entry.imageOrdinal ?? null);
+              }
+              return { attachments, ordinals };
+            },
           },
           timeoutMs: 120_000,
           isConcurrencySafe: () => true,

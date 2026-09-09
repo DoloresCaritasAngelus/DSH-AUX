@@ -9,17 +9,15 @@
  * @module @dolorescaritasangelus/dsh-aux/images/locate
  */
 import { loadSessionImages } from "./ownership.js";
-import { sessionEvents } from "../session-utils.js";
+import { readSessionEvents as readStoredSessionEvents, sessionEvents } from "../session-utils.js";
+import { hashOfAttachmentId as hashOfId } from "./object-path.js";
 
-/** Attachment ids are content-addressed: `sha256:<64 hex>`. */
-const HASH_ID_RE = /^sha256:([a-f0-9]{64})$/;
 /** Match the hash in an object-store path, with or without an extension. */
 const PATH_HASH_RE = /([a-f0-9]{64})(?:\.(?:png|jpe?g|webp|gif))?$/i;
 
 /** Extract the 64-hex hash from an attachment id, or null. */
 function hashOfAttachmentId(attachmentId) {
-  const match = typeof attachmentId === "string" ? HASH_ID_RE.exec(attachmentId) : null;
-  return match === null ? null : match[1];
+  return hashOfId(attachmentId) ?? null;
 }
 
 /** Extract the 64-hex hash from an object-store image path, or null. */
@@ -73,8 +71,8 @@ function contentOfUserEvent(event) {
 
 /**
  * Read a session's events from the supplied live session first, then fall
- * back to `sessionPersistence.inspect`. Returns null when the session is not
- * readable (live session absent and persistence inspect missing/failing).
+ * back to the stored log through the persistence shim (0.1.5 `open/read`,
+ * older `inspect`). Returns null when the session is not readable.
  */
 async function readSessionEvents(service, sessionId, opts = {}) {
   const liveSession = opts?.liveSession;
@@ -90,18 +88,8 @@ async function readSessionEvents(service, sessionId, opts = {}) {
   } catch {
     persistence = void 0;
   }
-  if (persistence === void 0 || persistence === null || typeof persistence.inspect !== "function") {
-    return null;
-  }
-  try {
-    const inspection = await persistence.inspect(sessionId);
-    if (inspection !== null && inspection !== void 0 && Array.isArray(inspection.events)) {
-      return inspection.events;
-    }
-  } catch {
-    return null;
-  }
-  return null;
+  const stored = await readStoredSessionEvents(persistence, sessionId);
+  return Array.isArray(stored) ? stored : null;
 }
 
 /**

@@ -28,6 +28,7 @@ import {
   wrapUntrustedPageData,
 } from "../dsh-aux/src/prompt.js";
 import { codePointCount, resolveMaxChars, truncateByChars, runWebExtract } from "../dsh-aux/src/tools/web-extract.js";
+import { setFetchTransportForTests } from "../dsh-aux/src/fetch.js";
 import { fetchViaProxy, fetchWithSsrf, matchesNoProxy, proxyForUrl } from "../dsh-aux/src/fetch.js";
 import {
   charsetFromContentType,
@@ -164,13 +165,15 @@ test("webExtractUserMessageMulti: 每页独立标签与数据块", () => {
 
 // ── Low: redirect off-by-one / SSRF 逐跳 ──────────────────────────────────
 
-async function withGlobalFetch(stub, fn) {
-  const original = globalThis.fetch;
-  globalThis.fetch = stub;
+// Install a direct-transport stub for the duration of fn. The stub keeps the
+// historical (url) => responseLike shape; the seam also passes
+// (url, { headers, signal, addresses }).
+async function withFetchTransport(stub, fn) {
+  setFetchTransportForTests(stub);
   try {
     return await fn();
   } finally {
-    globalThis.fetch = original;
+    setFetchTransportForTests(null);
   }
 }
 
@@ -181,7 +184,7 @@ function fakeService() {
 
 test("fetchWithSsrf: 多跳成功与相对 Location", async () => {
   const calls = [];
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => {
       calls.push(String(url));
       if (String(url) === "https://a.test/start")
@@ -200,7 +203,7 @@ test("fetchWithSsrf: 多跳成功与相对 Location", async () => {
 });
 
 test("fetchWithSsrf: 缺 Location 抛错", async () => {
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => ({ status: 302, url, headers: { get: () => null }, ok: false, text: async () => "" }),
     async () => {
       await assert.rejects(() => fetchWithSsrf(fakeService(), "https://a.test/x", "web_extract"), /missing Location/);
@@ -216,7 +219,7 @@ test("fetchWithSsrf: 恰好 5 跳成功,6 跳报 too many (off-by-one 回归)", 
       return { status: 302, url, headers: { get: () => "https://a.test/h" + count }, ok: false, text: async () => "" };
     return { status: 200, url, ok: true, headers: { get: () => "text/plain" }, text: async () => "ok" };
   };
-  await withGlobalFetch(stub, async () => {
+  await withFetchTransport(stub, async () => {
     count = 0;
     const { finalUrl } = await fetchWithSsrf(fakeService(), "https://a.test/r0", "web_extract");
     assert.ok(finalUrl.endsWith("/h5"), finalUrl);
@@ -226,7 +229,7 @@ test("fetchWithSsrf: 恰好 5 跳成功,6 跳报 too many (off-by-one 回归)", 
       count += 1;
       return { status: 302, url, headers: { get: () => "https://a.test/h" + count }, ok: false, text: async () => "" };
     };
-    await withGlobalFetch(stub6, async () => {
+    await withFetchTransport(stub6, async () => {
       await assert.rejects(
         () => fetchWithSsrf(fakeService(), "https://a.test/r0", "web_extract"),
         /too many redirects/,
@@ -237,7 +240,7 @@ test("fetchWithSsrf: 恰好 5 跳成功,6 跳报 too many (off-by-one 回归)", 
 
 test("fetchWithSsrf: 重定向到内网在请求前被拒", async () => {
   let internalFetched = false;
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => {
       if (String(url).startsWith("http://127.0.0.1")) {
         internalFetched = true;
@@ -337,7 +340,7 @@ async function makeLocalHarness() {
 
 test("H1: seam 缺失(web 无 fetch 能力)时回退本地逐跳抓取", async () => {
   const { ctx, streams } = await makeLocalHarness();
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => ({
       ok: true,
       status: 200,
@@ -385,7 +388,7 @@ test("H2: provider 返回 3xx 时经本地逐跳重跟随(每跳 SSRF)", async (
     });
   });
   const ctx2 = harness.ctx;
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => {
       if (String(url).startsWith("http://127.0.0.1")) throw new Error("internal fetch happened");
       return {
@@ -418,7 +421,7 @@ test("H2: provider 3xx 重跟随到内网在请求前被拒", async () => {
     });
   });
   let internalFetched = false;
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => {
       if (String(url).startsWith("http://127.0.0.1")) {
         internalFetched = true;
@@ -450,7 +453,7 @@ test("H1: provider 抛 code=WEB_PROVIDER_UNAVAILABLE 回退本地", async () => 
       },
     });
   });
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => ({
       ok: true,
       status: 200,
@@ -489,7 +492,7 @@ test("H1/H2: seam fetch 是依赖 this 的实方法(防解绑回归,线上复现
       },
     });
   });
-  await withGlobalFetch(
+  await withFetchTransport(
     async () => {
       throw new Error("不应走到本地回退");
     },
@@ -516,7 +519,7 @@ test("H1 负路径: seam 抛自有校验错误(web provider returned…)不被�
       },
     });
   });
-  await withGlobalFetch(
+  await withFetchTransport(
     async () => {
       throw new Error("本地回退不应被调用");
     },
@@ -574,7 +577,7 @@ test("H1: 其余 provider 不可用形态(code/纯 message)也回退本地", asy
       });
     });
     let fetched = false;
-    await withGlobalFetch(
+    await withFetchTransport(
       async (url) => {
         fetched = true;
         return {
@@ -634,7 +637,7 @@ test("readTextCapped: 流式 body 超限即 cancel 断流", async () => {
 
 test("Low: 二进制 content-type 被拒绝", async () => {
   const { ctx } = await makeLocalHarness();
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => ({
       ok: true,
       status: 200,
@@ -781,7 +784,7 @@ test("F1 全流程: same-origin 递归抓取(本地路径)", async () => {
       '<html><body>CHILD TEXT<a href="/grand">grand</a><a href="/child">loop</a></body></html>',
     "https://a.example/grand": "<html><body>GRAND TEXT</body></html>",
   };
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => {
       const u = String(url);
       const htmlText = pages[u];
@@ -822,7 +825,7 @@ test("F1: maxDepth=0 只抓根页;maxDepth 尊重层级", async () => {
     "https://a.example/root": '<html><body>ROOT<a href="/child">c</a></body></html>',
     "https://a.example/child": "<html><body>CHILD</body></html>",
   };
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => {
       const u = String(url);
       if (pages[u] === undefined)
@@ -851,7 +854,7 @@ test("F1: 共享 maxChars 预算截断累计文本", async () => {
     "https://a.example/root": "<html><body>" + "R".repeat(5000) + '<a href="/c">c</a></body></html>',
     "https://a.example/c": "<html><body>" + "C".repeat(5000) + "</body></html>",
   };
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => {
       const u = String(url);
       if (pages[u] === undefined)
@@ -927,7 +930,7 @@ test("反爬: 无 header charset 时按 <meta charset> 解码(GBK 不乱码)", a
     ...GBK,
     ...ascii("</body></html>"),
   ]);
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => ({
       ok: true,
       status: 200,
@@ -953,7 +956,7 @@ test("反爬: 检测到 JS-Challenge(Cloudflare)时不调 aux,返回 browserRequ
   const { ctx, streams } = await makeLocalHarness();
   const challengeBody =
     "<html><head><title>Just a moment...</title><script>__cf_chl_opt=1;if(window._cf_chl_opt){}</script></head><body>Checking your browser before accessing.</body></html>";
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => ({
       ok: true,
       status: 200,
@@ -977,7 +980,7 @@ test("反爬: 检测到 JS-Challenge(Cloudflare)时不调 aux,返回 browserRequ
 test("反爬: 429 重试一次后成功,不再报错", async () => {
   const { ctx, streams } = await makeLocalHarness();
   let calls = 0;
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => {
       calls += 1;
       if (calls === 1)
@@ -1006,7 +1009,7 @@ test("反爬: 429 重试一次后成功,不再报错", async () => {
 
 test("反爬: 重定向跳数暴露到结果元数据", async () => {
   const { ctx } = await makeLocalHarness();
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => {
       const u = String(url);
       if (u === "https://a.example/start")
@@ -1062,9 +1065,9 @@ test("代理: proxyForUrl 尊重 env 与 NO_PROXY", () => {
   }
 });
 
-test("代理: via=direct 强制全局 fetch,不触碰代理", async () => {
+test("代理: via=direct 走直连传输,不触碰代理", async () => {
   let called = 0;
-  await withGlobalFetch(
+  await withFetchTransport(
     async () => {
       called += 1;
       return { ok: true, status: 200, url: "x", headers: { get: () => "text/plain" }, text: async () => "ok" };
@@ -1077,9 +1080,9 @@ test("代理: via=direct 强制全局 fetch,不触碰代理", async () => {
   );
 });
 
-test("代理: 无代理 env 时 fetchWithSsrf 走全局 fetch(直连)", async () => {
+test("代理: 无代理 env 时 fetchWithSsrf 走直连传输", async () => {
   const old = { ...process.env };
-  await withGlobalFetch(
+  await withFetchTransport(
     async (url) => ({
       ok: true,
       status: 200,

@@ -265,3 +265,120 @@ test("removeFromOwnership: cleans service._sessionImages map and persists", asyn
     await fixture.cleanup();
   }
 });
+
+test("deleteImage: 冻结期拒绝 DELETION_FROZEN(--force 亦拒绝),解冻后恢复可删", async () => {
+  const fixture = await createImageFixture();
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = fixture.home;
+  const service = makeService();
+  service._liveBackfillPending = new Set(["s-live"]);
+  try {
+    const id = attachmentIdFor("frozen-delete");
+    const { file, extPath } = await fixture.writeObject(id, { mediaType: "image/png", bytes: 16 });
+
+    for (const opts of [{}, { force: true }]) {
+      await assert.rejects(deleteImage(service, id, opts), (error) => {
+        assert.equal(error?.code, "DELETION_FROZEN");
+        assert.ok(String(error?.message).includes("冻结"), "应带可读冻结原因: " + error?.message);
+        assert.equal(error?.retryable, true, "冻结是自愈的可重试状态");
+        return true;
+      });
+    }
+    await fsPromises.lstat(file);
+    await fsPromises.lstat(extPath);
+    const trash = await fsPromises.readdir(join(fixture.objectsRoot, ".trash")).catch(() => []);
+    assert.equal(trash.length, 0, "冻结期不得产生任何回收动作");
+
+    service._liveBackfillPending.clear();
+    const result = await deleteImage(service, id);
+    assert.deepEqual(result, { ok: true, deleted: id, freedBytes: 16 });
+    await assertMissing(file);
+    await assertMissing(extPath);
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fixture.cleanup();
+  }
+});
+
+test("deleteImage: 冻结期对不存在的 id 也报 DELETION_FROZEN(门先于 NOT_FOUND)", async () => {
+  const fixture = await createImageFixture();
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = fixture.home;
+  const service = makeService();
+  service._liveBackfillFailed = new Set(["s-live"]);
+  try {
+    await assert.rejects(deleteImage(service, attachmentIdFor("frozen-missing")), (error) => {
+      assert.equal(error?.code, "DELETION_FROZEN", "冻结态必须优先于 NOT_FOUND 上报");
+      return true;
+    });
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fixture.cleanup();
+  }
+});
+
+test("deleteOrphans: 冻结期拒绝,解冻后正常回收", async () => {
+  const fixture = await createImageFixture();
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = fixture.home;
+  const service = makeService();
+  service._liveBackfillPending = new Set(["s-live"]);
+  try {
+    const id = attachmentIdFor("frozen-orphan");
+    const { file } = await fixture.writeObject(id, { mediaType: "image/gif", bytes: 20 });
+
+    await assert.rejects(deleteOrphans(service), (error) => {
+      assert.equal(error?.code, "DELETION_FROZEN");
+      return true;
+    });
+    await fsPromises.lstat(file);
+    assert.equal((await fsPromises.readdir(join(fixture.objectsRoot, ".trash")).catch(() => [])).length, 0);
+
+    service._liveBackfillPending.clear();
+    const result = await deleteOrphans(service);
+    assert.deepEqual(result.deleted, [id]);
+    await assertMissing(file);
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fixture.cleanup();
+  }
+});
+
+test("deleteImage: 兄弟文件只删 IMAGE_EXTENSIONS 白名单,外来兄弟文件保留", async () => {
+  const fixture = await createImageFixture();
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = fixture.home;
+  const service = makeService();
+  try {
+    const id = attachmentIdFor("sibling-whitelist");
+    const { file, dir } = await fixture.writeObject(id, { mediaType: "image/png", bytes: 16 });
+    const hash = hashOf(id);
+    // Whitelisted companions (hardlinks to the same inode): must all go.
+    for (const ext of [".jpg", ".jpeg", ".webp", ".gif"]) {
+      await fsPromises.link(file, join(dir, hash + ext));
+    }
+    // Foreign siblings that merely share the "<hash>." prefix: must survive.
+    const foreign = [".bak", ".pngx", ".txt", ".json", ".pNg"];
+    for (const suffix of foreign) {
+      await fsPromises.writeFile(join(dir, hash + suffix), "keep");
+    }
+
+    const result = await deleteImage(service, id);
+
+    assert.deepEqual(result, { ok: true, deleted: id, freedBytes: 16 });
+    await assertMissing(file);
+    for (const ext of [".png", ".jpg", ".jpeg", ".webp", ".gif"]) {
+      await assertMissing(join(dir, hash + ext));
+    }
+    for (const suffix of foreign) {
+      assert.equal(
+        await fsPromises.readFile(join(dir, hash + suffix), "utf8"),
+        "keep",
+        "前缀相同但不在白名单的兄弟文件不得被删: " + suffix,
+      );
+    }
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fixture.cleanup();
+  }
+});

@@ -11,6 +11,8 @@
  * 白名单(允许出现 aux-notes/ 或 02-patch-ledger 的文件):
  *   .gitignore(规则本身)、CONTRIBUTING.md、.github/**、.agents/skills/**
  *   —— 这些文件已注明"本地 gitignore,不随仓库分发"。
+ * 另有 CHANGELOG.md 结构闸(见文件末尾):发布段只增不减、每段必须有非空正文、
+ * 两个哨兵节必须在位 —— 整段发布历史被截断或替换成空壳标题时同样退出 1。
  * 退出码:发现命中 = 1(阻塞 CI);干净 = 0。
  */
 import { execSync } from "node:child_process";
@@ -102,5 +104,69 @@ if (hits > 0) {
 if (msgHits > 0) {
   console.error(`\n${msgHits} 处提交信息脱密命中:提交信息只写 diff 可见的变更语义,过程内容留在 aux-notes。`);
 }
-if (hits > 0 || msgHits > 0) process.exit(1);
-console.log("文档脱密检查通过。");
+// CHANGELOG 完整性闸(防截断 + 防空壳):发布段只增不减,且每段必须有正文。
+// 历史事故模式一:整文件被 write 覆盖成"未发布"节的前几行,发布历史静默丢失;
+// 历史事故模式二(变异 B):文件被替换成 N 个 `## 0.x` 假标题 + 两个哨兵、零正文,
+// 只数段数与哨兵的门禁会 exit 0 漏网。脱密规则不会命中这两种删除/伪造,
+// 所以这里单独断言结构下限 + 正文非空。
+const CHANGELOG_RELEASE_BASELINE = 23; // 基线 v0.4.4 时的已发布版本段数量
+
+/**
+ * 按 `## ` 切 CHANGELOG 段,并判断每段是否有正文。
+ * 正文 = 段内至少一行非空、且不是更深的 Markdown 标题(如 `###`)。
+ * 只有标题和空行 = 空壳段,必须拦截。
+ * @param {string} text CHANGELOG 全文。
+ * @returns {{heading: string, hasBody: boolean}[]}
+ */
+function parseChangelogSections(text) {
+  const sections = [];
+  let current = null;
+  for (const line of text.split("\n")) {
+    if (/^## /.test(line)) {
+      current = { heading: line, hasBody: false };
+      sections.push(current);
+      continue;
+    }
+    if (current && line.trim() !== "" && !/^#{1,6}\s/.test(line)) current.hasBody = true;
+  }
+  return sections;
+}
+
+let changelogHits = 0;
+try {
+  const changelog = readFileSync("CHANGELOG.md", "utf8");
+  const releases = parseChangelogSections(changelog).filter((section) => /^## 0\./.test(section.heading));
+  if (releases.length < CHANGELOG_RELEASE_BASELINE) {
+    console.error(
+      `DOC-HYGIENE CHANGELOG.md [发布历史截断] 已发布版本段 ${releases.length} < 基线 ${CHANGELOG_RELEASE_BASELINE};` +
+        " 追加新版本小节时不得删除既有发布段。",
+    );
+    changelogHits += 1;
+  }
+  const emptyReleases = releases.filter((section) => !section.hasBody);
+  if (emptyReleases.length > 0) {
+    const sample = emptyReleases
+      .slice(0, 3)
+      .map((section) => section.heading.trim())
+      .join(" / ");
+    console.error(
+      `DOC-HYGIENE CHANGELOG.md [发布段空正文] ${emptyReleases.length} 个已发布版本段只有标题/空行(例:${sample});` +
+        " 发布段必须有非空正文,防整段被截断或替换成空壳标题。",
+    );
+    changelogHits += 1;
+  }
+  if (!/^## 0\.4\.4\b/m.test(changelog)) {
+    console.error("DOC-HYGIENE CHANGELOG.md [发布历史缺失] 未找到 v0.4.4 段。");
+    changelogHits += 1;
+  }
+  if (!/^## 未发布 \(Unreleased\)$/m.test(changelog)) {
+    console.error("DOC-HYGIENE CHANGELOG.md [结构缺失] 未找到「未发布 (Unreleased)」节。");
+    changelogHits += 1;
+  }
+} catch (error) {
+  console.error(`DOC-HYGIENE CHANGELOG.md [不可读] ${error?.message ?? String(error)}`);
+  changelogHits += 1;
+}
+
+if (hits > 0 || msgHits > 0 || changelogHits > 0) process.exit(1);
+console.log(`文档脱密检查通过(CHANGELOG 发布段完整性:${CHANGELOG_RELEASE_BASELINE} 段基线 + 非空正文)。`);

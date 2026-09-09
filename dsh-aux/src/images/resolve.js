@@ -4,9 +4,16 @@
  *
  * @module @dolorescaritasangelus/dsh-aux/images/resolve
  */
-import { basename, mediaTypeForPath, mediaTypeFromContentType } from "../media.js";
+import {
+  basename,
+  extensionForPath,
+  mediaTypeForPath,
+  mediaTypeFromContentType,
+  sniffImageMediaType,
+} from "../media.js";
 import { fetchWithSsrf } from "../fetch.js";
 import { sessionEvents } from "../session-utils.js";
+import { sessionImageRefs } from "./refs.js";
 
 /** Read a response body as bytes, aborting as soon as the cap is exceeded. */
 async function readBytesCapped(response, byteCap) {
@@ -53,22 +60,26 @@ export async function resolveImageRef(service, args, exec) {
     attachments = void 0;
   }
   if (args.attachmentId !== void 0 && args.attachmentId.length > 0) {
-    // Find the durable ref in the session's user messages.
+    // Search every message-producing event, recursing into tool results: a
+    // tool-produced image (read_image, the vision_analyze echo) is referenced
+    // by the same durable id but never appears in a user message.
     const agent = exec.agent;
     const session = agent?.session;
-    const events = sessionEvents(session);
-    for (const event of events) {
-      if (event.type !== "user/message") continue;
-      const content = event.message?.content ?? event.data?.message?.content ?? [];
-      for (const block of content) {
-        if (block?.type === "image" && String(block.attachment?.attachmentId) === String(args.attachmentId)) {
-          if (attachments === void 0) throw new Error("vision_analyze: no attachment service mounted");
-          const stored = await attachments.readImage(block.attachment, exec.signal);
-          return stored.ref;
-        }
+    const wanted = String(args.attachmentId);
+    const found = sessionImageRefs(sessionEvents(session)).find((ref) => String(ref.attachmentId) === wanted);
+    if (found !== void 0) {
+      if (attachments === void 0) throw new Error("vision_analyze: no attachment service mounted");
+      try {
+        const stored = await attachments.readImage(found, exec.signal);
+        return stored.ref;
+      } catch (error) {
+        throw new Error(
+          `vision_analyze: attachment "${wanted}" is referenced by this session but its stored image is no longer available — it may have been reclaimed by attachment GC`,
+          { cause: error },
+        );
       }
     }
-    throw new Error(`vision_analyze: attachment "${args.attachmentId}" not found in this session's messages`);
+    throw new Error(`vision_analyze: attachment "${wanted}" not found in this session's messages`);
   }
   if (args.imagePath !== void 0 && args.imagePath.length > 0) {
     // Path confinement/symlink safety is intentionally delegated to the host
@@ -83,9 +94,17 @@ export async function resolveImageRef(service, args, exec) {
     if (fs === void 0 || attachments === void 0) {
       throw new Error("vision_analyze: local image support requires the fs and attachment services");
     }
-    const mediaType = mediaTypeForPath(args.imagePath);
-    if (mediaType === void 0) {
-      throw new Error("vision_analyze: imagePath must end in .png/.jpg/.jpeg/.webp/.gif");
+    // A recognized extension declares the format; an extension-less path
+    // declares nothing and has its leading bytes sniffed after the read. An
+    // unknown non-empty extension is refused before any I/O, mirroring
+    // read_image: only the four supported extensions (or no extension at all)
+    // are accepted.
+    const declared = mediaTypeForPath(args.imagePath);
+    const extension = extensionForPath(args.imagePath);
+    if (declared === void 0 && extension !== "") {
+      throw new Error(
+        `vision_analyze: imagePath "${args.imagePath}" uses the ${extension} extension, which is not a supported image format — use .png/.jpg/.jpeg/.webp/.gif, or an extension-less file whose content is one of those formats`,
+      );
     }
     const target = await fs.resolve(args.imagePath, {
       ...(exec.agent?.session?.header?.cwd !== void 0 ? { cwd: exec.agent.session.header.cwd } : {}),
@@ -100,6 +119,20 @@ export async function resolveImageRef(service, args, exec) {
     }
     const byteCap = Math.min(attachments.imageLimits.maxImageBytes, attachments.imageLimits.maxMessageImageBytes);
     const data = await fs.readBytes(target, exec.signal, byteCap);
+    const sniffed = sniffImageMediaType(data);
+    const mediaType = declared ?? sniffed;
+    if (mediaType === void 0) {
+      throw new Error(
+        `vision_analyze: "${target.displayPath}" is not a supported image — the path declares no image extension and the bytes match none of the PNG/JPEG/WebP/GIF signatures`,
+      );
+    }
+    // A declared extension that disagrees with the bytes is refused with both
+    // facts named; a silent save would store the image under the wrong type.
+    if (declared !== void 0 && sniffed !== void 0 && sniffed !== declared) {
+      throw new Error(
+        `vision_analyze: "${target.displayPath}" declares ${declared} by its extension, but the bytes are ${sniffed} — rename the file to match its actual format or convert it`,
+      );
+    }
     try {
       return await attachments.saveImage({ data, mediaType, name: basename(target.displayPath) });
     } catch (error) {

@@ -107,7 +107,7 @@ test("B3: gcImages lstat 加固 - 跳过符号链接 bucket,受害文件保留",
   const prevHome = process.env.DSH_HOME;
   process.env.DSH_HOME = tmp;
   try {
-    const out = await gcImages(30);
+    const out = await gcImages(makeService(), 30);
     assert.equal(out.kind, "success", out.text);
     assert.equal(await fsPromises.readFile(victim, "utf8"), "precious", "外部受害文件不得被删");
     await fsPromises.lstat(objects + "/evil-bucket"); // 符号链接本身保留
@@ -135,7 +135,7 @@ test("B3: gcImages lstat 加固 - 常规旧文件删除,符号链接文件不删
   const prevHome = process.env.DSH_HOME;
   process.env.DSH_HOME = tmp;
   try {
-    const out = await gcImages(30);
+    const out = await gcImages(makeService(), 30);
     assert.equal(out.kind, "success", out.text);
     const remaining = await fsPromises.readdir(objects);
     assert.ok(!remaining.includes("oldfile"), "常规旧文件应删除,实际: " + remaining.join(","));
@@ -223,4 +223,192 @@ test("B4: installShutdownHook 可导出且幂等", () => {
   installShutdownHook(service);
   installShutdownHook(service); // 重复调用不应报错
   assert.equal(service._shutdownHookInstalled, true);
+});
+
+test("gcImages: 冻结期拒绝清扫(DELETION_FROZEN),不删任何文件", async () => {
+  const tmp = "/tmp/aux-w1-frozen-" + process.pid;
+  const objects = tmp + "/attachments/v1/objects/ab";
+  await fsPromises.mkdir(objects, { recursive: true });
+  const file = objects + "/" + "ab" + "f".repeat(62);
+  await fsPromises.writeFile(file, "OLD");
+  const old = Date.now() - 40 * 24 * 60 * 60 * 1000;
+  await fsPromises.utimes(file, new Date(old), new Date(old));
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  const service = makeService();
+  service._liveBackfillPending = new Set(["s-live"]);
+  try {
+    const out = await gcImages(service, 1);
+    assert.equal(out.kind, "error", "冻结期必须拒绝: " + out.text);
+    assert.ok(out.text.includes("DELETION_FROZEN"), "错误应带机器可读码: " + out.text);
+    assert.ok(out.text.includes("冻结"), "错误应带冻结原因: " + out.text);
+    await fsPromises.lstat(file);
+    assert.equal(
+      (await fsPromises.readdir(tmp + "/attachments/v1/objects/.trash").catch(() => [])).length,
+      0,
+      "冻结期不得产生回收动作",
+    );
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("gcImages: 非对象 service 拒绝清扫(屏障不可评估即不得删除)", async () => {
+  const tmp = "/tmp/aux-w1-noservice-" + process.pid;
+  const objects = tmp + "/attachments/v1/objects/ab";
+  await fsPromises.mkdir(objects, { recursive: true });
+  const file = objects + "/" + "ab" + "c".repeat(62);
+  await fsPromises.writeFile(file, "OLD");
+  const old = Date.now() - 40 * 24 * 60 * 60 * 1000;
+  await fsPromises.utimes(file, new Date(old), new Date(old));
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  try {
+    const out = await gcImages(30);
+    assert.equal(out.kind, "error", "缺少 service 时必须拒绝: " + out.text);
+    assert.ok(out.text.includes("DELETION_FROZEN"), out.text);
+    await fsPromises.lstat(file);
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("gcImages: 不把 objects/.trash 当 bucket 清扫(回收窗口不被 days 缩短)", async () => {
+  const tmp = "/tmp/aux-w1-trashskip-" + process.pid;
+  const v1 = tmp + "/attachments/v1";
+  const bucket = v1 + "/objects/ab";
+  const trash = v1 + "/objects/.trash";
+  await fsPromises.mkdir(bucket, { recursive: true });
+  await fsPromises.mkdir(trash, { recursive: true });
+  const old = Date.now() - 40 * 24 * 60 * 60 * 1000;
+  // A just-trashed old object: fresh ingress stamp in the name, old mtime.
+  const trashed = trash + "/" + "ab" + "e".repeat(62) + "-" + Date.now() + "-abcdef01";
+  await fsPromises.writeFile(trashed, "TRASHED");
+  await fsPromises.utimes(trashed, new Date(old), new Date(old));
+  // A normal stale object: gc-images must still sweep it.
+  const stale = bucket + "/" + "ab" + "d".repeat(62);
+  await fsPromises.writeFile(stale, "STALE");
+  await fsPromises.utimes(stale, new Date(old), new Date(old));
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  try {
+    const out = await gcImages(makeService(), 1);
+    assert.equal(out.kind, "success", out.text);
+    await fsPromises.lstat(trashed);
+    await assert.rejects(fsPromises.lstat(stale), (error) => error?.code === "ENOENT");
+    assert.ok(out.text.includes("回收站清出 0 个"), "trash 条目不得计入附件删除: " + out.text);
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("gcImages: 跳过固化(retained)附件并计数,其余旧附件照常清除", async () => {
+  const tmp = "/tmp/aux-w1-retained-" + process.pid;
+  const v1 = tmp + "/attachments/v1";
+  const objects = v1 + "/objects/ab";
+  await fsPromises.mkdir(objects, { recursive: true });
+  const old = Date.now() - 40 * 24 * 60 * 60 * 1000;
+  const retainedHash = "ab" + "e".repeat(62);
+  const freeHash = "ab" + "d".repeat(62);
+  const retainedFile = objects + "/" + retainedHash;
+  const freeFile = objects + "/" + freeHash;
+  await fsPromises.writeFile(retainedFile, "R");
+  await fsPromises.writeFile(freeFile, "F");
+  await fsPromises.utimes(retainedFile, new Date(old), new Date(old));
+  await fsPromises.utimes(freeFile, new Date(old), new Date(old));
+  await fsPromises.writeFile(
+    v1 + "/image-retention.json",
+    JSON.stringify({ version: 1, retained: ["sha256:" + retainedHash] }),
+  );
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  try {
+    const out = await gcImages(makeService(), 1);
+    assert.equal(out.kind, "success", out.text);
+    assert.ok(out.text.includes("跳过 1 个固化附件"), "结果应报告固化跳过计数: " + out.text);
+    await fsPromises.lstat(retainedFile);
+    await assert.rejects(fsPromises.lstat(freeFile), (error) => error?.code === "ENOENT");
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("gcImages: 跳过仍被会话引用的对象并计数", async () => {
+  const tmp = "/tmp/aux-w1-referenced-" + process.pid;
+  const v1 = tmp + "/attachments/v1";
+  const objects = v1 + "/objects/ab";
+  await fsPromises.mkdir(objects, { recursive: true });
+  const old = Date.now() - 40 * 24 * 60 * 60 * 1000;
+  const refHash = "ab" + "e".repeat(62);
+  const freeHash = "ab" + "d".repeat(62);
+  const refFile = objects + "/" + refHash;
+  const freeFile = objects + "/" + freeHash;
+  await fsPromises.writeFile(refFile, "R");
+  await fsPromises.writeFile(freeFile, "F");
+  await fsPromises.utimes(refFile, new Date(old), new Date(old));
+  await fsPromises.utimes(freeFile, new Date(old), new Date(old));
+  await fsPromises.writeFile(v1 + "/session-images.json", JSON.stringify({ "s-1": ["sha256:" + refHash] }));
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  try {
+    const out = await gcImages(makeService(), 1);
+    assert.equal(out.kind, "success", out.text);
+    assert.ok(out.text.includes("跳过 1 个仍被会话引用的附件"), "结果应报告引用跳过计数: " + out.text);
+    await fsPromises.lstat(refFile);
+    await assert.rejects(fsPromises.lstat(freeFile), (error) => error?.code === "ENOENT");
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("gcImages: retained 清单不可读时拒绝清扫(fail-closed)", async () => {
+  const tmp = "/tmp/aux-w1-badretained-" + process.pid;
+  const v1 = tmp + "/attachments/v1";
+  const objects = v1 + "/objects/ab";
+  await fsPromises.mkdir(objects, { recursive: true });
+  const file = objects + "/" + "ab" + "b".repeat(62);
+  await fsPromises.writeFile(file, "OLD");
+  const old = Date.now() - 40 * 24 * 60 * 60 * 1000;
+  await fsPromises.utimes(file, new Date(old), new Date(old));
+  // A directory where the retention file should be -> readFile throws EISDIR.
+  await fsPromises.mkdir(v1 + "/image-retention.json", { recursive: true });
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  try {
+    const out = await gcImages(makeService(), 1);
+    assert.equal(out.kind, "error", "不可读必须拒绝而不是当成空固化集: " + out.text);
+    assert.ok(out.text.includes("固化"), out.text);
+    await fsPromises.lstat(file);
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("gcImages: 会话归属表不可读时拒绝清扫(fail-closed)", async () => {
+  const tmp = "/tmp/aux-w1-badowner-" + process.pid;
+  const v1 = tmp + "/attachments/v1";
+  const objects = v1 + "/objects/ab";
+  await fsPromises.mkdir(objects, { recursive: true });
+  const file = objects + "/" + "ab" + "a".repeat(62);
+  await fsPromises.writeFile(file, "OLD");
+  const old = Date.now() - 40 * 24 * 60 * 60 * 1000;
+  await fsPromises.utimes(file, new Date(old), new Date(old));
+  await fsPromises.mkdir(v1 + "/session-images.json", { recursive: true });
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = tmp;
+  try {
+    const out = await gcImages(makeService(), 1);
+    assert.equal(out.kind, "error", "归属表不可读必须拒绝: " + out.text);
+    assert.ok(out.text.includes("会话归属表不可读"), out.text);
+    await fsPromises.lstat(file);
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fsPromises.rm(tmp, { recursive: true, force: true });
+  }
 });

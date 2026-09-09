@@ -11,7 +11,7 @@
 ![Version](https://img.shields.io/badge/version-0.4.4-blue)
 ![Tests](https://img.shields.io/badge/tests-370-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Platform](https://img.shields.io/badge/DSH-0.1.2--alpha.2%20~%200.1.2--rc.1-0078D4)
+![Platform](https://img.shields.io/badge/DSH-0.1.5--alpha.1-0078D4)
 
 </div>
 
@@ -208,7 +208,7 @@ node scripts/doctor.mjs    # post-update health check (does not modify anything)
 | `/aux debug <target> [N]` | Cross-session view (@this / session id / prefix / cwd) |
 | `/aux patch` | Install all patches required by the current DSH and self-heal |
 | `/aux patch --json` | Same, with structured step results |
-| `/aux model <task> [provider/model]` | View / set a task's auxiliary model |
+| `/aux model <task> [provider/model]` | View / set a task's auxiliary model (writes a single-entry chain; use the settings page's "Fallback chain" field for more levels) |
 | `/aux vision <path> <question...>` | Directly view an image from the command line |
 | `/aux test <task>` | Self-test a task route |
 | `/aux memory [n]` | View recent image analysis memory |
@@ -371,17 +371,23 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 ## Compatibility & Dependencies
 
-- **Platform**: DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 (verified on 0.1.2-alpha.2 / 0.1.2-alpha.3 / 0.1.2-alpha.4 / 0.1.2-alpha.5 / 0.1.2-rc.1); Node ≥ 20.
+- **Platform**: DSH 0.1.5-alpha.1 (single supported line on the main branch); Node ≥ 20.
+- **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are all official DSH packages (bundled with the platform); no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (370 tests); file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (569 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 
 - **image-bridge**: lets text-only main models receive pasted images while keeping thumbnails; re-run `bridge/apply-patch.mjs` after `npm update`.
-- **settings writability**: the settings page can read/write aux config; native on the DSH 0.1.2 line, rc.6 patch retired to `bridge/retired/`.
-- **session event registration channel**: `aux/llm-call` is written with `ignorable: true`; if the patch is missing, events are downgraded (not written) to protect session logs.
+- **settings writability**: the settings page can read/write aux config; native on the DSH alpha line, rc.6 patch retired to `bridge/retired/`.
+- **session event registration channel**: the four hidden events (including `aux/llm-call`) are written with `ignorable: true`; if the patch is missing, events are downgraded (not written) to protect session logs. Since DSH 0.1.5 the session migration validates historical events against a frozen vocabulary, so self-heal now applies **P12** (admits `aux/*`) and **P13** (admits official historical shapes, self-retiring once upstream ships); `dsh-aux/src/event-shapes.js` is the single source of truth for event fields — an unregistered field warns and fails the test suite.
 - **session deletion synergy**: works with `dsh-plugin-session-delete` to clean up unreferenced images when a session is deleted.
+- **image ownership & delete safety**: a `session/event` ownership hook plus a `session/created` recovery barrier (in-memory log scan); deletions are refused globally while a live session is unbackfilled (fail-closed, visible in `/aux status`); reclaim moves objects into `objects/.trash/` (7-day recovery window).
+- **GC debt**: an `attachment-refs.json` sidecar plus official `imageHostPath` reclamation and full `.ext` hard-link cleanup; the derived `request-images/` cache is reclaimed by mtime LRU under a total cap (256 MiB by default, `requestImagesMaxMiB`).
+- **Vision delivery route**: `aux.visionRoute` (aux by default / native-when-capable / auto); native delivery only applies to routes whitelisted in `aux.nativeRoutes`, and `forceAuxVision` wins.
+- **Multi-level fallback chain**: `aux.tasks.<task>.models` is an ordered array of "provider/model" entries (primary → backup 1 → backup 2 …); while it is non-empty the singular `provider/model` is ignored (`/aux status` warns). `/aux model <task> <provider/model>` writes a **single-entry chain** — add more levels in the settings page's "Fallback chain" field (one per line) or in `settings.yaml`. The chain tail still considers the main model per `fallbackToMain` / `visionFallbackToMain`.
+- **Vision polish (Phase 3)**: failed entries report the reason and whether a retry helps (rate-limit/timeout/connection retry once in-tool); an extension-less `imagePath` is sniffed by magic bytes (aligned with `read_image`); animated GIFs are analyzed from the first frame; direct fetches pin the validated IP (closing DNS rebinding); `aux.tasks.<task>.models` provides an ordered fallback chain; the `vision_analyze` conversation card shows a `【图N/共M】` badge with thumbnail and conclusion.
 - **subagent-bridge**: transparently takes over native `subagent` and `workflow` parallel `agent()` children.
 
 ### Minimal / Anchored Standard compatibility
@@ -398,7 +404,7 @@ Before the first persistent `tool/call`, only the Minimal tool pair is exposed a
 | [TESTING.md](./TESTING.md) | Test file list and baseline |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guide |
 | [CREDITS.md](./CREDITS.md) | Credits & acknowledgements |
-| [docs/design/](./docs/design/) | Feature design docs (image library / bridges / crawl / vision agent / attachment GC) |
+| [docs/design/](./docs/design/) | Feature design docs (image library / bridges / crawl / vision agent / attachment GC / upstream requests) |
 | [docs/archive/](./docs/archive/) | v0.1-era process docs (PRD / reviews / upstream proposals) |
 | [AI.md](./dsh-aux/AI.md) | AI agent install guide |
 
@@ -414,7 +420,7 @@ If the image block's attachment object has already been GC/cleaned, or none of t
 
 **Q3: Do I need to configure a model for dsh-aux?**
 
-No. dsh-aux is **zero-config**: it works without any model configuration and falls back to the session's main model. You can assign a dedicated model later via the settings page or `/aux model <task> <provider/model>`.
+No. dsh-aux is **zero-config**: it works without any model configuration and falls back to the session's main model. You can assign a dedicated model later via the settings page or `/aux model <task> <provider/model>`; for multi-level fallback, list several "provider/model" entries in order in the settings page's "Fallback chain" field or in `aux.tasks.<task>.models`.
 
 ## Related Projects
 

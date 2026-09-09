@@ -13,6 +13,7 @@ import { stat } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { resolvePackageFile, readPackageFile } from "./bridge-locate.js";
 import { imageBridgeStatus } from "./image-bridge.js";
+import { deletionBlockReason } from "./images/ownership.js";
 import { subagentBridgeStatus, workflowBridgeStatus } from "./subagent-bridge.js";
 import { isCompactionBridgeInstalled, isCompactionTaskConfigured } from "./compaction-bridge.js";
 import { isSkillTaskConfigured, skillBridgeStatus } from "./skill-bridge.js";
@@ -29,18 +30,19 @@ const PATCH_PACKAGES = [
   "dsh-workflow-worker-thread",
   "dsh-tool-skill",
   "dsh-session",
+  "dsh-session-format-v0-to-v1",
 ];
 
 /**
  * Patch ledger: one row per local bridge patch that dsh-aux maintains.
- * Main branch supports DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1.
+ * Main branch supports DSH 0.1.5-alpha.1 (single version).
  * Retired legacy patches (host-apiproxy / rc.6 settings) live in
  * `bridge/retired/` and are intentionally not listed here.
  *
  * Each entry:
  * - `id`: stable key used by the UI and status payloads.
  * - `group`: P-number ledger family (P1-P6/P11 bridge apply-patch, P7 session,
- *   P8 whitelist).
+ *   P8 whitelist, P12/P13 v0 format admissions).
  * - `pkg`: target DSH package that the patch would modify.
  * - `mark`: source marker string that indicates the patch is applied.
  * - `description`: short human-readable purpose.
@@ -102,6 +104,26 @@ const PATCH_LEDGER = [
     mark: "aux/llm-call",
     description: "aux/llm-call 事件白名单",
   },
+  {
+    id: "format-aux-events",
+    group: "P12",
+    pkg: "dsh-session-format-v0-to-v1",
+    marks: [
+      '"aux/llm-call": disposition(',
+      '"aux/debug": disposition(',
+      '"aux/platform-status": disposition(',
+      '"aux/image-library": disposition(',
+    ],
+    description: "v0 冻结词表放行 aux/* 事件(0.1.5 旧会话迁移)",
+  },
+  {
+    id: "format-official-gaps",
+    group: "P13",
+    pkg: "dsh-session-format-v0-to-v1",
+    marks: ['"thinking/language": disposition(', '["preset"], ["origin"]'],
+    description: "官方历史写法临时放行(上游收编后自动退役)",
+    required: false,
+  },
 ];
 
 /** Read one patched package's lib source once, returning undefined if absent. */
@@ -131,7 +153,8 @@ export async function collectPatchLedger() {
       sources.set(patch.pkg, src);
     }
     const present = src !== void 0;
-    const installed = present && src.includes(patch.mark);
+    const marks = patch.marks ?? [patch.mark];
+    const installed = present && marks.every((mark) => src.includes(mark));
     const state = !present ? "unknown" : installed ? "installed" : "missing";
     rows.push({
       id: patch.id,
@@ -140,7 +163,7 @@ export async function collectPatchLedger() {
       description: patch.description,
       state,
       installed,
-      required: true,
+      required: patch.required !== false,
       present,
     });
   }
@@ -244,6 +267,39 @@ function item(entry) {
  * Status for one model-facing tool. Tools are available whenever the plugin
  * is mounted; only the user's mode switch changes their state.
  */
+/**
+ * Status for the image-lifecycle delete gate.
+ *
+ * `ready` means every live session's image ownership is known and deletion may
+ * proceed; `frozen` is the fail-closed state — an unbackfilled live session's
+ * references are unknowable, so no deletion is allowed until the retry
+ * succeeds. The state is self-healing and observable here.
+ */
+function imageLifecycleStatusItem(service) {
+  const blockedReason = deletionBlockReason(service);
+  if (blockedReason === void 0) {
+    return item({
+      key: "imageLifecycle",
+      kind: "lifecycle",
+      mode: "aux",
+      state: "enabled",
+      reason: "ownership-complete",
+      action: "none",
+    });
+  }
+  // "unknown" (not "unavailable"): the gate is self-healing and must not be
+  // swept into the patch/issue flow.
+  return item({
+    key: "imageLifecycle",
+    kind: "lifecycle",
+    mode: "aux",
+    state: "unknown",
+    reason: "ownership-unknown",
+    action: "wait",
+    detail: blockedReason,
+  });
+}
+
 function toolStatus(service, key) {
   const mode = service.toolBridgeMode(key);
   if (mode === "native") {
@@ -571,6 +627,7 @@ export async function collectPlatformStatus(service) {
   const items = [];
   for (const key of TOOL_KEYS) items.push(toolStatus(service, key));
   items.push(imageBridgeStatusItem(service, image));
+  items.push(imageLifecycleStatusItem(service));
   items.push(filePatchBridgeStatusItem(service, "subagentBridge", sub));
   items.push(filePatchBridgeStatusItem(service, "workflowBridge", workflow));
   items.push(compactionBridgeStatusItem(service));
@@ -597,6 +654,14 @@ export async function collectPlatformStatus(service) {
 
   const warnings = [];
   const enabled = service._enabled ?? {};
+  if ((service.forceAuxVision ?? false) === true && (service.visionRoute ?? "aux") !== "aux") {
+    // forceAuxVision wins at delivery time; the configured route is dead.
+    warnings.push({
+      code: "force-aux-vision-overrides-route",
+      keys: ["forceAuxVision", "visionRoute"],
+      reason: "force-aux-vision-overrides-route",
+    });
+  }
   if (enabled.vision_analyze === "native" && enabled.imageBridge !== "native") {
     warnings.push({
       code: "vision-disabled-image-bridge-enabled",
@@ -618,6 +683,15 @@ export async function collectPlatformStatus(service) {
     },
     eventsSupported: events,
     patchLedger,
+    visionRoute: {
+      mode: service.visionRoute ?? "aux",
+      nativeRoutes: Array.isArray(service.nativeRoutes) ? [...service.nativeRoutes] : [],
+      forceAuxVision: service.forceAuxVision === true,
+    },
+    imageLifecycle: {
+      deletionReady: deletionBlockReason(service) === void 0,
+      blockedReason: deletionBlockReason(service),
+    },
     items,
     warnings,
     issues,

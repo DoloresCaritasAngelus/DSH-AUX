@@ -114,11 +114,13 @@ test("resolveImageRef: new API snapshotEvents still finds attachmentId in sessio
   };
   const session = newSession([
     {
+      // 真实会话日志形状:user/message 的 data 是扁平 UserMessage。
       type: "user/message",
       data: {
-        message: {
-          content: [{ type: "image", attachment: { attachmentId: "sha256:abc" } }],
-        },
+        content: [{ type: "image", attachment: { attachmentId: "sha256:abc" } }],
+        source: { kind: "user" },
+        role: "user",
+        id: "msg-compat",
       },
     },
   ]);

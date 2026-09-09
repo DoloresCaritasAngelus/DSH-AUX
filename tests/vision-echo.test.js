@@ -92,8 +92,8 @@ test("trace echo: 多图 render 按序 text→image 交替,失败项只有 text"
   const value = {
     analyses: [
       { analysis: "one", provider: "prov", model: "mod", attachment: FULL_REF },
-      { analysis: "vision_analyze: image failed: boom", provider: "", model: "" },
-      { analysis: "three", provider: "prov", model: "mod", attachment: BARE_REF },
+      { analysis: "vision_analyze: image failed: boom", provider: "", model: "", mode: "aux" },
+      { analysis: "three", provider: "prov", model: "mod", attachment: BARE_REF, mode: "aux" },
     ],
     provider: "prov",
     model: "mod",
@@ -109,7 +109,7 @@ test("trace echo: 多图 render 按序 text→image 交替,失败项只有 text"
 
 test("trace echo: 输出 schema 锁形 —— ref 多一字段或少一必填字段都被拒", () => {
   const schema = captureVisionDefinition().output.schema;
-  const single = { analysis: "a", provider: "prov", model: "mod", attachment: FULL_REF };
+  const single = { analysis: "a", provider: "prov", model: "mod", mode: "aux", attachment: FULL_REF };
   assert.deepEqual(validateJsonSchemaValue(schema, single, "value"), [], "完整 ref 应通过");
   const extra = { ...single, attachment: { ...FULL_REF, extraField: 1 } };
   assert.ok(validateJsonSchemaValue(schema, extra, "value").length > 0, "多字段 ref 应被拒");
@@ -122,12 +122,15 @@ test("trace echo: 输出 schema 锁形 —— ref 多一字段或少一必填字
   assert.deepEqual(validateJsonSchemaValue(schema, bare, "value"), [], "无可选字段的 ref 应通过");
 });
 
+// 形状级用例:这里手工构造的值是 schema 接受域的说明。真实 runVision 返回是否
+// 满足该 schema 由 tests/vision-batch-mode.test.js 端到端锁定(含顶层 mode)。
 test("trace echo: 输出 schema 接受无 attachment 的失败条目(多图)", () => {
   const schema = captureVisionDefinition().output.schema;
   const value = {
-    analyses: [{ analysis: "vision_analyze: image failed: boom", provider: "", model: "" }],
+    analyses: [{ analysis: "vision_analyze: image failed: boom", provider: "", model: "", mode: "aux" }],
     provider: "",
     model: "",
+    mode: "aux",
   };
   assert.deepEqual(validateJsonSchemaValue(schema, value, "value"), []);
 });
@@ -175,18 +178,35 @@ test("trace echo: 回显块通过官方 Session 种子校验且结构原样存�
   assert.equal(Object.isFrozen(inner[0]), true, "入库快照应深冻结");
 });
 
-test("trace echo: presentationMeta 统一产出 attachments 数组", () => {
+test("trace echo: presentationMeta 产出 attachments 数组与同序 ordinals", () => {
   const def = captureVisionDefinition();
+  const messageOrdinal = { scope: "message", index: 1, total: 4 };
+  const callOrdinal = { scope: "call", index: 3, total: 3 };
   const multi = {
     analyses: [
-      { analysis: "one", provider: "prov", model: "mod", attachment: FULL_REF },
+      { analysis: "one", provider: "prov", model: "mod", attachment: FULL_REF, imageOrdinal: messageOrdinal },
       { analysis: "failed", provider: "", model: "" },
-      { analysis: "three", provider: "prov", model: "mod", attachment: BARE_REF },
+      { analysis: "three", provider: "prov", model: "mod", attachment: BARE_REF, imageOrdinal: callOrdinal },
     ],
     provider: "prov",
     model: "mod",
   };
-  assert.deepEqual(def.output.presentationMeta({}, multi), { attachments: [FULL_REF, BARE_REF] });
-  const single = { analysis: "a", provider: "prov", model: "mod", attachment: BARE_REF };
-  assert.deepEqual(def.output.presentationMeta({}, single), { attachments: [BARE_REF] });
+  assert.deepEqual(def.output.presentationMeta({}, multi), {
+    attachments: [FULL_REF, BARE_REF],
+    ordinals: [messageOrdinal, callOrdinal],
+  });
+  const single = {
+    analysis: "a",
+    provider: "prov",
+    model: "mod",
+    attachment: BARE_REF,
+    imageOrdinal: messageOrdinal,
+  };
+  assert.deepEqual(def.output.presentationMeta({}, single), {
+    attachments: [BARE_REF],
+    ordinals: [messageOrdinal],
+  });
+  // 缺 ordinal 的条目保留 null 占位,索引仍与 attachments 对齐
+  const legacy = { analysis: "a", provider: "prov", model: "mod", attachment: BARE_REF };
+  assert.deepEqual(def.output.presentationMeta({}, legacy), { attachments: [BARE_REF], ordinals: [null] });
 });

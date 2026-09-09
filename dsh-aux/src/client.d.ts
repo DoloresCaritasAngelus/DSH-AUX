@@ -23,13 +23,25 @@ export interface AuxStatusProjectionWire {
   tasks: Record<string, AuxStatusCallWire>;
 }
 
+/** Routing facts an `aux/llm-call` event adds beyond the projection wire. */
+export interface AuxCallRoutingFacts {
+  /** Ordered "provider/model" candidates the call could use (the fallback chain). */
+  candidates?: string[];
+  /** Index of the candidate that answered (success events only). */
+  selectedIndex?: number;
+  /** Per-attempt failure kinds, comma-separated (failure events only). */
+  errorCode?: string;
+  purpose?: string;
+  mode?: string;
+}
+
 /** One `aux/llm-call` event read from session history for chronological chip selection. */
 export interface AuxCallHistoryEvent {
   event: {
     type: "aux/llm-call";
     seq: number;
     time: number;
-    data: AuxStatusCallWire;
+    data: AuxStatusCallWire & AuxCallRoutingFacts;
   };
 }
 

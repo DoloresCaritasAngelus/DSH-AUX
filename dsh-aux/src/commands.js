@@ -23,7 +23,7 @@ import { runVision } from "./tools/vision.js";
 import { runWebExtract } from "./tools/web-extract.js";
 import { runWebCrawl } from "./tools/web-crawl.js";
 import { runCompress } from "./tools/compress.js";
-import { sessionEvents } from "./session-utils.js";
+import { listSessionSnapshots, readSessionEvents, sessionEvents } from "./session-utils.js";
 
 /** Human-readable reason text for a status item/issue. */
 function statusReasonText(reason) {
@@ -217,7 +217,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
     if (!Number.isInteger(days) || days <= 0) {
       return { kind: "error", text: "用法: /aux gc-images [days] — 清理超过 N 天的附件图片(默认 30)" };
     }
-    return await gcImages(days);
+    return await gcImages(service, days);
   }
   if (sub === "model") {
     return await handleModelCommand(service, args.slice(1));
@@ -263,6 +263,12 @@ export async function handleAuxCommand(service, agent, rawInput) {
     }
     lines.push(`  - forceAuxVision: ${service.forceAuxVision ? "开启(原生图片也走 AUX 视觉)" : "关闭"}`);
     lines.push(
+      `  - visionRoute: ${service.visionRoute ?? "aux"}(native 白名单 ${(service.nativeRoutes ?? []).length} 条)`,
+    );
+    if (service.forceAuxVision === true && (service.visionRoute ?? "aux") !== "aux") {
+      lines.push("  - ⚠️ forceAuxVision 开启:visionRoute 的 native 分支不会生效(交付强制走 aux)");
+    }
+    lines.push(
       `  - visionFallbackToMain: ${service.visionFallbackToMain ? "开启(失败回退主模型)" : "关闭(视觉失败直接失败)"}`,
     );
     for (const entry of status.items ?? []) {
@@ -276,9 +282,14 @@ export async function handleAuxCommand(service, agent, rawInput) {
     );
     for (const entry of service.describe()) {
       const primary = entry.primary ? `${entry.primary.provider}/${entry.primary.model}` : "(未配置 → 主模型)";
+      const chain = Array.isArray(entry.chain) ? entry.chain : [];
+      const chainText = chain.length > 1 ? " | 链: " + chain.map((r) => `${r.provider}/${r.model}`).join(" → ") : "";
       lines.push(
-        `  - ${entry.label}(${entry.task}): ${primary} | timeout ${entry.timeoutMs}ms | 并发 ${entry.maxConcurrency}`,
+        `  - ${entry.label}(${entry.task}): ${primary}${chainText} | timeout ${entry.timeoutMs}ms | 并发 ${entry.maxConcurrency}`,
       );
+      if (entry.singularIgnored === true) {
+        lines.push(`      ⚠ tasks.${entry.task}.models 已配置 → 单数 provider/model 被忽略(仅链生效)`);
+      }
     }
     const recent = recentCalls(agent);
     if (recent.length > 0) {
@@ -288,8 +299,11 @@ export async function handleAuxCommand(service, agent, rawInput) {
         const callState = call.ok ? "成功" : "失败";
         const fallback = call.fallbackUsed ? " (已降级)" : "";
         const error = call.ok ? "" : ` [${call.errorCode ?? "error"}]`;
+        // Delivery route: native entries are image hand-offs to the main
+        // model, not auxiliary-model calls (reuses the aux/llm-call event).
+        const mode = call.mode === "native" ? " [native 交付]" : "";
         lines.push(
-          `  - ${call.task}: ${call.provider}/${call.model} ${callState}${fallback}${error} ${call.durationMs}ms`,
+          `  - ${call.task}: ${call.provider}/${call.model} ${callState}${mode}${fallback}${error} ${call.durationMs}ms`,
         );
       }
     }
@@ -309,7 +323,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
   }
   return {
     kind: "error",
-    text: "用法: /aux status [--json] — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux debug [N] — 查看内容真相; /aux patch — 重打补丁; /aux model <task> [provider/model] — 查看或设置任务的辅助模型",
+    text: '用法: /aux status [--json] — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux debug [N] — 查看内容真相; /aux patch — 重打补丁; /aux model <task> [provider/model] — 查看或设置任务的辅助模型(设置时写成单元素降级链,可在设置页的"降级链"字段加长)',
   };
 }
 
@@ -402,18 +416,15 @@ async function resolveDebugTarget(service, raw, currentId) {
   } catch {
     sp = void 0;
   }
-  if (!sp || typeof sp.list !== "function") {
+  if (!sp) {
     return { error: { kind: "error", text: "sessionPersistence 不可用,无法解析目标会话" } };
   }
-  let headers;
-  try {
-    headers = await sp.list();
-  } catch (error) {
-    return { error: { kind: "error", text: "读取会话列表失败: " + (error?.message ?? String(error)) } };
-  }
+  // Stored-session snapshots carry their metadata under `header` on the 0.1.5
+  // handle seam and inline on the older list API; normalize once here.
+  const headers = (await listSessionSnapshots(sp)).map((entry) => entry?.header ?? entry ?? {});
   const exact = headers.find((h) => h.id === token);
   if (exact !== void 0) return { id: exact.id, label: exact.id };
-  const idMatches = headers.filter((h) => h.id.startsWith(token));
+  const idMatches = headers.filter((h) => typeof h.id === "string" && h.id.startsWith(token));
   if (idMatches.length === 1) return { id: idMatches[0].id, label: idMatches[0].id };
   if (idMatches.length > 1) {
     return {
@@ -496,15 +507,14 @@ export async function handleDebugCommand(service, agent, args) {
     } catch {
       sp = void 0;
     }
-    if (!sp || typeof sp.inspect !== "function") {
+    if (!sp) {
       return { kind: "error", text: "sessionPersistence 不可用,无法读取目标会话" };
     }
-    try {
-      const inspection = await sp.inspect(targetId);
-      events = inspection?.events ?? [];
-    } catch (error) {
-      return { kind: "error", text: `读取会话 ${targetLabel} 失败: ${error?.message ?? String(error)}` };
+    const stored = await readSessionEvents(sp, targetId);
+    if (stored === void 0) {
+      return { kind: "error", text: `读取会话 ${targetLabel} 失败: 持久化日志不可读` };
     }
+    events = stored;
   }
   const debugEvents = events.filter((event) => event?.type === AUX_DEBUG_EVENT);
   if (debugEvents.length === 0) {
@@ -632,7 +642,7 @@ export async function handleModelCommand(service, args) {
   if (!isBuiltin && custom === void 0) {
     return {
       kind: "error",
-      text: `用法: /aux model <task> [provider/model] — task ∈ {${AUX_TASKS.join(", ")}}`,
+      text: `用法: /aux model <task> [provider/model] — task ∈ {${AUX_TASKS.join(", ")}};设置时落成单元素降级链,多级链请在设置页“降级链”字段填写`,
     };
   }
   // Custom tasks are view-only through /aux model; their route is fixed by
@@ -664,12 +674,26 @@ export async function handleModelCommand(service, args) {
   }
   const currentSection = service._source?.() ?? {};
   const tasks = { ...(currentSection.tasks ?? {}) };
-  tasks[task] = { ...(tasks[task] ?? {}), provider, model };
+  // The choice is written as a single-entry chain: a chain wins over the
+  // singular fields, and only `models` can also override a chain coming from
+  // plugin config (clearing a settings-level list would not). Users extend the
+  // chain afterwards in the settings page's chain field.
+  // The effective chain (plugin + settings) tells the user whether their
+  // existing chain is being replaced, not just the settings-level list.
+  const previousChain = Array.isArray(service._merged?.[task]?.models) ? service._merged[task].models : [];
+  const nextEntry = { ...(tasks[task] ?? {}), models: [provider + "/" + model] };
+  delete nextEntry.provider;
+  delete nextEntry.model;
+  tasks[task] = nextEntry;
   try {
     await settings.replace(AUX_SETTINGS_NAMESPACE, { ...currentSection, tasks });
     // Recompute so the status view reflects the change immediately.
     service._recomputeMerged();
-    return { kind: "success", text: `辅助模型 [${task}] 已设为 ${provider}/${model},下一请求生效。` };
+    const replaced = previousChain.length > 1 ? "(原降级链已替换为单元素)" : "";
+    return {
+      kind: "success",
+      text: `辅助模型 [${task}] 已设为 ${provider}/${model}(单元素链)${replaced},下一请求生效。`,
+    };
   } catch (error) {
     return { kind: "error", text: `aux: 写入设置失败: ${error?.message ?? String(error)}` };
   }

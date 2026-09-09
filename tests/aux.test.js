@@ -2261,7 +2261,7 @@ test("web_extract 工具: 抓取失败(HTTP 500)时报错", async () => {
   await assert.rejects(() => tool.execute({ url: "https://example.com/error" }, exec), /HTTP 500/);
 });
 
-test("web_extract 工具: 无 web provider 时回退全局 fetch 并清洗 HTML", async () => {
+test("web_extract 工具: 无 web provider 时回退直连传输并清洗 HTML", async () => {
   // 独立 harness:web 服务抛"no usable web provider"
   const ctx = new Context();
   const streams = [];
@@ -2327,9 +2327,9 @@ test("web_extract 工具: 无 web provider 时回退全局 fetch 并清洗 HTML"
   const fiber = ctx.plugin(AuxLlmService, {});
   await fiber;
   await settle();
-  // 打桩全局 fetch
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url, opts) => ({
+  // 打桩直连传输(service 缝)
+  const originalTransport = ctx.auxLlm._httpRequest;
+  ctx.auxLlm._httpRequest = async (url) => ({
     ok: true,
     status: 200,
     url: String(url),
@@ -2359,7 +2359,7 @@ test("web_extract 工具: 无 web provider 时回退全局 fetch 并清洗 HTML"
     assert.ok(userText.includes("回退页面"));
     assert.ok(userText.includes("bold"));
   } finally {
-    globalThis.fetch = originalFetch;
+    ctx.auxLlm._httpRequest = originalTransport;
   }
 });
 
@@ -2390,16 +2390,27 @@ test("web_extract 工具: allowInternalUrls 配置为 true 时允许内网 URL",
     signal: new AbortController().signal,
     agent: { session: makeSession(), options: { provider: "opencode-go", model: "deepseek-v4-flash" } },
   };
-  const value = await tool.execute({ url: "http://127.0.0.1:3080/internal", maxChars: 8000 }, exec);
-  assert.equal(value.url, "http://127.0.0.1:3080/internal");
-  assert.equal(value.provider, "opencode-go");
+  const originalTransport = ctx.auxLlm._httpRequest;
+  ctx.auxLlm._httpRequest = async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => "text/html" },
+    text: async () => "<html><body>INTERNAL</body></html>",
+  });
+  try {
+    const value = await tool.execute({ url: "http://127.0.0.1:3080/internal", maxChars: 8000 }, exec);
+    assert.equal(value.url, "http://127.0.0.1:3080/internal");
+    assert.equal(value.provider, "opencode-go");
+  } finally {
+    ctx.auxLlm._httpRequest = originalTransport;
+  }
 });
 
 test("SSRF: 手动重定向到内网地址时在请求前拒绝", async () => {
   const { ctx } = await makeHarness();
-  const originalFetch = globalThis.fetch;
+  const originalTransport = ctx.auxLlm._httpRequest;
   let internalFetched = false;
-  globalThis.fetch = async (input, opts) => {
+  ctx.auxLlm._httpRequest = async (input) => {
     const url = String(input);
     if (url === "https://public.example/redirect") {
       return { ok: false, status: 302, headers: { get: () => "http://127.0.0.1:3080/secret" }, text: async () => "" };
@@ -2418,7 +2429,7 @@ test("SSRF: 手动重定向到内网地址时在请求前拒绝", async () => {
     );
     assert.equal(internalFetched, false, "重定向到内网地址时不应发出实际请求");
   } finally {
-    globalThis.fetch = originalFetch;
+    ctx.auxLlm._httpRequest = originalTransport;
   }
 });
 
@@ -2901,10 +2912,14 @@ test("vision_analyze 工具: 多图时 question 仍必填", async () => {
   assert.equal(streams.length, 0, "不应发起辅助调用");
 });
 
-test("visionSystemPrompt: 含 GIF 动画的条件引导(不虚构静态图动作)", () => {
-  const p = visionSystemPrompt();
-  assert.ok(p.includes("ANIMATED GIF"), "应包含 GIF 引导");
-  assert.ok(p.includes("do not invent motion for a static image"), "应禁止静态图虚构动作");
+test("GIF 契约: prompt 不再承诺动图时序,工具描述写明仅分析首帧", async () => {
+  const prompt = visionSystemPrompt();
+  assert.ok(!/ANIMATED GIF|temporal|motion/i.test(prompt), "prompt 不得再要求描述动图时序");
+  const { tools } = await makeHarness();
+  const tool = tools.find((t) => t.name === "vision_analyze");
+  assert.ok(tool, "vision_analyze 应已注册");
+  assert.match(tool.description, /Animated GIFs are analyzed from their first frame only/);
+  assert.match(tool.description, /not visible to the model/);
 });
 
 test("事件记录: aux/llm-call 以 ignorable 标记写入(白名单外事件可安全读回)", async () => {
@@ -3017,4 +3032,179 @@ test("事件记录: 检测函数在候选全部缺失时安全返回 false 不�
   assert.equal(allMissing, true, "隔离布局下所有候选都应不存在");
   const supported = await sessionEventsSupported(ctx.auxLlm);
   assert.equal(typeof supported, "boolean", "检测应返回布尔值且不抛错");
+});
+
+/** Wrap ctx.llm.stream so one model fails; returns the per-call route log. */
+function failRoute(ctx, failingModel, makeError) {
+  const original = ctx.llm.stream.bind(ctx.llm);
+  const calls = [];
+  ctx.llm.stream = (options) => {
+    calls.push(options.provider + "/" + options.model);
+    if (options.model === failingModel) {
+      // An async iterable whose first pull throws (a generator without yield
+      // trips eslint's require-yield).
+      return {
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              throw makeError();
+            },
+          };
+        },
+      };
+    }
+    return original(options);
+  };
+  return calls;
+}
+
+test("降级链: 主选限流后按序落到备选,事件记录整链与作答下标", async () => {
+  const { ctx } = await makeHarness({ tasks: { compress: { models: ["p/primary", "p/backup"] } } });
+  const calls = failRoute(ctx, "primary", () => {
+    const error = new Error("429 too many requests");
+    error.status = 429;
+    return error;
+  });
+  const session = makeSession();
+  const result = await ctx.auxLlm.call("compress", {
+    messages: [{ content: [{ type: "text", text: "hi" }] }],
+    session,
+  });
+  assert.equal(result.provider, "p");
+  assert.equal(result.model, "backup");
+  assert.deepEqual(calls, ["p/primary", "p/backup"], "应按序尝试链");
+  const event = session.events.find((entry) => entry.type === AUX_CALL_EVENT);
+  assert.deepEqual(event.data.candidates, ["p/primary", "p/backup", "opencode-go/deepseek-v4-flash"]);
+  assert.equal(event.data.selectedIndex, 1, "作答者是链上第 2 个候选");
+  assert.equal(event.data.fallbackUsed, true);
+});
+
+test("降级链: 冷却中的主选被跳过,不发起调用", async () => {
+  const { ctx } = await makeHarness({ tasks: { compress: { models: ["p/primary", "p/backup"] } } });
+  const calls = failRoute(ctx, "primary", () => new Error("must not be called"));
+  ctx.auxLlm._cooldown.recordFailure("p", "primary");
+  ctx.auxLlm._cooldown.recordFailure("p", "primary");
+  assert.equal(ctx.auxLlm._cooldown.recordFailure("p", "primary"), true, "三次失败进入冷却");
+  const result = await ctx.auxLlm.call("compress", {
+    messages: [{ content: [{ type: "text", text: "hi" }] }],
+    session: makeSession(),
+  });
+  assert.equal(result.model, "backup");
+  assert.deepEqual(calls, ["p/backup"], "冷却候选不得发起调用");
+});
+
+test("降级链: 能力门在链中间生效(文本候选跳过,图像候选作答)", async () => {
+  const { ctx } = await makeHarness({
+    tasks: { vision: { models: ["opencode-go/deepseek-v4-flash", "opencode-go/kimi-k2.7-code"] } },
+  });
+  const calls = failRoute(ctx, "never", () => new Error("unused"));
+  const session = makeSession();
+  const result = await ctx.auxLlm.call("vision", {
+    messages: [
+      {
+        content: [
+          { type: "image", attachment: { attachmentId: "a" } },
+          { type: "text", text: "q" },
+        ],
+      },
+    ],
+    session,
+  });
+  assert.equal(result.model, "kimi-k2.7-code");
+  assert.deepEqual(calls, ["opencode-go/kimi-k2.7-code"], "文本候选不得发起调用");
+  const event = session.events.find((entry) => entry.type === AUX_CALL_EVENT);
+  assert.deepEqual(event.data.candidates, ["opencode-go/deepseek-v4-flash", "opencode-go/kimi-k2.7-code"]);
+  assert.equal(event.data.selectedIndex, 1);
+});
+
+test("降级链: 单数配置等价于单元素链(向后兼容)", async () => {
+  const { ctx } = await makeHarness({ tasks: { compress: { provider: "p", model: "single" } } });
+  const row = ctx.auxLlm.describe().find((entry) => entry.task === "compress");
+  assert.deepEqual(row.chain, [{ provider: "p", model: "single" }]);
+  assert.equal(row.chainSource, "single");
+  assert.equal(row.singularIgnored, false);
+  assert.deepEqual(row.primary, { provider: "p", model: "single" });
+});
+
+test("降级链: models 优先于单数,status 输出整链与忽略警告", async () => {
+  const { ctx, commands } = await makeHarness({
+    tasks: { compress: { provider: "ignored", model: "ignored-model", models: ["p/one", "p/two"] } },
+  });
+  const row = ctx.auxLlm.describe().find((entry) => entry.task === "compress");
+  assert.deepEqual(row.chain, [
+    { provider: "p", model: "one" },
+    { provider: "p", model: "two" },
+  ]);
+  assert.equal(row.chainSource, "models");
+  assert.equal(row.singularIgnored, true);
+  assert.deepEqual(row.models, ["p/one", "p/two"]);
+  const out = await commands[0].handler({ agent: void 0, rawInput: "status" });
+  assert.equal(out.kind, "success");
+  assert.ok(out.text.includes("链: p/one → p/two"), out.text);
+  assert.ok(out.text.includes("单数 provider/model 被忽略"), out.text);
+});
+
+test("/aux model: 选择写成单元素链,可覆盖已有链", async () => {
+  const { ctx, commands } = await makeHarness({ tasks: { compress: { models: ["p/one", "p/two"] } } });
+  const replaced = [];
+  ctx.get("settings").replace = async (ns, section) => {
+    replaced.push({ ns, section });
+  };
+  const out = await commands[0].handler({ agent: void 0, rawInput: "model compress opencode-go/glm-5.2" });
+  assert.equal(out.kind, "success", out.text);
+  assert.match(out.text, /原降级链已替换为单元素/);
+  const entry = replaced[0].section.tasks.compress;
+  assert.deepEqual(entry.models, ["opencode-go/glm-5.2"], "选择必须落成单元素链(否则插件链仍会胜出)");
+  assert.equal(entry.provider, void 0);
+  assert.equal(entry.model, void 0);
+  assert.equal(replaced[0].ns, "aux");
+  // 其他任务条目必须原样保留(只改本任务)
+  assert.deepEqual(replaced[0].section.tasks.vision ?? {}, {});
+});
+
+/** 真实 user/message 事件:data 是扁平 UserMessage(A42 的会话日志形状)。 */
+function pastedImageEvent(attachmentId, seq = 9) {
+  return {
+    type: "user/message",
+    seq,
+    time: 1757300000000,
+    data: {
+      content: [
+        { type: "image", attachment: { attachmentId, mediaType: "image/png", bytes: 12, width: 8, height: 8 } },
+        { type: "text", text: "测试." },
+      ],
+      source: { kind: "user" },
+      role: "user",
+      id: "msg-" + seq,
+    },
+    surfaceOp: "append",
+  };
+}
+
+test("归属钩子: 真实 user/message 形状的粘贴图被登记(A42 影响 ②)", async () => {
+  const { ctx } = await makeHarness();
+  const session = makeSession();
+  const attachmentId = "sha256:6d5f" + "a".repeat(60);
+  ctx.emit("session/event", session, pastedImageEvent(attachmentId));
+  await pollUntil(() => ctx.auxLlm._sessionImages.get(session.id)?.has(attachmentId) === true);
+  assert.equal(
+    ctx.auxLlm._sessionImages.get(session.id).has(attachmentId),
+    true,
+    "用户粘贴图必须被登记(否则图库判为 orphan)",
+  );
+});
+
+test("归属钩子: agent/inbox/spliced 的 inserted 不计入(避免重复)", async () => {
+  const { ctx } = await makeHarness();
+  const session = makeSession();
+  const attachmentId = "sha256:7e6a" + "b".repeat(60);
+  ctx.emit("session/event", session, {
+    type: "agent/inbox/spliced",
+    seq: 3,
+    time: 1757300002000,
+    data: { inserted: [{ content: [{ type: "image", attachment: { attachmentId } }] }] },
+  });
+  await settle();
+  const owned = ctx.auxLlm._sessionImages.get(session.id);
+  assert.equal(owned === void 0 || owned.has(attachmentId) === false, true, "spliced 不得登记");
 });

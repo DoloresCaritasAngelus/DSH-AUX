@@ -49,8 +49,9 @@ window.__ModuleLoader__.load({
       ".ax-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 16px}",
       ".ax-row{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--dsw-alias-label-secondary);min-width:0}",
       ".ax-row label{font-size:12px;color:var(--dsw-alias-label-tertiary)}",
-      ".ax-row input,.ax-row select{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-strong);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}",
-      ".ax-row input:focus-visible,.ax-row select:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:1px}",
+      ".ax-row input,.ax-row select,.ax-row textarea{flex:1;min-width:0;border:1px solid var(--dsw-alias-border-strong);border-radius:4px;padding:4px 8px;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}",
+      ".ax-row textarea{font-family:inherit;resize:vertical}",
+      ".ax-row input:focus-visible,.ax-row select:focus-visible,.ax-row textarea:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:1px}",
       ".ax-hint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}",
       ".ax-field-head{display:flex;align-items:center;gap:6px;min-width:0}",
       ".ax-field-head[role=button]{cursor:pointer;border-radius:4px;padding:2px 4px;margin:-2px -4px}",
@@ -170,6 +171,14 @@ window.__ModuleLoader__.load({
       ".ax-image-memory-more{border:none;background:transparent;color:var(--dsw-alias-state-business-primary);cursor:pointer;font-size:11px;padding:0}",
       ".ax-image-resize-handle{position:absolute;right:2px;bottom:2px;width:16px;height:16px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,var(--dsw-alias-label-caption) 50%,var(--dsw-alias-label-caption) 60%,transparent 60%),linear-gradient(135deg,transparent 70%,var(--dsw-alias-label-caption) 70%,var(--dsw-alias-label-caption) 80%,transparent 80%);opacity:.8}",
       ".ax-image-resize-handle:hover{opacity:1}",
+      ".ax-tv{display:flex;flex-direction:column;gap:6px;min-width:0}",
+      ".ax-tv-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--dsw-alias-label-secondary);min-width:0}",
+      ".ax-tv-title{font-weight:600;color:var(--dsw-alias-label-primary)}",
+      ".ax-tv-badge{font-size:11px;line-height:16px;border-radius:999px;padding:0 6px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);white-space:nowrap}",
+      ".ax-tv-running{color:var(--dsw-alias-label-tertiary)}",
+      ".ax-tv-error{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:18px;overflow-wrap:anywhere}",
+      ".ax-tv-text{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;overflow-wrap:anywhere}",
+      ".ax-tv-gallery{min-width:0}",
     ].join("");
     const tagId = "@dolorescaritasangelus/dsh-aux/Aux.css";
     if (
@@ -214,6 +223,12 @@ window.__ModuleLoader__.load({
       "field.concurrency": "并发上限",
       "field.maxChars": "maxChars (页面字符上限)",
       "field.reasoningEffort": "思考档位",
+      "field.models": "降级链 (provider/model,每行一条,按序尝试)",
+      "field.models.placeholder": "例如 volcengine-ark/minimax-m3\nopencode-go/kimi-k2.7-code",
+      "toolview.title": "图像分析",
+      "toolview.running": "分析中…",
+      "toolview.failed": "分析失败",
+      "toolview.image": "图",
       "placeholder.inheritModel": "(继承主模型)",
       "placeholder.inheritDefault": "(继承默认)",
       "subagent.mode": "模式",
@@ -234,6 +249,13 @@ window.__ModuleLoader__.load({
       "global.forceAuxVision": "强制原生图片也走 AUX 视觉 (forceAuxVision)",
       "global.visionFallbackToMain": "视觉辅助失败时降级到主模型 (visionFallbackToMain)",
       "global.showStatusChip": "在对话界面显示辅助模型状态芯片",
+      "global.visionRoute": "vision 交付路由 (visionRoute)",
+      "global.visionRoute.aux": "aux —— 始终用辅助视觉模型",
+      "global.visionRoute.native-when-capable": "native-when-capable —— 白名单路由交给主模型",
+      "global.visionRoute.auto": "auto —— 仅当辅助路由等于主路由(或未配置辅助路由)时交给主模型",
+      "global.nativeRoutes": "native 交付白名单 (provider/model,每行一条)",
+      "global.nativeRoutes.placeholder": "例如 deepseek-official/deepseek-v4-flash-vision-exp",
+      "global.requestImagesMaxMiB": "派生请求缓存上限 MiB (0 = 关闭回收)",
 
       "group.platform": "平台开关",
       "group.platform.desc": "选择每个工具/桥接使用原生、AUX 还是未来深耕模式。",
@@ -443,6 +465,12 @@ window.__ModuleLoader__.load({
       "field.concurrency": "Max concurrency",
       "field.maxChars": "maxChars (page char limit)",
       "field.reasoningEffort": "Reasoning effort",
+      "field.models": "Fallback chain (provider/model, one per line, tried in order)",
+      "field.models.placeholder": "e.g. volcengine-ark/minimax-m3\nopencode-go/kimi-k2.7-code",
+      "toolview.title": "Image analysis",
+      "toolview.running": "Analyzing…",
+      "toolview.failed": "Analysis failed",
+      "toolview.image": "Image",
       "placeholder.inheritModel": "(Inherit main model)",
       "placeholder.inheritDefault": "(Inherit default)",
       "subagent.mode": "Mode",
@@ -463,6 +491,13 @@ window.__ModuleLoader__.load({
       "global.forceAuxVision": "Force native images through AUX vision (forceAuxVision)",
       "global.visionFallbackToMain": "Fall back to main model when vision fails (visionFallbackToMain)",
       "global.showStatusChip": "Show auxiliary model status chip in conversation UI",
+      "global.visionRoute": "Vision delivery route (visionRoute)",
+      "global.visionRoute.aux": "aux — always use the auxiliary vision model",
+      "global.visionRoute.native-when-capable": "native-when-capable — whitelisted routes go to the main model",
+      "global.visionRoute.auto": "auto — main model only when the aux route equals it (or no aux route is configured)",
+      "global.nativeRoutes": "Native delivery whitelist (provider/model, one per line)",
+      "global.nativeRoutes.placeholder": "e.g. deepseek-official/deepseek-v4-flash-vision-exp",
+      "global.requestImagesMaxMiB": "Request-image cache cap in MiB (0 = disable reclaim)",
 
       "group.platform": "Platform Switches",
       "group.platform.desc": "Choose native, AUX, or future deep-compat mode for each tool/bridge.",
@@ -877,6 +912,23 @@ window.__ModuleLoader__.load({
           return next;
         });
       };
+      /** Multi-line "provider/model" text -> ordered chain array (empty clears). */
+      const setTaskModels = (task, text) => {
+        const routes = String(text ?? "")
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+        setSaved(false);
+        setSaveError(null);
+        setDraft((d) => {
+          const next = structuredClone(d ?? {});
+          next.tasks = next.tasks ?? {};
+          next.tasks[task] = next.tasks[task] ?? {};
+          if (routes.length === 0) delete next.tasks[task].models;
+          else next.tasks[task].models = routes;
+          return next;
+        });
+      };
       const save = () => {
         setSaving(true);
         setSaveError(null);
@@ -905,6 +957,12 @@ window.__ModuleLoader__.load({
             if (val !== void 0 && val !== "") ops.push({ op: "set", path, value: Number(val) });
             else ops.push({ op: "unset", path });
           }
+          // Ordered fallback chain: written as-is; the server ignores the
+          // singular provider/model whenever the chain is non-empty.
+          const modelsPath = [...base, "models"];
+          if (Array.isArray(entry.models) && entry.models.length > 0)
+            ops.push({ op: "set", path: modelsPath, value: entry.models });
+          else ops.push({ op: "unset", path: modelsPath });
           const effort = entry.reasoningEffort;
           const effortPath = [...base, "reasoningEffort"];
           // 任务级 reasoningEffort 可以独立于 provider/model 存在
@@ -948,6 +1006,20 @@ window.__ModuleLoader__.load({
         if (draft?.forceAuxVision !== void 0) {
           if (draft.forceAuxVision) ops.push({ op: "set", path: ["forceAuxVision"], value: true });
           else ops.push({ op: "unset", path: ["forceAuxVision"] });
+        }
+        if (draft?.visionRoute !== void 0) {
+          if (draft.visionRoute !== "aux") ops.push({ op: "set", path: ["visionRoute"], value: draft.visionRoute });
+          else ops.push({ op: "unset", path: ["visionRoute"] });
+        }
+        if (draft?.nativeRoutes !== void 0) {
+          if (Array.isArray(draft.nativeRoutes) && draft.nativeRoutes.length > 0)
+            ops.push({ op: "set", path: ["nativeRoutes"], value: draft.nativeRoutes });
+          else ops.push({ op: "unset", path: ["nativeRoutes"] });
+        }
+        if (draft?.requestImagesMaxMiB !== void 0) {
+          if (Number.isFinite(draft.requestImagesMaxMiB) && draft.requestImagesMaxMiB !== 256)
+            ops.push({ op: "set", path: ["requestImagesMaxMiB"], value: draft.requestImagesMaxMiB });
+          else ops.push({ op: "unset", path: ["requestImagesMaxMiB"] });
         }
         if (draft?.visionFallbackToMain !== void 0) {
           if (draft.visionFallbackToMain === false)
@@ -1149,6 +1221,18 @@ window.__ModuleLoader__.load({
             ),
             fieldRow(
               task,
+              "models",
+              t("field.models"),
+              react.createElement("textarea", {
+                rows: 2,
+                value: Array.isArray(field(task, "models")) ? field(task, "models").join("\n") : "",
+                placeholder: t("field.models.placeholder"),
+                disabled: false,
+                onChange: (e) => setTaskModels(task, e.target.value),
+              }),
+            ),
+            fieldRow(
+              task,
               "timeoutMs",
               t("field.timeout"),
               react.createElement("input", {
@@ -1336,6 +1420,41 @@ window.__ModuleLoader__.load({
           next.skill = next.skill ?? {};
           if (value === "audit") delete next.skill.mode;
           else next.skill.mode = value;
+          return next;
+        });
+      };
+      const setVisionRoute = (value) => {
+        setSaved(false);
+        setSaveError(null);
+        setDraft((d) => {
+          const next = structuredClone(d ?? {});
+          if (value === "aux") delete next.visionRoute;
+          else next.visionRoute = value;
+          return next;
+        });
+      };
+      const setNativeRoutes = (text) => {
+        const routes = String(text ?? "")
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+        setSaved(false);
+        setSaveError(null);
+        setDraft((d) => {
+          const next = structuredClone(d ?? {});
+          if (routes.length === 0) delete next.nativeRoutes;
+          else next.nativeRoutes = routes;
+          return next;
+        });
+      };
+      const setRequestImagesMaxMiB = (text) => {
+        const value = Number.parseInt(String(text ?? ""), 10);
+        setSaved(false);
+        setSaveError(null);
+        setDraft((d) => {
+          const next = structuredClone(d ?? {});
+          if (!Number.isFinite(value) || value === 256) delete next.requestImagesMaxMiB;
+          else next.requestImagesMaxMiB = Math.max(0, value);
           return next;
         });
       };
@@ -1848,6 +1967,52 @@ window.__ModuleLoader__.load({
               return next;
             });
           }),
+          react.createElement(
+            "div",
+            { className: "ax-row" },
+            react.createElement("label", { htmlFor: "ax-vision-route" }, t("global.visionRoute")),
+            react.createElement(
+              "select",
+              {
+                id: "ax-vision-route",
+                value: draft?.visionRoute ?? "aux",
+                disabled: false,
+                onChange: (e) => setVisionRoute(e.target.value),
+              },
+              react.createElement("option", { value: "aux" }, t("global.visionRoute.aux")),
+              react.createElement(
+                "option",
+                { value: "native-when-capable" },
+                t("global.visionRoute.native-when-capable"),
+              ),
+              react.createElement("option", { value: "auto" }, t("global.visionRoute.auto")),
+            ),
+          ),
+          react.createElement(
+            "div",
+            { className: "ax-row" },
+            react.createElement("label", { htmlFor: "ax-native-routes" }, t("global.nativeRoutes")),
+            react.createElement("textarea", {
+              id: "ax-native-routes",
+              rows: 3,
+              placeholder: t("global.nativeRoutes.placeholder"),
+              value: Array.isArray(draft?.nativeRoutes) ? draft.nativeRoutes.join("\n") : "",
+              onChange: (e) => setNativeRoutes(e.target.value),
+            }),
+          ),
+          react.createElement(
+            "div",
+            { className: "ax-row" },
+            react.createElement("label", { htmlFor: "ax-request-images-cap" }, t("global.requestImagesMaxMiB")),
+            react.createElement("input", {
+              id: "ax-request-images-cap",
+              type: "number",
+              min: 0,
+              step: 1,
+              value: Number.isFinite(draft?.requestImagesMaxMiB) ? draft.requestImagesMaxMiB : 256,
+              onChange: (e) => setRequestImagesMaxMiB(e.target.value),
+            }),
+          ),
           switchRow(t("global.visionFallbackToMain"), draft?.visionFallbackToMain !== false, false, (e) => {
             setSaved(false);
             setSaveError(null);
@@ -3564,6 +3729,114 @@ window.__ModuleLoader__.load({
       "remote.session",
       "sessions",
     ];
+    /** Text blocks of a settled tool result, joined in order. */
+    function blockText(content) {
+      if (!Array.isArray(content)) return "";
+      return content
+        .filter(
+          (part) => part !== null && typeof part === "object" && part.type === "text" && typeof part.text === "string",
+        )
+        .map((part) => part.text)
+        .join("\n");
+    }
+
+    /**
+     * Card model of one vision_analyze call. Running and cancelled calls carry
+     * no content; a settled failure renders text only; a settled success yields
+     * the durable refs (paired with their display ordinals) plus the conclusion
+     * text. Attachment data comes from the result presentationMeta, which the
+     * host writes from the same values, never from parsing the content text.
+     */
+    function visionCardModel(block) {
+      if (block === null || typeof block !== "object" || !("kind" in block)) {
+        return { state: "running", images: [], ordinals: [], text: "" };
+      }
+      const text = blockText(block.content);
+      if (block.isError === true) return { state: "error", images: [], ordinals: [], text };
+      const meta = block.meta !== null && typeof block.meta === "object" ? block.meta : {};
+      const refs = Array.isArray(meta.attachments) ? meta.attachments : [];
+      const ordinals = Array.isArray(meta.ordinals) ? meta.ordinals : [];
+      const images = [];
+      const badges = [];
+      for (let i = 0; i < refs.length; i += 1) {
+        const ref = refs[i];
+        if (ref === null || typeof ref !== "object" || typeof ref.attachmentId !== "string") continue;
+        images.push({ attachment: ref });
+        const ordinal = ordinals[i];
+        badges.push(ordinal !== null && typeof ordinal === "object" ? ordinal : null);
+      }
+      return { state: "settled", images, ordinals: badges, text };
+    }
+
+    /** Display badge: the CJK 【图N/共M】 for a message image, 【图N】 for a call
+     * image. The wording matches the bridge anchor text, so the human and the
+     * model count the same way; attachmentId remains the stable anchor. */
+    function ordinalBadge(ordinal) {
+      if (ordinal === null || typeof ordinal !== "object") return null;
+      if (!Number.isInteger(ordinal.index) || ordinal.index <= 0) return null;
+      if (ordinal.scope === "message" && Number.isInteger(ordinal.total)) {
+        return "【图" + ordinal.index + "/共" + ordinal.total + "】";
+      }
+      return "【图" + ordinal.index + "】";
+    }
+
+    /**
+     * vision_analyze toolview card. Registering this key suppresses the generic
+     * tool row for every vision_analyze result, so all four states must render:
+     * running, cancelled, failed (text only) and settled (badges + gallery +
+     * conclusion). The gallery is dispatched through the declared
+     * tool.call.images child slot; the official conversation.message.images slot
+     * is never replaced.
+     */
+    function VisionAnalyzeRow(props) {
+      const t = (props && props.t) || __t;
+      const block = props && props.block;
+      const renderSlot = props && props.renderSlot;
+      const loadImage = props && props.loadImage;
+      const model = visionCardModel(block);
+      const badges = model.ordinals.map(ordinalBadge).filter((label) => label !== null);
+      const children = [
+        react.createElement(
+          "div",
+          { className: "ax-tv-head", key: "head" },
+          react.createElement("span", { className: "ax-tv-title" }, t("toolview.title")),
+          model.state === "running"
+            ? react.createElement("span", { className: "ax-tv-running" }, t("toolview.running"))
+            : null,
+          model.state === "error"
+            ? react.createElement("span", { className: "ax-tv-error" }, t("toolview.failed"))
+            : null,
+          ...badges.map((label, index) =>
+            react.createElement("span", { className: "ax-tv-badge", key: "badge-" + index }, label),
+          ),
+        ),
+      ];
+      if (
+        model.state === "settled" &&
+        model.images.length > 0 &&
+        typeof renderSlot === "function" &&
+        typeof loadImage === "function"
+      ) {
+        children.push(
+          react.createElement(
+            "div",
+            { className: "ax-tv-gallery", key: "gallery" },
+            renderSlot("tool.call.images", { images: model.images, loadImage, align: "start" }),
+          ),
+        );
+      }
+      if (model.text !== "") {
+        children.push(
+          react.createElement(
+            "div",
+            { className: model.state === "error" ? "ax-tv-error" : "ax-tv-text", key: "text" },
+            model.text,
+          ),
+        );
+      }
+      return react.createElement("div", { className: "ax-tv", role: "group" }, ...children);
+    }
+
     /**
      * Client plugin body: register the settings page and the status chip.
      * @param ctx - client root context.
@@ -3588,6 +3861,20 @@ window.__ModuleLoader__.load({
         if (result.value === void 0) throw new Error(__t("command.unknown") + line);
         return result.value.result;
       };
+      ctx.slots.inject("tool.call.toolview", () =>
+        ctx.slots.register(
+          {
+            name: "tool.call.toolview",
+            key: "vision_analyze",
+            locale: NS,
+            // Declaring the Tool image gallery as a child is what authorizes
+            // this entry's renderSlot to dispatch it; the official
+            // conversation.message.images slot stays untouched.
+            children: { "tool.call.images": { kind: "single", scope: "session" } },
+          },
+          VisionAnalyzeRow,
+        ),
+      );
       ctx.slots.inject("settings.section", () =>
         ctx.slots.register(
           {

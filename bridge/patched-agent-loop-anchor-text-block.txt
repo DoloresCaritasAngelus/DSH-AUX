@@ -1,0 +1,25 @@
+			const imageTotal = message.content.filter((b) => b?.type === "image").length;
+			const imageAnchor = (index, total, attachmentId) => `[本条消息第${index}张/共${total}张, attachmentId=<${attachmentId}>。可用 vision_analyze 的 attachmentId 参数查看]`;
+			let imageIndex = 0;
+			const content = [];
+			for (const block of message.content) {
+				if (block?.type !== "image") { content.push(block); continue; }
+				imageIndex += 1;
+				if (block.attachment === void 0) { content.push(block); continue; }
+				const id = String(block.attachment.attachmentId ?? "");
+				const match = /^sha256:([a-f0-9]{64})$/.exec(id);
+				const hash = match?.[1];
+				if (hash !== void 0 && home !== void 0) {
+					const real = `${home}/attachments/v1/objects/${hash.slice(0, 2)}/${hash}`;
+					const ext = extOf(block.attachment.mediaType);
+					const linkPath = `${real}.${ext}`;
+					try {
+						// Ensure the extension hard link exists (the admit bridge
+						// creates it for fresh uploads; older logs may lack it).
+						await link(real, linkPath).catch((e) => { if (e?.code !== "EEXIST") throw e; });
+					} catch { /* keep the real path when linking fails */ }
+					content.push({ type: "text", text: imageAnchor(imageIndex, imageTotal, id) });
+					continue;
+				}
+				content.push(block);
+			}

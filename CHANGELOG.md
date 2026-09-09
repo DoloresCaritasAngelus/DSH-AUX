@@ -2,6 +2,119 @@
 
 ## 未发布 (Unreleased)
 
+### 评审复核后的修复(2026-09-09)
+
+- **图片删除 fail-closed 全覆盖**:`deletionReady` 此前只覆盖会话清理;现集中为
+  `assertDeletionReady` 并接入 `/aux image delete`、孤儿回收与 `/aux gc-images`
+  (含 `--force`),冻结期返回 `DELETION_FROZEN`(可重试);`gc-images` 跳过 `.trash`、
+  按引用/固化过滤,固化清单读失败即拒绝删除。
+- **回收站窗口按入站计龄**:`.trash` 条目名内时间戳为权威,7 天窗口不再因对象原始
+  mtime 过期而退化为 0;`sweepTrash` 只清本模块条目,外来文件保留并计数。
+- **多图 `vision_analyze` 补顶层 `mode`**:`images[]` 返回值此前缺 schema 必填的顶层
+  `mode`,真实 DSH 输出校验(`ToolOutputError`)会让整批结果作废;现取批次交付决策,
+  并用真实返回喂 schema 的测试锁住(全成功/单元素/部分失败/native)。
+- **fetch 钉扎隔离与有界超时**:直连请求改用独立连接(`agent: false`),钉扎"按连接"
+  成立(并关闭 Node ≥22.21 的 env-proxy 全局路由,避免钉扎被静默旁路);新增**无条件** connect/首字节与空闲 deadline(默认 15s/45s,可配,`<=0` 关闭),
+  无代理部署不再无界挂起;严格模式解析为空时 fail-closed;`NO_PROXY` 括号 IPv6 归一。
+- **补丁引擎整体回滚**:步骤块中途失配不再落半补丁(整体回滚 + 退出码 1);`--rollback`
+  只认本工具备份;anchor-text 升级判定改用块匹配;self-heal 告警覆盖"步骤块未命中";
+  `tests/bridge.test.js` 的部署包探测改为显式 opt-in。
+- **文档与 CI 口径**:测试基线快照收敛、`TESTING.md` 清单补齐、`ci-doc-hygiene` 新增
+  "发布段非空正文"闸与变异测试、`install-dsh-version` 版本矩阵收敛并注明只切换 `package.json`。
+
+### 0.1.5 会话迁移放行(P12/P13)
+
+- **P12 — AUX 事件进冻结词表**:DSH 0.1.5 的 v0→v1 会话迁移用冻结词表
+  (`dsh-session-format-v0-to-v1` 的 `RELEASED_V0_EVENT_DISPOSITIONS`)校验历史事件,
+  未知类型连 `ignorable: true` 都不放行、多余载荷成员直接拒(源工件不变),含
+  `aux/*` 事件的旧会话因此打不开。`bridge/self-heal.mjs` 新增 P12:按
+  `dsh-aux/src/event-shapes.js` 的登记表为四个 AUX 事件补 disposition 与透传 case,
+  键集取"已发布形态 ∪ 当前形态"的并集;逐项幂等、备份 + `node --check` 门。
+- **P13 — 官方写端缺口临时放行**:同一文件里一并放行官方历史写法——
+  `permission/preset` 的 `origin`(0.1.1-rc.1)、abort cause 的 `stack`(0.1.3 线)、
+  官方 `thinking/language`、provider 扩展的 `assistant/chunk finish.replayState`。
+  每项先探测上游是否已收编,已收编即跳过(自退役);`DSH_AUX_NO_OFFICIAL_ADMISSIONS=1`
+  只保留 P12。`/aux status` 的补丁台账新增 P12/P13 两行。
+- **写端闸**:新增 `dsh-aux/src/event-shapes.js`(事件 × 允许字段单一真相)与
+  `tests/event-shapes.test.js`(扫描全部写入点断言字段已登记);`events.js` 在写入前
+  对未登记字段告警一次,避免"加了字段、下次 DSH 升级才发现旧会话读不出来"。
+- **测试**:新增 `tests/event-shapes.test.js`、`tests/format-admissions.test.js`
+  (不记裸总数,基线见 `TESTING.md` 并以实跑为准)。
+
+### 修复
+
+- **用户消息图片查找失效(P0)**:`user/message` 事件的 `data` 就是扁平 `UserMessage`
+  (官方 `packages/core/session/src/types.ts:297`;读取归一化见 `index.ts:335`),而图片提取
+  统一按 `event.data?.message` 读取 ⇒ 对用户粘贴的图恒返回空。影响三条:`vision_analyze` 的
+  `attachmentId` 入口找不到、图片库归属登记不到(被判 orphan)、会话卡片角标退化。现按事件
+  类型归一化(`user/message` → `event.message ?? event.data`;`tool/result` →
+  `data.message ?? event.message`),并保留派生 live 形状的容错;`agent/inbox/spliced` 的
+  `inserted` 明确不计入(随后会成为 `user/message`,计入会重复)。新增
+  `tests/user-message-image.test.js`,并把 6 个测试文件中自造的嵌套 `data.message`
+  fixture 校正为真实会话日志形状。
+
+### vision 打磨与路由链(Phase 3)
+
+- **失败分类与自动重试**:多图分析中单张图片失败时,限流/超时/连接类失败在工具内**自动重试一次**;
+  仍失败则返回结构化 `error: { code, message, retryable }` 与指令式文案(说明原因、可否重试、下一步),
+  不再是一句陈述句;工具描述写明失败条目会给出原因与可否重试。错误码沿用 AUX 既有分类并附
+  DSH `LlmError` 映射(有意分歧:DSH 对 5xx `SERVER` 会重试,AUX 的 `other` 不重试)。
+- **直连路径 IP 钉扎**:`imageUrl` / `web_extract` / `web_crawl` 的直连请求改为把 SSRF 校验**同一次解析**
+  得到的公网地址钉到连接(`node:http(s)` + `lookup`),重定向逐跳同样钉扎;SNI 与 Host 保持,
+  代理 CONNECT 路径不变。此前校验与 `fetch` 各解析一次 DNS,存在 rebinding 窗口。
+- **多级降级链**:新增 `aux.tasks.<task>.models` 有序数组(主选 → 备1 → 备2 …),复用冷却跳过与
+  图像能力门;非空时单数 `provider/model` 被忽略(`/aux status` 给出警告);链尾仍按
+  `fallbackToMain` / `visionFallbackToMain` 考虑主模型;`/aux model` 写入单元素链,
+  设置页新增"降级链"多行控件;`aux/llm-call` 事件记录 `candidates` / `selectedIndex`。
+- **`imagePath` 魔数嗅探**:无扩展名(含点文件)按 PNG/JPEG/GIF87a/89a/RIFF-WEBP 签名判定格式,
+  与官方 `read_image` 对齐;未知非空扩展名在读取前拒绝;扩展名与字节不符时给出"声明 X / 字节 Y"的明确文案。
+- **动图契约对齐**:删除 vision system prompt 中"描述动图时序"的承诺(附件归一化只保留首帧),
+  工具描述写明"动图仅分析首帧"。
+- **`vision_analyze` 会话卡片**:客户端注册 `tool.call.toolview` 的 `key: 'vision_analyze'` 行,
+  显示 `【图N/共M】` 角标(消息内编号,与桥接文本同源)+ 缩略图 + 结论,失败项只出文本;
+  输出新增 `imageOrdinal`(消息级 / 调用级),`presentationMeta` 增加同序 `ordinals`。
+- **测试**:新增 `tests/image-path-media.test.js`、`tests/fetch-pinning.test.js`、
+  `tests/route-chain.test.js`、`tests/vision-ordinal.test.js`、`tests/vision-toolview.test.js`
+  (不记裸总数,基线见 `TESTING.md` 并以实跑为准)。
+
+### 图片生命周期与 vision 原生交付
+
+- **归属与误删防护**:新增 `session/event` 归属钩子(递归工具产物图)与 `session/created`
+  恢复屏障(内存日志扫描,零磁盘 I/O);屏障未完成/失败时**全局拒绝删除**(fail-closed,
+  `/aux status` 的 `imageLifecycle` 可观测,5 分钟对账重试成功后自动恢复);
+  回收改为 `rename` 进 `objects/.trash/`(7 天恢复窗口,mtime 清扫)。
+- **持久化兼容**:`sessionPersistence` 新老两代统一走 `listSessionSnapshots()` /
+  `readSessionEvents()`(0.1.5 `list`/`open(id,'read').read()` + `close()`,旧代 `listSnapshots`/`inspect`),
+  会话解析同时兼容 `snapshot.header.id` 与旧内联 `id/cwd`。
+- **GC 债**:新增旁挂 `attachment-refs.json`(完整 ref,只服务 GC),删除改走官方
+  `attachments.imageHostPath(ref)` 并清掉全部已知 `.ext` 硬链接;对象命名规则收进单一
+  `images/object-path.js`;派生 `request-images/` 按总量上限(默认 256 MiB,`requestImagesMaxMiB` 可配)
+  + mtime LRU 回收,并入 5 分钟对账与 `/aux gc-images` 输出。
+- **vision 原生交付**:新增 `aux.visionRoute`(aux / native-when-capable / auto)与
+  `aux.nativeRoutes` 白名单;`inputModalities` 只作否定门;native 跳过辅助调用、
+  输出新增 `mode` 字段、交付失败显式提示改用 aux;交付复用 `aux/llm-call` 事件
+  (`mode: 'native'`)以便 `/aux history` 追溯;设置页新增三个控件。
+
+### DSH 0.1.5-alpha.1 兼容(主支单版本)
+
+- **补丁重切(P1/P2/P7)**:
+  - `dsh-agent-loop` 图像桥接锚点重切到 0.1.5 的同步五参 `buildRequest`:插入桥接方法并把签名改 async,
+    桥接在冻结循环之后进行且仅在真的改写时 `deepFreeze` 产物,唯一调用点补 `await`;0.1.2 的 8 参链路保持原状。
+  - `dsh-api-session-controller` 准入闸步骤块改为忽略行首缩进匹配(0.1.5 的 `using` 绑定多包一层 `try`
+    使每行多一个前导 tab),同一份锚点块同时命中 0.1.2 与 0.1.5。
+  - `dsh-session` append ignorable 新增 0.1.5 变体(post-event `validateSessionEventData` + 重入守卫);
+    `patch-session-ignorable.mjs` 与 `self-heal.mjs` 两份变体表同步登记。
+- **桥接投递文本**改为 `[本条消息第N张/共M张, attachmentId=<sha256:…>。可用 vision_analyze 的 attachmentId 参数查看]`:
+  不再依赖 `.ext` 硬链接路径与扩展名判型;已打补丁的旧部署由新增 `anchor-text` 状态原地升级。
+- **`apply-patch --dry-run` 结论保真**:dry-run 改为与真实应用同判据(先校验步骤块再判定可升级),
+  不再把"检测命中但块不匹配"报成可升级;版本不匹配仍按设计返回退出码 0(由 CI/自愈的文本门禁承担信号)。
+- **兼容矩阵**:主支只支持 `0.1.5-alpha.1`;CI compat 矩阵、根 devDependencies 与 `TESTING.md` 基线同步切换;
+  `0.1.2-alpha.2 ~ 0.1.2-rc.1` 冻结在 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1`。
+  peerDependencies 范围保持不变(兼容矩阵是支持声明,不是安装闸)。
+- **测试**:新增 `tests/bridge-dry-run.test.js`、`tests/bridge-block-match.test.js`、
+  `tests/agent-loop-anchor.test.js`、`tests/session-append-ignorable.test.js`;
+  `tests/bridge.test.js` 的提取源改为仓库内补丁块(此前在 CI 中静默 skip)。
+
 ## 0.4.4 (2026-09-06) — vision_analyze 轨迹回显
 
 - **`vision_analyze` 轨迹回显**(轨迹可见性增强,不改变分析行为):

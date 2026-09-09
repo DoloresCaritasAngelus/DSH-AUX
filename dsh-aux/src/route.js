@@ -58,7 +58,7 @@ export function resolveConfig(config) {
       throw new Error(`AuxConfig tasks.${task} must be an object`);
     }
     const entry = {};
-    const allowedKeys = ["provider", "model", "timeoutMs", "maxConcurrency", "reasoningEffort"];
+    const allowedKeys = ["provider", "model", "models", "timeoutMs", "maxConcurrency", "reasoningEffort"];
     // maxChars (deployment-level page-text cap) is meaningful for web_extract
     // and web_crawl; kept task-scoped so a stray vision.maxChars is refused
     // rather than silently ignored.
@@ -81,6 +81,9 @@ export function resolveConfig(config) {
     }
     if (entry.provider !== void 0 && entry.model === void 0) {
       throw new Error(`AuxConfig tasks.${task}: provider and model must be supplied together`);
+    }
+    if (raw.models !== void 0) {
+      entry.models = assertRouteSpecList(raw.models, `AuxConfig tasks.${task}.models`);
     }
     if (raw.timeoutMs !== void 0) {
       if (!Number.isInteger(raw.timeoutMs) || raw.timeoutMs <= 0) {
@@ -126,6 +129,7 @@ export function mergeTaskConfig(pluginEntry, settingsEntry) {
   return {
     provider: settingsEntry.provider ?? pluginEntry.provider,
     model: settingsEntry.model ?? pluginEntry.model,
+    models: settingsEntry.models ?? pluginEntry.models,
     timeoutMs: settingsEntry.timeoutMs ?? pluginEntry.timeoutMs,
     maxConcurrency: settingsEntry.maxConcurrency ?? pluginEntry.maxConcurrency,
     maxChars: settingsEntry.maxChars ?? pluginEntry.maxChars,
@@ -158,11 +162,69 @@ export function taskMaxChars(merged) {
  * @returns the route, or undefined when nothing is configured.
  */
 export function resolvePrimaryRoute(merged, defaults) {
-  if (merged.provider !== void 0 && merged.model !== void 0) {
-    return route(merged.provider, merged.model);
+  return resolveRouteChain(merged, defaults)[0] ?? void 0;
+}
+
+/**
+ * Resolve the ordered auxiliary route chain for a task:
+ *   1. `models` (non-empty) — the explicit chain, in order; a singular
+ *      provider/model is then IGNORED (surfaced as a status warning, never a
+ *      config error: existing configs must keep loading);
+ *   2. otherwise the singular provider+model from merged config;
+ *   3. otherwise the task's default auxiliary route (from the defaults map);
+ *   4. otherwise an empty chain (caller falls back to the main model).
+ * Duplicate "provider/model" entries are collapsed, keeping the first.
+ * @param merged merged task config.
+ * @param defaults map of task key -> route() of a default auxiliary model.
+ * @returns the ordered routes; empty when nothing is configured.
+ */
+export function resolveRouteChain(merged, defaults) {
+  const models = Array.isArray(merged?.models)
+    ? merged.models.filter((spec) => typeof spec === "string" && spec.length > 0)
+    : [];
+  const chain = [];
+  if (models.length > 0) {
+    for (const spec of models) chain.push(parseRouteSpec(spec));
+  } else if (merged?.provider !== void 0 && merged?.model !== void 0) {
+    chain.push(route(merged.provider, merged.model));
+  } else {
+    const fallback = defaults?.[merged?.task ?? ""] ?? defaults?._any;
+    if (fallback !== void 0) chain.push(fallback);
   }
-  const fallback = defaults[merged.task ?? ""] ?? defaults._any;
-  return fallback ?? void 0;
+  const seen = new Set();
+  return chain.filter((entry) => {
+    const key = entry.provider + "\u0000" + entry.model;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Parse one "provider/model" spec. The model may itself contain slashes
+ * (e.g. an OpenRouter-style id), so only the FIRST slash separates.
+ * @param spec non-empty string.
+ * @returns the route.
+ */
+export function parseRouteSpec(spec) {
+  const text = String(spec ?? "").trim();
+  const slash = text.indexOf("/");
+  if (slash <= 0 || slash === text.length - 1) {
+    throw new Error(`aux: route spec "${text}" must be "provider/model"`);
+  }
+  return route(text.slice(0, slash), text.slice(slash + 1));
+}
+
+/** Validate a route-spec list (`models` config value). */
+export function assertRouteSpecList(value, label) {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array of "provider/model" strings`);
+  return value.map((spec) => {
+    if (typeof spec !== "string" || spec.trim().length === 0) {
+      throw new Error(`${label} must contain only non-empty "provider/model" strings`);
+    }
+    parseRouteSpec(spec);
+    return spec.trim();
+  });
 }
 
 /**
@@ -202,6 +264,39 @@ export function classifyFailure(error, signal) {
 /** Whether a failure class merits an automatic main-model fallback. */
 export function shouldFallback(kind) {
   return kind !== "aborted";
+}
+
+/**
+ * AUX failure kind -> canonical DSH `LlmError` code (`@deepseek-ai/dsh-llm`).
+ * AUX keeps its own kebab-case codes on the wire (they are already consumed by
+ * `aux/llm-call` events and `/aux status`); this table is the documented
+ * alignment, so a future migration to the DSH taxonomy is mechanical.
+ */
+export const DSH_FAILURE_CODES = Object.freeze({
+  aborted: "ABORTED",
+  timeout: "TIMEOUT",
+  "rate-limit": "RATE_LIMIT",
+  payment: "QUOTA",
+  auth: "AUTH",
+  "model-not-found": "UNKNOWN_MODEL",
+  connection: "TRANSPORT",
+  content: "UNSUPPORTED_CONTENT",
+  other: "UNKNOWN",
+});
+
+/**
+ * Whether one automatic in-tool retry is worth attempting. Exactly the
+ * transient classes DSH itself retries — TIMEOUT, RATE_LIMIT, TRANSPORT
+ * (`dsh-llm/src/retry-policy.ts` DEFAULT_RETRYABLE_CODES).
+ *
+ * Deliberate divergence from DSH: an unclassified failure lands in `other`,
+ * which also covers provider 5xx responses that DSH classifies as SERVER and
+ * does retry. AUX does not repeat an unknown failure inside the tool — the
+ * model gets `retryable: false` and decides, instead of the tool burning a
+ * second call on an error nobody classified.
+ */
+export function isRetryableFailure(kind) {
+  return kind === "rate-limit" || kind === "timeout" || kind === "connection";
 }
 
 /**

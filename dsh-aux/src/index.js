@@ -31,12 +31,14 @@ import {
   mergeTaskConfig,
   resolveConfig,
   resolvePrimaryRoute,
+  resolveRouteChain,
   route,
   shouldFallback,
   taskConcurrency,
   taskTimeoutMs,
 } from "./route.js";
 import { resolveSubagentRoute } from "./subagent-route.js";
+import { resolveVisionDelivery } from "./vision-route.js";
 import { stripThinkBlocks } from "./prompt.js";
 import {
   AUX_SETTINGS_NAMESPACE,
@@ -74,7 +76,14 @@ import {
   shouldUsePreStepAuxGuide,
 } from "./bootstrap.js";
 import { registerAuxTools } from "./tools/register.js";
-import { onSessionDisposed, reconcileSessionImages } from "./images/ownership.js";
+import {
+  noteLiveSession,
+  onSessionDisposed,
+  recordAttachmentOwnership,
+  reconcileSessionImages,
+} from "./images/ownership.js";
+import { eventImageRefs } from "./images/refs.js";
+import { recordAttachmentRefs } from "./images/attachment-refs.js";
 import { handleAuxCommand } from "./commands.js";
 import { prepareCompactionMessages } from "./compaction-messages.js";
 import { attachSkillBridge } from "./skill-bridge.js";
@@ -303,6 +312,10 @@ export class AuxLlmService extends Service {
     this._sessionImages = new Map();
     this._sessionImagesLoaded = false;
     this._sessionImagesDirty = false;
+    // Live-session ownership barrier: deletions are refused (fail-closed)
+    // while any live session's history scan is in flight or has failed.
+    this._liveBackfillPending = new Set();
+    this._liveBackfillFailed = new Set();
     // Serialize image-memory journal writes: the journal is a read-modify-
     // write file, and multi-image analysis runs records in parallel — a
     // concurrent race would drop entries (last writer wins).
@@ -339,7 +352,28 @@ export class AuxLlmService extends Service {
       publishPlatformStatus(this).catch(() => {});
       publishImageLibrary(this).catch(() => {});
     });
+    // Ownership hook: record every image reference a session produces,
+    // incrementally, including images nested inside tool results. Constructor
+    // seeds never fire `session/event` (replay/fork/resume enter through
+    // construction), so `session/created` backfills the history once.
+    ctx.on("session/event", (session, event) => {
+      const sessionId = session?.id ?? session?.sessionId;
+      if (sessionId === void 0) return;
+      const refs = eventImageRefs(event);
+      for (const ref of refs) {
+        const attachmentId = ref?.attachmentId;
+        if (typeof attachmentId === "string" && attachmentId.length > 0) {
+          recordAttachmentOwnership(this, String(sessionId), attachmentId);
+        }
+      }
+      // Full refs feed the GC sidecar (host-path seam + media-type .ext).
+      recordAttachmentRefs(this, refs).catch(() => {});
+    });
     ctx.on("session/created", (session) => {
+      // Recovery barrier: scan the in-memory log before the session is
+      // treated as a known owner (a resumed session's constructor seed is its
+      // full stored log — no disk I/O needed).
+      noteLiveSession(this, session);
       publishPlatformStatusToSession(this, session).catch(() => {});
       publishImageLibraryToSession(this, session).catch(() => {});
     });
@@ -419,6 +453,10 @@ export class AuxLlmService extends Service {
     this._subagentSettings = settings.subagent ?? {};
     this.fallbackToMain = settings.fallbackToMain ?? true;
     this.forceAuxVision = settings.forceAuxVision ?? false;
+    this.visionRoute = settings.visionRoute ?? "aux";
+    this.nativeRoutes = Array.isArray(settings.nativeRoutes) ? [...settings.nativeRoutes] : [];
+    // Derived request-image cache cap (MiB -> bytes); 0 disables the sweep.
+    this.requestImagesMaxBytes = Math.max(0, settings.requestImagesMaxMiB ?? 256) * 1024 * 1024;
     this.visionFallbackToMain = settings.visionFallbackToMain ?? true;
     this.showStatusChip = settings.showStatusChip ?? true;
     const defaultEnabled = {
@@ -495,20 +533,23 @@ export class AuxLlmService extends Service {
     const attempts = [];
     try {
       const mainRoute = await this._mainRoute(request);
-      const primary = resolvePrimaryRoute(definition, this.taskDefaults);
-      const candidates = [];
-      if (primary !== void 0) candidates.push(primary);
+      // Ordered auxiliary chain: `models` (when configured) else the singular
+      // provider/model, else the task default. Each candidate is tried in turn
+      // with the existing cooldown skip and image-capability gate.
+      const chain = resolveRouteChain(definition, this.taskDefaults);
+      const candidates = [...chain];
+      const candidateKeys = () => candidates.map((entry) => entry.provider + "/" + entry.model);
       // `visionFallbackToMain=false` disables falling back to the main model
-      // AFTER a configured vision aux route fails; when NO vision aux route is
+      // AFTER a configured vision aux chain fails; when NO vision aux route is
       // configured at all, the main model is the only option (not a fallback),
       // so keep it usable.
       const allowMainFallback =
         (request.allowMainFallback ?? this.fallbackToMain) &&
-        (task !== "vision" || this.visionFallbackToMain || primary === void 0);
+        (task !== "vision" || this.visionFallbackToMain || chain.length === 0);
       if (
         allowMainFallback &&
         mainRoute !== void 0 &&
-        !(primary !== void 0 && primary.provider === mainRoute.provider && primary.model === mainRoute.model)
+        !chain.some((entry) => entry.provider === mainRoute.provider && entry.model === mainRoute.model)
       ) {
         candidates.push(mainRoute);
       }
@@ -525,6 +566,7 @@ export class AuxLlmService extends Service {
           errorCode: "no-route",
           fallbackUsed: false,
           purpose: request.purpose,
+          mode: request.mode ?? "aux",
         });
         throw new Error(`aux task "${task}": no route configured and no main model available`);
       }
@@ -549,9 +591,15 @@ export class AuxLlmService extends Service {
             ok: true,
             durationMs: Date.now() - startedAt,
             fallbackUsed: attempts.length > 0,
+            // Which candidate answered, and the whole ordered chain it came
+            // from: the chain itself stays out of the privacy-minimized
+            // aux-status projection and lives only here + /aux status.
+            candidates: candidateKeys(),
+            selectedIndex: candidates.indexOf(candidate),
             inputChars: request.inputChars,
             outputChars: output.length,
             purpose: request.purpose,
+            mode: request.mode ?? "aux",
           });
           if (this.debugConfig?.fullToolTrace === true) {
             const max = this.debugConfig.maxDebugEventBytes ?? 65536;
@@ -591,7 +639,9 @@ export class AuxLlmService extends Service {
         durationMs: Date.now() - startedAt,
         errorCode: attempts.map((a) => a.kind).join(","),
         fallbackUsed: attempts.length > 1,
+        candidates: candidateKeys(),
         purpose: request.purpose,
+        mode: request.mode ?? "aux",
       });
       if (this.debugConfig?.fullToolTrace === true) {
         const max = this.debugConfig.maxDebugEventBytes ?? 65536;
@@ -659,6 +709,56 @@ export class AuxLlmService extends Service {
   }
 
   /** Resolve the session's current main model route, when available. */
+  /**
+   * Resolve how one vision_analyze call is delivered.
+   *
+   * Gathers the facts (main route, resolved aux vision route, main-model
+   * modalities) and delegates the decision to the pure
+   * {@link resolveVisionDelivery}. Nothing here is cached: the main route can
+   * change per session and per turn.
+   *
+   * @param {object} exec Tool execution context.
+   * @returns {Promise<{ mode: "aux"|"native", reason: string, mainRoute?: object, auxRoute?: object, mainInputModalities?: ReadonlyArray<string> }>}
+   */
+  async visionDelivery(exec) {
+    const session = exec?.agent?.session;
+    let mainRoute;
+    try {
+      mainRoute = await this._mainRoute({ agent: exec?.agent, session });
+    } catch {
+      mainRoute = void 0;
+    }
+    let auxRoute;
+    try {
+      auxRoute = resolvePrimaryRoute(this._taskDefinition("vision"), this.taskDefaults);
+    } catch {
+      auxRoute = void 0;
+    }
+    let mainInputModalities;
+    if (mainRoute !== void 0) {
+      try {
+        const llm = this.ctx.get("llm");
+        const info = await llm?.resolveModelInfo?.(mainRoute.provider, mainRoute.model, exec?.signal);
+        mainInputModalities = info?.inputModalities;
+      } catch {
+        mainInputModalities = void 0;
+      }
+    }
+    return {
+      ...resolveVisionDelivery({
+        visionRoute: this.visionRoute,
+        nativeRoutes: this.nativeRoutes,
+        forceAuxVision: this.forceAuxVision,
+        mainRoute,
+        auxRoute,
+        mainInputModalities,
+      }),
+      mainRoute,
+      auxRoute,
+      mainInputModalities,
+    };
+  }
+
   async _mainRoute(request) {
     const agent = request.agent;
     const session = request.session;
@@ -785,34 +885,40 @@ export class AuxLlmService extends Service {
     }
   }
 
+  /** One task's routing status row: primary, the full chain, and its source. */
+  _describeTask(task, definition, label) {
+    const chain = resolveRouteChain(definition, this.taskDefaults);
+    const primary = chain[0] ?? null;
+    const models = Array.isArray(definition?.models)
+      ? definition.models.filter((spec) => typeof spec === "string" && spec.length > 0)
+      : [];
+    const hasSingular = definition?.provider !== void 0 && definition?.model !== void 0;
+    return {
+      task,
+      label,
+      configured: definition?.provider !== void 0 || models.length > 0,
+      primary,
+      chain,
+      chainSource: models.length > 0 ? "models" : hasSingular ? "single" : primary === null ? "none" : "default",
+      // A non-empty chain makes the singular provider/model inert. Reported
+      // (not refused): an existing config must keep loading.
+      singularIgnored: models.length > 0 && hasSingular,
+      models,
+      timeoutMs: taskTimeoutMs(definition),
+      maxConcurrency: taskConcurrency(definition),
+    };
+  }
+
   /** Current per-task routing status (for /aux status and UIs). */
   describe() {
     const out = [];
     for (const task of AUX_TASKS) {
-      const definition = { task, ...(this._merged[task] ?? {}) };
-      const primary = resolvePrimaryRoute(definition, this.taskDefaults);
-      out.push({
-        task,
-        label: TASK_LABELS[task],
-        configured: definition?.provider !== void 0,
-        primary: primary ?? null,
-        timeoutMs: taskTimeoutMs(definition),
-        maxConcurrency: taskConcurrency(definition),
-      });
+      out.push(this._describeTask(task, { task, ...(this._merged[task] ?? {}) }, TASK_LABELS[task]));
     }
     // Custom tasks registered via registerTask/registerAuxTask also appear in
     // the status view (label defaults to the task key).
     for (const [key, definition] of this._customTasks) {
-      const customDef = { task: key, ...definition };
-      const primary = resolvePrimaryRoute(customDef, this.taskDefaults);
-      out.push({
-        task: key,
-        label: definition.label ?? key,
-        configured: definition?.provider !== void 0,
-        primary: primary ?? null,
-        timeoutMs: taskTimeoutMs(customDef),
-        maxConcurrency: taskConcurrency(customDef),
-      });
+      out.push(this._describeTask(key, { task: key, ...definition }, definition.label ?? key));
     }
     return out;
   }

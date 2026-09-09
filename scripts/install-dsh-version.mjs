@@ -3,15 +3,23 @@
  * CI helper: temporarily install a chosen DSH package version into the
  * workspace node_modules, then restore the original package.json.
  *
+ * ⚠️ 只切换 package.json,不还原 node_modules(E1-S3 的根因):
+ *   脚本在 `npm install` 之后只把 package.json 写回原样;node_modules 里的
+ *   `@deepseek-ai/*` 会保持目标版本,直到你按还原后的 package.json 重新安装。
+ *   跑完本脚本后若不需要目标版本,请显式重装(例如
+ *   `npm install --no-package-lock --no-audit --no-fund`)或改用独立工作树,
+ *   不要让 node_modules 与 package.json 漂移 —— 那会静默改变本地测试口径
+ *   (先例:本机 node_modules 停在 0.1.2-alpha.3,而 package.json 钉 0.1.5-alpha.1)。
+ *   `--keep` 时连 package.json 也不还原,仅供本地调试。
+ *
  * DSH-AUX is not published to npm; this script only swaps the local
  * `@deepseek-ai/*` devDependencies used by the test suite so we can run the
- * same tests against DSH 0.1.2 lines (0.1.2-alpha.2 through 0.1.2-rc.1) in
+ * same tests against the supported DSH line (main branch: 0.1.5-alpha.1) in
  * GitHub Actions without a full containerized DSH.
  *
  * Usage:
- *   node scripts/install-dsh-version.mjs --version 0.1.2-alpha.2
- *   node scripts/install-dsh-version.mjs --version 0.1.2-alpha.3 --keep
- *   node scripts/install-dsh-version.mjs --version 0.1.2-rc.1 --keep
+ *   node scripts/install-dsh-version.mjs --version 0.1.5-alpha.1
+ *   node scripts/install-dsh-version.mjs --version 0.1.5-alpha.1 --keep
  *
  * --keep keeps the modified package.json (useful when debugging CI locally).
  */
@@ -55,19 +63,18 @@ const DSH_VERSIONED_PACKAGES = [
 ];
 
 // Packages that must be present in the temporary package.json for each DSH
-// line. dsh-api-session-controller is already a devDependency on alpha.2/3 in
-// this repo, but adding it explicitly for every line makes the matrix robust
-// when the repository's default package.json changes.
+// line. Only the currently supported line is kept (main branch:
+// 0.1.5-alpha.1); the frozen 0.1.2-alpha.2 ~ 0.1.2-rc.1 lines live on the
+// legacy branches (see TESTING.md「CI 辅助脚本」), so their dead matrix entries
+// were dropped (#42). dsh-api-session-controller is already a devDependency in
+// this repo, but adding it explicitly keeps the matrix robust when the
+// repository's default package.json changes.
 const EXTRA_DEV_PACKAGES = {
-  "0.1.2-alpha.2": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
-  "0.1.2-alpha.3": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
-  "0.1.2-alpha.4": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
-  "0.1.2-alpha.5": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
-  "0.1.2-rc.1": ["dsh-api-session-controller", "dsh-api-settings-controller", "dsh-api-workspace-controller"],
+  "0.1.5-alpha.1": ["dsh-api-session-controller"],
 };
 
 // Alpha lines no longer include dsh-host-apiproxy; the workspace devDependencies
-// already target 0.1.2-alpha.3 and install-dsh-version only swaps the line.
+// carry the current supported line and install-dsh-version only swaps it.
 
 // All @deepseek-ai/dsh-* packages share the DSH release line. Forcing them all
 // (including transitive packages such as dsh-system-prompt) to the same version
@@ -140,6 +147,16 @@ const DSH_OVERRIDE_PACKAGES = [
 // surface; install success plus overrides are verified across all of them.
 const VERIFY_PACKAGES = ["dsh-agent", "dsh-session", "dsh-tool-skill"];
 
+// Unsupported lines are not fatal here (the legacy branches carry their own
+// copy of this script), but silence would hide a stale matrix: warn loudly.
+if (!Object.hasOwn(EXTRA_DEV_PACKAGES, version)) {
+  console.warn(
+    `[install-dsh-version] 未登记的支持线: ${version}` +
+      `(当前支持线:${Object.keys(EXTRA_DEV_PACKAGES).join(", ")});` +
+      " 冻结线请用 legacy 分支;本次只按现有 devDependencies 替换版本。",
+  );
+}
+
 const pkg = JSON.parse(ORIGINAL);
 const devDeps = pkg.devDependencies ?? {};
 let changed = 0;
@@ -180,7 +197,7 @@ const result = spawnSync("npm", ["install", "--no-package-lock", "--no-audit", "
 
 if (!keep) {
   writeFileSync(PKG_PATH, ORIGINAL);
-  console.log("[install-dsh-version] 已恢复原始 package.json");
+  console.log("[install-dsh-version] 已恢复原始 package.json(注意:node_modules 未还原,仍是目标版本)");
 }
 
 if (result.status !== 0) {
