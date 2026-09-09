@@ -375,7 +375,7 @@ const result = await ctx.auxLlm.call("compress", {
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 用户**：请使用永久分支 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 或 Release `v0.4.4-legacy`。
 - **旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）用户**：请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。主支不再支持这些版本。
 - **运行时零第三方依赖**：peerDependencies 全部是 DSH 官方包（环境自带），无 `dependencies`。
-- **测试零依赖**：`node --test tests/*.test.js`（569 项；文件清单与基线见 `TESTING.md`）。
+- **测试零依赖**：`node --test tests/*.test.js`（576 项；文件清单与基线见 `TESTING.md`）。
 
 ### 集成组件
 

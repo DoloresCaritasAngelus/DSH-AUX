@@ -100,8 +100,9 @@ DSH 迭代很快，尤其是 0.1.2-alpha.x 后：
 | [TESTING.md](./TESTING.md) | 测试清单与基线 |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 贡献指南 |
 | [CREDITS.md](./CREDITS.md) | 借鉴来源与致谢 |
-| [docs/design/](./docs/design/) | 专项设计：图库 DESIGN/CONTRACT、SUBAGENT-BRIDGE、WORKFLOW-BRIDGE、WEB-CRAWL-DESIGN、VISION-AGENT、SESSION-ATTACHMENT-GC |
-| [docs/archive/](./docs/archive/) | v0.1 时代过程存档：PRD、UPSTREAM-PR、COMPARISON、设计符合度/web_extract 评审 |
+| [docs/README.md](./docs/README.md) | 文档树索引与状态词表（每个 docs 文档的状态 / 易腐烂标注 / 归档规则） |
+| [docs/design/](./docs/design/) | 仍有效的专项设计：IMAGE-LIBRARY DESIGN/CONTRACT、WEB-CRAWL-DESIGN、upstream-requests |
+| [docs/archive/](./docs/archive/) | 已退役文档（含退役原因 / 取代者 / 复盘点）：PRD、UPSTREAM-PR、COMPARISON、设计符合度 / web_extract 评审、SUBAGENT/WORKFLOW-BRIDGE、VISION-AGENT、SESSION-ATTACHMENT-GC 等 |
 | [docs/known-issues.md](./docs/known-issues.md) | 已知问题公开清单（修复后移入 CHANGELOG） |
 | [SECURITY.md](./SECURITY.md) / [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) | 安全报告渠道 / 行为准则 |
 | [dsh-aux/AI.md](./dsh-aux/AI.md) | AI 安装/验证指南 |

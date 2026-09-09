@@ -1,5 +1,9 @@
 # Upstream feature requests from dsh-aux
 
+> 状态:✅ 活跃
+> 最后核实:2026-09-09
+> 🔻 版本快照:DSH 0.1.5-alpha.1(`5dda764ed3`);源码行号是该 checkout 的快照,易腐烂
+
 > Requester: the `dsh-aux` plugin (auxiliary-model routing plus `vision_analyze` /
 > `web_extract` / `compress_text` tools).
 > Baseline: DSH **0.1.5-alpha.1** (`5dda764ed3`). Source line references are

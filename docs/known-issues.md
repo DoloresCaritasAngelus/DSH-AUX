@@ -1,5 +1,9 @@
 # Known Issues / 已知问题
 
+> 状态:✅ 活跃
+> 最后核实:2026-09-09
+> 🔻 版本快照:条目状态易腐烂;修复后请移入 CHANGELOG 并从本页删除
+
 > 本页公开列出当前已确认、尚未修复的问题,避免重复报告。修复后会移入 CHANGELOG。
 > 报告新问题请用 [issue 模板](https://github.com/DoloresCaritasAngelus/DSH-AUX/issues/new/choose)。
 

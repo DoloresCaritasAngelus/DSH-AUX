@@ -1,5 +1,9 @@
 # dsh-aux 向上游提出的功能请求
 
+> 状态:✅ 活跃
+> 最后核实:2026-09-09
+> 🔻 版本快照:DSH 0.1.5-alpha.1(`5dda764ed3`);源码行号是该 checkout 的快照,易腐烂
+
 > 提出方:`dsh-aux` 插件(辅助模型路由 + `vision_analyze` / `web_extract` /
 > `compress_text` 工具)。
 > 基线:DSH **0.1.5-alpha.1**(`5dda764ed3`)。源码行号为该版本的快照。

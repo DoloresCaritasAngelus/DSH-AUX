@@ -1,10 +1,14 @@
 # IMAGE-LIBRARY IMPLEMENTATION PLAN — AUX 图片生命周期可视化与交互面板
 
-> 文档类型：**实施计划 / 任务分解（Execution Plan）**
-> 配套设计：`IMAGE-LIBRARY-DESIGN.md`（技术方案/数据模型/UI 设计）
-> 分支：`feat/aux-patch-diagnostics`
-> 状态：**待执行**
-> 最后更新：2026-09-03
+> 状态:🔵 已实现(保留作回执)
+> 退役原因:计划已随 0.4.2 执行完毕;原状态头“待执行”已腐烂
+> 取代者:代码 dsh-aux/src/images/** + CHANGELOG 0.4.2(实施记录)
+> 复盘点:图库扩展为资产库、或再次需要并行任务编排时
+> 最后核实:2026-09-09
+> 🔻 版本快照:dsh-aux v0.4.2
+> 文档类型:**实施计划 / 任务分解(Execution Plan)**
+> 配套设计:`docs/design/IMAGE-LIBRARY-DESIGN.md`(技术方案/数据模型/UI 设计)
+> 分支:`feat/aux-patch-diagnostics`
 >
 > 本计划用于在后续多次上下文压缩/并行子代理执行期间，作为**任务编排单一事实源**。
 > 执行者先读本文件 + 设计文档；按依赖顺序推进；只做计划内审核，不做无限循环审核。
