@@ -209,7 +209,6 @@ node scripts/doctor.mjs    # 更新后健康检查（不修改任何文件）
 | `/aux patch` | 一键安装当前 DSH 所需全部补丁并自愈 |
 | `/aux patch --json` | 同上，返回结构化步骤结果 |
 | `/aux model <task> [provider/model]` | 查看 / 设置某任务的辅助模型（设置时写成单元素降级链；多级链用设置页"降级链"字段） |
-| `/aux models [--json]` | 各路由的 image 能力（true / false / 未知，设置页选择器数据源） |
 | `/aux vision <path> <question...>` | 命令行直接看图 |
 | `/aux test <task>` | 自检某任务路由 |
 | `/aux memory [n]` | 查看最近图片分析记忆 |
@@ -271,10 +270,7 @@ AUX 的一些桥接需要平台补丁才能完整工作（`image-bridge`、`suba
 
 ### 设置页还能做什么
 
-Web → 设置 → 辅助模型，可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型、超时、并发、`maxChars` 与**思考档位**。设置页分区为「概览 / 路由与模型 / 任务模型与降级链 / 工具与桥接开关 / 图片与缓存 / 调试与诊断 / 高级」，**默认只展开概览**；每个任务默认一行摘要（链 / 超时 / 并发），点「编辑」才展开；超时、并发、`maxChars` 与思考档位收进「高级」。中英双语跟随 DSH 语言。
-
-- **模型选择器**：可折叠供应商分组（默认展开第一组、组头显示已选 n/共 m）+ 组内多选 + 下方链排序（↑/↓/删除）+ 手动输入；6 个任务的降级链与 native 白名单复用同一组件，native 每行标注 image 能力（true / 未声明 image 标黄 / 未知标灰，数据来自 `/aux models`）。
-- **消息图片画廊**：`enabled.messageImages` 默认 `native`（官方图库）；切到 `aux` 后用户消息的缩略图带 `第N/共M` 角标（仅 ≥2 张），其余行为与官方一致（首帧缓存 / 加载 / 重试 / 点击大图 / aria）。
+Web → 设置 → 辅助模型，可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型、超时、并发、`maxChars` 与**思考档位**。设置页按「工具任务 / 桥接任务 / 子代理 / 全局 / 平台开关」分组折叠，中英双语跟随 DSH 语言。
 
 - **状态 chip**：composer 实时显示最近一次辅助调用（任务、耗时、是否降级）。
 - **诊断与修复**：每个工具/桥接显示状态点、补丁徽标、不可用原因；补丁缺失可一键重打，写入后检测并提示重启。

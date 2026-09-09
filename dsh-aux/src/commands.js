@@ -222,9 +222,6 @@ export async function handleAuxCommand(service, agent, rawInput) {
   if (sub === "model") {
     return await handleModelCommand(service, args.slice(1));
   }
-  if (sub === "models") {
-    return await handleModelsCommand(service, args.slice(1));
-  }
   if (sub === "vision") {
     return await handleVisionCommand(service, agent, args.slice(1));
   }
@@ -326,7 +323,7 @@ export async function handleAuxCommand(service, agent, rawInput) {
   }
   return {
     kind: "error",
-    text: '用法: /aux status [--json] — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux debug [N] — 查看内容真相; /aux patch — 重打补丁; /aux model <task> [provider/model] — 查看或设置任务的辅助模型; /aux models [--json] — 各路由 image 能力(设置时写成单元素降级链,可在设置页的"降级链"字段加长)',
+    text: '用法: /aux status [--json] — 查看各任务路由与最近调用; /aux history [N] / /aux history full [N] — 简要/全部溯源; /aux debug [N] — 查看内容真相; /aux patch — 重打补丁; /aux model <task> [provider/model] — 查看或设置任务的辅助模型(设置时写成单元素降级链,可在设置页的"降级链"字段加长)',
   };
 }
 
@@ -637,72 +634,6 @@ export async function handlePatchCommand(service, json = false) {
   return { kind: ok ? "success" : "error", text: output.join("\n") };
 }
 
-/**
- * /aux models [--json] — per-route image capability for the settings picker.
- *
- * Returns a tri-state per provider/model: true (declares image input), false
- * (a non-empty modality list without image) or null (unknown). Results are
- * cached in-process per route and invalidated when the adapter registry
- * announces a change, so opening the picker does not re-resolve the whole
- * catalog on every render.
- * @param service the AUX service.
- * @param args subcommand arguments (supports --json).
- */
-export async function handleModelsCommand(service, args = []) {
-  const json = args.includes("--json");
-  let llm;
-  try {
-    llm = service.ctx.get("llm");
-  } catch {
-    llm = void 0;
-  }
-  if (llm === void 0) {
-    return { kind: "error", text: "aux: llm service is not mounted; cannot resolve model capabilities" };
-  }
-  const cache = service._imageCapabilityCache ?? (service._imageCapabilityCache = new Map());
-  const routes = [];
-  let providers = [];
-  try {
-    providers = llm.listProviders();
-  } catch {
-    providers = [];
-  }
-  for (const provider of providers) {
-    let models = [];
-    try {
-      models = await llm.listModels(provider.id);
-    } catch {
-      models = [];
-    }
-    for (const model of models) {
-      const key = provider.id + "\u0000" + model.id;
-      let imageCapable = cache.get(key);
-      if (imageCapable === void 0) {
-        imageCapable = null;
-        try {
-          const info = await llm.resolveModelInfo(provider.id, model.id);
-          const modalities = info?.inputModalities;
-          // Tri-state: an empty list means unknown (some adapters default
-          // undeclared models to []), never a negative capability claim.
-          if (Array.isArray(modalities) && modalities.length > 0) {
-            imageCapable = modalities.includes("image");
-          }
-        } catch {
-          imageCapable = null;
-        }
-        cache.set(key, imageCapable);
-      }
-      routes.push({ provider: provider.id, model: model.id, name: model.name, imageCapable });
-    }
-  }
-  if (json) return { kind: "success", text: JSON.stringify({ routes }) };
-  const lines = ["模型 image 能力(provider/model: true|false|unknown):"];
-  for (const route of routes) {
-    const state = route.imageCapable === true ? "true" : route.imageCapable === false ? "false" : "unknown";
-    lines.push(`  - ${route.provider}/${route.model}: ${state}`);
-  }
-  return { kind: "success", text: lines.join("\n") };
-}
 /** Handle the /aux model subcommand: read or write one task's route. */
 export async function handleModelCommand(service, args) {
   const task = args[0] ?? "";

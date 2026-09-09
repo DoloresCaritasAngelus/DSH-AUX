@@ -31,7 +31,6 @@ aux-notes/
 # tests/readme-sync.test.js 的运行依赖,必须随仓库版本走(非过程性残留)。
 scripts/*
 !scripts/gen-package-readme.mjs
-!scripts/gen-client-message-images.mjs
 !scripts/doctor.mjs
 !scripts/install-dsh-version.mjs
 !scripts/ci-fake-dsh.mjs
