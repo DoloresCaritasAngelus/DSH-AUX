@@ -14,7 +14,7 @@
 > Whenever you need me, just call me directly～
 
 ![Version](https://img.shields.io/badge/version-0.4.4-blue)
-![Tests](https://img.shields.io/badge/tests-370-brightgreen)
+![Tests](https://img.shields.io/badge/tests-576-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.5--alpha.1-0078D4)
 
@@ -73,13 +73,13 @@ Models keep getting stronger, but handing "look at this image", "read this page"
 | **Settings + status panel** | Grouped and collapsible, bilingual; full platform status, patch diagnostics, one-click repair, and restart detection |
 | **Session image lifecycle** | Deleting a session cleans up unreferenced images; shared images are preserved; image memory survives restarts |
 | **Image library panel** | Sidebar gallery: thumbnail sizes, search/filter, batch actions, detail modal, session/trace entry, group/sort views, archived state, drag-to-select |
-| **Zero third-party runtime deps** | peerDependencies are all official DSH packages |
+| **Zero third-party runtime deps** | peerDependencies are official DSH packages plus the platform-provided `react`/`zod` |
 
 ## What can I do for you
 
 | Tool | What it does | Typical use |
 |---|---|---|
-| `vision_analyze` | Image analysis (parallel multi-image; analyzed images echoed to the trajectory view) | "What's in this image?" "Read the chart values" |
+| `vision_analyze` | Image analysis (parallel multi-image; one failed image does not invalidate the batch and reports the reason and whether a retry helps; analyzed images echoed to the trajectory view) | "What's in this image?" "Read the chart values" |
 | `web_extract` | Web page fetch + summary (same-origin recursion) | "Summarize this page" "Answer a question from this page" |
 | `web_crawl` | Site-wide deep crawl + overall summary | "Crawl the whole docs site and summarize" |
 | `compress_text` | Long-text compression (code/log/doc aware) | Compress logs, docs, or very long context |
@@ -352,7 +352,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 ## Security boundaries
 
-- **SSRF protection (on by default)**: `web_extract`, `web_crawl`, and `vision_analyze`'s `imageUrl` reject internal/loopback/cloud-metadata addresses by default; the fallback fetch path validates **every redirect hop before sending**. To fetch local/intranet services, explicitly set `allowInternalUrls: true`.
+- **SSRF protection (on by default)**: `web_extract`, `web_crawl`, and `vision_analyze`'s `imageUrl` reject internal/loopback/cloud-metadata addresses by default; the fallback fetch path validates **every redirect hop before sending**. Direct fetches pin the validated IP to a dedicated connection (closing DNS rebinding) and apply unconditional connect / first-byte / idle deadlines (15s / 45s by default, configurable, `<=0` disables); an empty resolution is fail-closed. To fetch local/intranet services, explicitly set `allowInternalUrls: true`.
 - **Prompt injection mitigation**: page bodies, compressed text, and text inside images are treated as **untrusted data**, physically separated from the trusted `Question` instructions, with embedded instructions explicitly forbidden.
 - **Concurrency hard cap**: even if `maxConcurrency` is configured higher, each task is capped at **10**.
 
@@ -379,12 +379,12 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **Platform**: DSH 0.1.5-alpha.1 (single supported line on the main branch); Node ≥ 20.
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
-- **Zero third-party runtime deps**: peerDependencies are all official DSH packages (bundled with the platform); no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (569 tests); file list and baseline in `TESTING.md`).
+- **Zero third-party runtime deps**: peerDependencies are official DSH packages plus the platform-provided `react`/`zod`; no `dependencies`.
+- **Zero test deps**: `node --test tests/*.test.js` (581 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 
-- **image-bridge**: lets text-only main models receive pasted images while keeping thumbnails; re-run `bridge/apply-patch.mjs` after `npm update`.
+- **image-bridge**: lets text-only main models receive pasted images while keeping thumbnails; the delivered text anchors on `attachmentId` (no longer on `.ext` hard-link paths) and labels each image "image N of M in this message"; re-run `bridge/apply-patch.mjs` after `npm update`.
 - **settings writability**: the settings page can read/write aux config; native on the DSH alpha line, rc.6 patch retired to `bridge/retired/`.
 - **session event registration channel**: the four hidden events (including `aux/llm-call`) are written with `ignorable: true`; if the patch is missing, events are downgraded (not written) to protect session logs. Since DSH 0.1.5 the session migration validates historical events against a frozen vocabulary, so self-heal now applies **P12** (admits `aux/*`) and **P13** (admits official historical shapes, self-retiring once upstream ships); `dsh-aux/src/event-shapes.js` is the single source of truth for event fields — an unregistered field warns and fails the test suite.
 - **session deletion synergy**: works with `dsh-plugin-session-delete` to clean up unreferenced images when a session is deleted.
@@ -409,8 +409,10 @@ Before the first persistent `tool/call`, only the Minimal tool pair is exposed a
 | [TESTING.md](./TESTING.md) | Test file list and baseline |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guide |
 | [CREDITS.md](./CREDITS.md) | Credits & acknowledgements |
-| [docs/design/](./docs/design/) | Feature design docs (image library / bridges / crawl / vision agent / attachment GC / upstream requests) |
-| [docs/archive/](./docs/archive/) | v0.1-era process docs (PRD / reviews / upstream proposals) |
+| [docs/README.md](./docs/README.md) | Docs-tree index & rules (status vocabulary / status headers / archive rules) |
+| [docs/design/](./docs/design/) | Feature design docs (image library / crawl / upstream requests) |
+| [docs/archive/](./docs/archive/) | Retired docs archive (archive index + retirement reason / successor) |
+| [docs/known-issues.md](./docs/known-issues.md) | Public list of known issues |
 | [AI.md](./dsh-aux/AI.md) | AI agent install guide |
 
 ## FAQ

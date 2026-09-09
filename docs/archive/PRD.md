@@ -1,6 +1,12 @@
 # PRD: dsh-aux — 辅助模型系统(参考 Hermes Agent,零历史包袱重做)
 
-> 状态: **已交付并端到端验证**(M1 + M2 完成;78 项测试全过;2026-08-14 实测:host 插件激活、/aux 命令可用、三工具注册、vision_analyze 分析真实图片成功、web_extract/compress_text 真实调用成功、配置持久化生效;2026-08-15 新增 /aux vision|test|memory 命令与图片记忆日志、会话删除附件清理(事件驱动 + 冷会话定时对账),配套社区插件 dsh-plugin-session-delete 提供删除入口,已实测删除热会话/冷会话清理链路;配套 image-bridge 补丁解决纯文本模型粘贴图片被拒问题,全链路闭环;后续新增 compaction-bridge,实现说明见 README.md)
+> 状态:⬜ 历史
+> 退役原因:三任务时代的 v1 需求规格,缺 web_crawl / 桥接 / 平台化转向
+> 取代者:PROJECT.md + docs/design/
+> 复盘点:仅史料,不再回看
+> 最后核实:2026-09-09
+> 🔻 版本快照:v0.1 时代(2026-08);测试数与里程碑已腐烂
+> 交付记录:**已交付并端到端验证**(M1 + M2 完成;78 项测试全过;2026-08-14 实测:host 插件激活、/aux 命令可用、三工具注册、vision_analyze 分析真实图片成功、web_extract/compress_text 真实调用成功、配置持久化生效;2026-08-15 新增 /aux vision|test|memory 命令与图片记忆日志、会话删除附件清理(事件驱动 + 冷会话定时对账),配套社区插件 dsh-plugin-session-delete 提供删除入口,已实测删除热会话/冷会话清理链路;配套 image-bridge 补丁解决纯文本模型粘贴图片被拒问题,全链路闭环;后续新增 compaction-bridge,实现说明见 README.md)
 > 参考: [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
 > 需求来源: 用户与实现者(本会话)研究 Hermes 源码后的完整设计
 > 目标读者: 实现者

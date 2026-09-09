@@ -6,9 +6,11 @@
 
 ## 0. 你需要知道的
 
-- **dsh-aux 是双端插件**:host 端提供 `ctx.auxLlm` 路由服务 + 三个工具
-  (`vision_analyze` / `web_extract` / `compress_text`)与 `/aux` 命令;
+- **dsh-aux 是双端插件**:host 端提供 `ctx.auxLlm` 路由服务 + 四个工具
+  (`vision_analyze` / `web_extract` / `web_crawl` / `compress_text`)与 `/aux` 命令;
   client 端提供 Web 设置页与 composer 状态 chip。
+- **支持线**:DSH `0.1.5-alpha.1`(主支单版本);`0.1.2-alpha.2 ~ 0.1.2-rc.1` 请用
+  `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 分支或 `v0.4.4-legacy` Release。
 - **安装 = 三步**:① 把包放进 DSH 能解析的 node_modules;② 在 profile 补丁层
   注册一行;③ 重启 DSH。
 - **零配置即可用**:装完不配任何模型也能工作(辅助任务自动用会话主模型)。
@@ -54,7 +56,7 @@ dsh plugin --profile web add "file:/path/to/dsh-aux"
 ```sh
 cd <仓库>/bridge
 node apply-patch.mjs                 # image-bridge / subagent / workflow / skill 补丁(幂等)
-# 设置页可写 aux 在当前 DSH 0.1.2 线是原生能力,不再需要 rc.6 settings 白名单补丁
+# 设置页可写 aux 在当前 DSH 0.1.5-alpha.1 线是原生能力,不再需要 rc.6 settings 白名单补丁
 ```
 
 检查输出无 error;成功后跳到 §3。
@@ -91,12 +93,13 @@ dsh --profile web --dump-config 2>/dev/null | grep -A1 "id: aux" | head -4
 # 期望:包含 name: '<NAME>'
 
 # 3.3 重启后(请用户重启 DSH,或询问用户是否由你重启):
-#   - 会话工具列表出现 vision_analyze / web_extract / compress_text
+#   - 会话工具列表出现 vision_analyze / web_extract / web_crawl / compress_text
 #   - 输入 /aux status 有输出(路由与最近调用)
 #   - Web 设置页出现「辅助模型」区块
 #   - 发一张图片,模型能调用 vision_analyze 描述它(纯文本主模型经
 #     image-bridge 集成组件;多模态模型原生看图)
 #   - /aux status 显示 image-bridge 状态(已集成/缺失)
+#   - /aux status 的补丁台账含 P12/P13(0.1.5 会话迁移放行;补丁写入后需重启 DSH 生效)
 #   - /aux status 显示 compaction-bridge 状态;配置 `/aux model compaction ...`
 #     后原生自动/手动压缩会走 AUX 辅助模型
 #   - 若会话使用「极简」或「Anchored Standard」预设:首轮不会出现 vision_analyze,
@@ -111,7 +114,7 @@ dsh --profile web --dump-config 2>/dev/null | grep -A1 "id: aux" | head -4
 | `--dump-config` 无 aux 行 | insert 未生效 / YAML 语法错 / id 冲突 | 检查 cordis.patch.yml 缩进与 `name` 完全一致;确保插在顶层数组 |
 | 工具未注册、/aux 无响应 | 补丁层改了但未重启 | 重启 DSH(host 插件改动必须重启) |
 | client 设置页不显示 | client bundle 未加载 | 确认 package.json 的 `dsh.client` 声明存在且 platform 为 web |
-| 重启后报插件加载错误 | 版本不匹配 | 检查 DSH 版本 ∈ 0.1.2-alpha.2 ~ 0.1.2-rc.1;查看启动日志(`~/dsh/dsh-web.log`) |
+| 重启后报插件加载错误 | 版本不匹配 | 检查 DSH 版本 = `0.1.5-alpha.1`(主支单版本);`0.1.2-alpha.2 ~ 0.1.2-rc.1` 用 legacy 分支;查看启动日志(`~/dsh/dsh-web.log`) |
 | 发图报 MODEL_DOES_NOT_SUPPORT_IMAGES | 纯文本主模型 + 未装 bridge 补丁 | 可选:安装 `bridge/` 补丁(见 §6),或换多模态主模型 |
 
 ## 5. 卸载
@@ -128,7 +131,8 @@ rm "$DSH_ROOT/node_modules/<NAME>"
 
 - **image-bridge(集成组件,默认安装)**:让纯文本主模型粘贴图片可用,且用户消息
   显示图片缩略图。机制:admit 保留 image block(UI 显示),agent-loop 在模型输入
-  边界按模态改写为路径文本(多模态模型原生看图),selectModel 允许含图会话切换
+  边界按模态改写为 attachmentId 锚点文本(含「本条消息第N张/共M张」,多模态模型原生看图),
+  selectModel 允许含图会话切换
   到纯文本模型(v3)。安装:install.sh 已包含;
   单独重装:`cd <repo>/bridge && node apply-patch.mjs`(幂等,可 --dry-run / --rollback)。
   `npm update` 后需重跑;`/aux status` 会报告状态。
@@ -148,8 +152,10 @@ rm "$DSH_ROOT/node_modules/<NAME>"
   持久化读链对白名单外事件拒绝整个日志(官方无插件事件注册通道)。install.sh
   中的 `bridge/patch-session-ignorable.mjs` 补齐 append 的 `ignorable` 写入
   入口并放行白名单。**未装时插件自动降级为不写事件**(保护会话日志),
-  `/aux status` 显示"会话事件记录:已停用"。`npm update` 后重跑。
-- **settings 可写性**:当前 DSH 0.1.2 线原生支持设置页读写 aux 配置,不再需要
+  `/aux status` 显示"会话事件记录:已停用"。`npm update` 后重跑。DSH 0.1.5 起会话迁移用
+  冻结词表校验历史事件,启动自愈会补 **P12**(放行 `aux/*` 事件)与 **P13**(放行官方历史写法,
+  上游收编后自退役);补丁写入后**重启 DSH 生效**,`/aux status` 的补丁台账列出两行。
+- **settings 可写性**:当前 DSH 0.1.5-alpha.1 线原生支持设置页读写 aux 配置,不再需要
   rc.6 的 settings 白名单补丁(旧补丁见 `bridge/retired/` 与 legacy 分支)。
 - **会话删除**:DSH 原生无删除会话功能,配合社区插件(如 dsh-plugin-session-delete);
   删除会话时 dsh-aux 会自动清理其无引用图片。

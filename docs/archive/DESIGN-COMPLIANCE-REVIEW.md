@@ -1,5 +1,12 @@
 # web_extract / web_crawl 设计意图符合度审查
 
+> 状态:⬜ 历史
+> 退役原因:审计对象是 v0.1 时代设计,后续版本已多次演进
+> 取代者:docs/design/WEB-CRAWL-DESIGN.md 的“实施进度”段 + tests/web-crawl.test.js
+> 复盘点:web_crawl 抓取核心再次重构时
+> 最后核实:2026-09-09
+> 🔻 版本快照:2026-08(基线 247 通过,已腐烂)
+
 > 审查对象:dsh-aux 插件。基线测试全量通过(`node --test tests/*.test.js` = **247 通过,0 失败**)。
 > 本文逐项比对 `WEB-EXTRACT-REVIEW.md` 与 `WEB-CRAWL-DESIGN.md` 的决议与实现。
 > **注(后续修订)**:本表基于修复前代码。其主发现 **P0-a**(followLinks 双引擎、未委托

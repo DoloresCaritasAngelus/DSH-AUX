@@ -28,9 +28,11 @@ tmp-*.mjs
 # 工作区,禁止入库(与 aux-notes 脱密纪律一致)
 aux-notes/
 # 保留 scripts/ 下的开发脚本但排除构建依赖:gen-package-readme 是 prepack 与
-# tests/readme-sync.test.js 的运行依赖,必须随仓库版本走(非过程性残留)。
+# tests/readme-sync.test.js 的运行依赖,gen-project-ai 是 PROJECT.AI.md 生成器与
+# CI 门禁的运行依赖,必须随仓库版本走(非过程性残留)。
 scripts/*
 !scripts/gen-package-readme.mjs
+!scripts/gen-project-ai.mjs
 !scripts/doctor.mjs
 !scripts/install-dsh-version.mjs
 !scripts/ci-fake-dsh.mjs
@@ -39,3 +41,4 @@ scripts/*
 !scripts/ci-install-smoke.mjs
 !scripts/ci-pack-check.mjs
 !scripts/ci-commit-lint.mjs
+!scripts/ci-docs-index.mjs

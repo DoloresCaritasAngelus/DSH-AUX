@@ -32,8 +32,12 @@ jobs:
         run: node --test tests/*.test.js
       - name: 文档脱密检查
         run: node scripts/ci-doc-hygiene.mjs
+      - name: 文档树索引检查
+        run: node scripts/ci-docs-index.mjs
       - name: README 单一真相检查
         run: node scripts/gen-package-readme.mjs --check
+      - name: PROJECT 单一真相检查
+        run: node scripts/gen-project-ai.mjs --check
       - name: 全仓语法检查
         run: node scripts/ci-syntax-check.mjs
       - name: npm 发布内容断言
@@ -63,8 +67,12 @@ jobs:
         run: node scripts/ci-fake-dsh.mjs
       - name: 文档脱密检查
         run: node scripts/ci-doc-hygiene.mjs
+      - name: 文档树索引检查
+        run: node scripts/ci-docs-index.mjs
       - name: README 单一真相检查
         run: node scripts/gen-package-readme.mjs --check
+      - name: PROJECT 单一真相检查
+        run: node scripts/gen-project-ai.mjs --check
 
   # 真实补丁落盘 + doctor 冒烟:在 fake DSH 根里实际打一遍补丁并跑 self-heal,
   # 最后用 doctor 验证 deployment 状态。只在当前 DSH 默认版本上跑,控制成本。
