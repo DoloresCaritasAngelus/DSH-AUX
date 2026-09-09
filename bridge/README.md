@@ -26,6 +26,21 @@
 | `dsh-session` | P7 ignorable 写入口 + P8 `aux/llm-call` 白名单 |
 | `dsh-session-format-v0-to-v1` | P12 放行 `aux/*` 事件 + P13 放行官方历史写法(0.1.5 旧会话迁移) |
 
+## 退出码、备份与计数口径(2026-09-09 起)
+
+| 情况 | 退出码 | 说明 |
+|---|---|---|
+| 已打补丁 / 已是最终态 / 版本不匹配跳过 / `--rollback` 完成 | `0` | 版本不匹配保持 0:`install.sh` 用 `set -e`,非零会把"未知版本先跳过、不破坏部署"退化成"装不上";该信号由输出文本承载(CI/自愈以正则门禁匹配) |
+| 步骤块失配或替换失败 | `1` | 该目标**整体回滚**到应用前状态,不落半补丁;`install.sh` 会中止,自愈只 WARN 不中断启动 |
+
+- 备份命名空间:`apply-patch` 写 `index.js.bak-bridge-<ts>`,`patch-session-ignorable` 写
+  `index.js.bak-ignorable-<ts>`;`--rollback` **只认自己写下的备份**(兼容旧版无 tag 的
+  `index.js.bak-<ISO>` 形状),不会再误弹 `self-heal` 的 `.bak-selfheal-*`。
+- `anchor-text` 升级判定改用块匹配(`blockPattern`),不再用 `!includes("attachmentId=<")`
+  负向门——注释里出现该字符串不会再让升级静默跳过。
+- 计数口径:`tests/bridge.test.js` 的部署包探测改为显式 opt-in(`BRIDGE_DEPLOYED_SRC=1`
+  或 `DSH_AGENT_LOOP`);**默认不探测**,本机与 CI 的 `# tests` 计数一致。
+
 ## 安装 / 升级
 
 ```bash

@@ -375,7 +375,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are all official DSH packages (bundled with the platform); no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (510 tests); file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (569 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 

@@ -2,6 +2,26 @@
 
 ## 未发布 (Unreleased)
 
+### 评审复核后的修复(2026-09-09)
+
+- **图片删除 fail-closed 全覆盖**:`deletionReady` 此前只覆盖会话清理;现集中为
+  `assertDeletionReady` 并接入 `/aux image delete`、孤儿回收与 `/aux gc-images`
+  (含 `--force`),冻结期返回 `DELETION_FROZEN`(可重试);`gc-images` 跳过 `.trash`、
+  按引用/固化过滤,固化清单读失败即拒绝删除。
+- **回收站窗口按入站计龄**:`.trash` 条目名内时间戳为权威,7 天窗口不再因对象原始
+  mtime 过期而退化为 0;`sweepTrash` 只清本模块条目,外来文件保留并计数。
+- **多图 `vision_analyze` 补顶层 `mode`**:`images[]` 返回值此前缺 schema 必填的顶层
+  `mode`,真实 DSH 输出校验(`ToolOutputError`)会让整批结果作废;现取批次交付决策,
+  并用真实返回喂 schema 的测试锁住(全成功/单元素/部分失败/native)。
+- **fetch 钉扎隔离与有界超时**:直连请求改用独立连接(`agent: false`),钉扎"按连接"
+  成立(并关闭 Node ≥22.21 的 env-proxy 全局路由,避免钉扎被静默旁路);新增**无条件** connect/首字节与空闲 deadline(默认 15s/45s,可配,`<=0` 关闭),
+  无代理部署不再无界挂起;严格模式解析为空时 fail-closed;`NO_PROXY` 括号 IPv6 归一。
+- **补丁引擎整体回滚**:步骤块中途失配不再落半补丁(整体回滚 + 退出码 1);`--rollback`
+  只认本工具备份;anchor-text 升级判定改用块匹配;self-heal 告警覆盖"步骤块未命中";
+  `tests/bridge.test.js` 的部署包探测改为显式 opt-in。
+- **文档与 CI 口径**:测试基线快照收敛、`TESTING.md` 清单补齐、`ci-doc-hygiene` 新增
+  "发布段非空正文"闸与变异测试、`install-dsh-version` 版本矩阵收敛并注明只切换 `package.json`。
+
 ### 0.1.5 会话迁移放行(P12/P13)
 
 - **P12 — AUX 事件进冻结词表**:DSH 0.1.5 的 v0→v1 会话迁移用冻结词表
@@ -18,8 +38,8 @@
 - **写端闸**:新增 `dsh-aux/src/event-shapes.js`(事件 × 允许字段单一真相)与
   `tests/event-shapes.test.js`(扫描全部写入点断言字段已登记);`events.js` 在写入前
   对未登记字段告警一次,避免"加了字段、下次 DSH 升级才发现旧会话读不出来"。
-- **测试**:新增 `tests/event-shapes.test.js`、`tests/format-admissions.test.js`;
-  全量 494 → 510 条。
+- **测试**:新增 `tests/event-shapes.test.js`、`tests/format-admissions.test.js`
+  (不记裸总数,基线见 `TESTING.md` 并以实跑为准)。
 
 ### 修复
 
@@ -54,8 +74,8 @@
   显示 `【图N/共M】` 角标(消息内编号,与桥接文本同源)+ 缩略图 + 结论,失败项只出文本;
   输出新增 `imageOrdinal`(消息级 / 调用级),`presentationMeta` 增加同序 `ordinals`。
 - **测试**:新增 `tests/image-path-media.test.js`、`tests/fetch-pinning.test.js`、
-  `tests/route-chain.test.js`、`tests/vision-ordinal.test.js`、`tests/vision-toolview.test.js`;
-  全量 435 → 483 条。
+  `tests/route-chain.test.js`、`tests/vision-ordinal.test.js`、`tests/vision-toolview.test.js`
+  (不记裸总数,基线见 `TESTING.md` 并以实跑为准)。
 
 ### 图片生命周期与 vision 原生交付
 

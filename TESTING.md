@@ -1,7 +1,8 @@
 # TESTING — dsh-aux 测试指南
 
 > 面向维护本项目的协作者(人/模型)。**活文档**:测试文件或基线变化时同步更新本表。
-> 关联技能:`.agents/skills/aux-test-baseline/SKILL.md`(规则),本文件是清单。
+> 关联技能:`.agents/skills/aux-test-baseline/SKILL.md`(测试纪律/程序入口;
+> 基线数字与文件清单以本文件为准,技能里不写易腐快照数字)。
 
 ## 运行
 
@@ -10,14 +11,15 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **510**(2026-09-09)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **569**(2026-09-09)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
+- `tests/bridge.test.js` 的部署包探测是**显式 opt-in**(`BRIDGE_DEPLOYED_SRC=1` 或 `DSH_AGENT_LOOP`);默认不探测 ⇒ 本机与 CI 的 `# tests` 计数一致。
 
 ## CI 辅助脚本
 
 ```bash
-node scripts/install-dsh-version.mjs --version <DSH-VERSION>  # 临时切换 @deepseek-ai/* 版本(自动恢复 package.json)
+node scripts/install-dsh-version.mjs --version <DSH-VERSION>  # 临时切换 @deepseek-ai/* 版本(只还原 package.json,node_modules 保持切换后的版本)
 node scripts/ci-syntax-check.mjs                              # 全仓 JS/MJS 语法检查
 node scripts/ci-fake-dsh.mjs                                  # fake DSH 根 + bridge patch dry-run
 node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + 实际补丁 + doctor(CI 专用)
@@ -43,6 +45,9 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/compression.test.js` | `compress_text` 压缩逻辑与 schema |
 | `tests/core-review.test.js` | 核心链路评审回归(路由/降级/能力门) |
 | `tests/fetch-vision-review.test.js` | 抓取/视觉链路回归 |
+| `tests/fetch-pinning.test.js` | 直连抓取 IP 钉扎(P5.2):SSRF 校验与连接同一次解析、逐跳钉扎、resolver/pin 单测(真 socket 只用本地 server) |
+| `tests/fetch-deadline.test.js` | 直连请求的无条件 connect/首字节与空闲 deadline(无代理部署同样生效;`<=0` 关闭;静默丢包必须超时) |
+| `tests/fetch-policy.test.js` | 解析 fail-closed(空地址集拒绝)+ `NO_PROXY` 括号 IPv6 归一 + 代理/直连策略边界 |
 | `tests/fs-boundary.test.js` | 文件系统边界(图片/附件路径安全) |
 | `tests/images-review.test.js` | 图片归属/回收/记忆 |
 | `tests/lifecycle-durability.test.js` | 生命周期持久化损坏恢复/空条目清理/共享引用回收/加载重试 |
@@ -52,6 +57,8 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/image-actions.test.js` | 单张删除/孤儿回收/ownership 清理/符号链接安全 |
 | `tests/image-commands.test.js` | `/aux images` 与 `/aux image` 命令层 |
 | `tests/image-locate.test.js` | 图片定位:最近 user/message seq 与 vision_analyze callId/callSeq |
+| `tests/image-path-media.test.js` | imagePath 魔数嗅探(P5.5/G9):无扩展名按 PNG/JPEG/GIF/WebP 签名判型、声明扩展名与字节不符拒绝、与官方 read_image 对齐 |
+| `tests/user-message-image.test.js` | `user/message` 载荷形状归一(P0/A42):`event.data` 即 UserMessage 本体,粘贴图查找/归属/编号回归 |
 | `tests/session-compat.test.js` | Session API 兼容:旧 `.events` / 新 `snapshotEvents()` 覆盖 bootstrap/history/debug/locate/resolve |
 | `tests/image-gc-debt.test.js` | 图片 GC 债(P4):`attachment-refs.json` 旁挂表读写/降级、`imageHostPath` 回收与 mediaType 派生 `.ext`、旁挂缺失回退不拒删、`request-images/` 总量上限 + mtime LRU、`object-path` 单模块命名规则 |
 | `tests/image-lifecycle.test.js` | 图片生命周期(P3):`collectImageRefs` 递归工具产物、persistence shim(新 `list/open` + 旧 `listSnapshots/inspect`)、恢复屏障与 fail-closed 全局拒删、`.trash` 回收与清扫、`resolveImageRef` 递归与"已回收"文案 |
@@ -59,9 +66,14 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/event-shapes.test.js` | 写端闸:AUX 事件类型/载荷字段必须登记在 `event-shapes.js`(静态扫描全部写入点 + `unknownEventKeys` 判定 + bridge disposition 覆盖) |
 | `tests/format-admissions.test.js` | P12/P13 纯函数:补什么/幂等/救援补丁识别/产物 `node --check`/锚点缺失只告警 |
 | `tests/readme-sync.test.js` | 单一真相:包内 README == 根 README 生成快照(防漂移) |
+| `tests/ci-doc-hygiene.test.js` | 文档脱密闸变异测试:段数不足 / 发布段空正文 / 哨兵缺失 / Unreleased 缺失必须非零退出 |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
 | `tests/subagent-route.test.js` | subagent 路由判定(native/manual/vision-aware) |
+| `tests/route-chain.test.js` | 多级降级链(P5.3):`tasks.<task>.models` 有序回退、单数 provider/model 兼容路径、设置投影/校验 |
 | `tests/vision-route.test.js` | vision 交付路由(P2):`resolveVisionDelivery` 决策矩阵(白名单/否定模态/forceAuxVision/auto 双条件)、native 零辅助调用、形状含 `mode`、交付失败点名 `visionRoute: 'aux'` |
+| `tests/vision-ordinal.test.js` | vision 输出序号(P5.6):消息级/调用级 `imageOrdinal`、`presentationMeta` 同序 ordinals |
+| `tests/vision-toolview.test.js` | vision_analyze toolview 卡片(P5.6):keyed `tool.call.toolview` 注册 + 各调用态渲染(假模块加载器 + 最小 React) |
+| `tests/vision-batch-mode.test.js` | 多图返回顶层 `mode` 过**编译后** schema(全成功/单元素/部分失败/native)+ 多来源拒绝 + 每批一次 delivery |
 | `tests/vision-echo.test.js` | vision_analyze 轨迹回显(输出 schema 锁形/官方 read_image 形状对齐/Session 加载边) |
 | `tests/web-crawl.test.js` | web_crawl(robots/范围/hosts/seed/模式/预算) |
 | `tests/web-extract-fixes.test.js` | web_extract(编码/反爬/代理/重定向/SSRF/Teredo…) |

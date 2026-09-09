@@ -70,7 +70,7 @@
 
 ---
 
-## 请求 2 —— `ctx.attachments` 列举 / 回收 seam
+## 请求 2 —— `AttachmentService` 列举 / 回收 seam
 
 ### 插件需要做什么
 
