@@ -109,7 +109,7 @@ if (msgHits > 0) {
 // 历史事故模式二(变异 B):文件被替换成 N 个 `## 0.x` 假标题 + 两个哨兵、零正文,
 // 只数段数与哨兵的门禁会 exit 0 漏网。脱密规则不会命中这两种删除/伪造,
 // 所以这里单独断言结构下限 + 正文非空。
-const CHANGELOG_RELEASE_BASELINE = 23; // 基线 v0.4.4 时的已发布版本段数量
+const CHANGELOG_RELEASE_BASELINE = 24; // 基线 v0.4.5 时的已发布版本段数量
 
 /**
  * 按 `## ` 切 CHANGELOG 段,并判断每段是否有正文。
@@ -155,8 +155,8 @@ try {
     );
     changelogHits += 1;
   }
-  if (!/^## 0\.4\.4\b/m.test(changelog)) {
-    console.error("DOC-HYGIENE CHANGELOG.md [发布历史缺失] 未找到 v0.4.4 段。");
+  if (!/^## 0\.4\.5\b/m.test(changelog)) {
+    console.error("DOC-HYGIENE CHANGELOG.md [发布历史缺失] 未找到 v0.4.5 段。");
     changelogHits += 1;
   }
   if (!/^## 未发布 \(Unreleased\)$/m.test(changelog)) {
