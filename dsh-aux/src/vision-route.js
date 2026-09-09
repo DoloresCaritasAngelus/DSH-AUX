@@ -5,12 +5,20 @@
  * The decision is a pure function of resolved facts so it can be tested
  * exhaustively without a runtime. Two safety rules dominate:
  *
- * - `nativeRoutes` is a **whitelist**: an unlisted route never gets native
- *   delivery, because route-level `defaultInput` can claim image support a
- *   model does not really have.
+ * - `nativeRoutes` is a **whitelist** and, by design, the **authority**: an
+ *   unlisted route never gets native delivery, because route-level
+ *   `defaultInput` can claim image support a model does not really have.
+ *   Listing a route is an explicit operator opt-in (`visionRoute` must also be
+ *   `native-when-capable` or `auto`), so a whitelist hit is taken as
+ *   sufficient proof of image capability. There is deliberately **no positive
+ *   re-check** against `inputModalities`: providers commonly report no modality
+ *   list at all, and treating that silence as "cannot see images" would veto
+ *   every opt-in. A misconfiguration therefore surfaces as a main-model turn
+ *   that cannot see the attached image, not as a silent fallback to AUX.
  * - `inputModalities` is only a **negative gate**: a non-empty list that
  *   omits `image` refuses native delivery. An absent/undefined list is not
- *   proof of capability and never authorizes anything by itself.
+ *   proof of capability and never authorizes anything by itself — the
+ *   whitelist does that.
  *
  * @module @dolorescaritasangelus/dsh-aux/vision-route
  */
@@ -51,6 +59,9 @@ export function resolveVisionDelivery({
   if (Array.isArray(mainInputModalities) && mainInputModalities.length > 0 && !mainInputModalities.includes("image")) {
     return { mode: "aux", reason: "main-text-only" };
   }
+  // Whitelist = authority: an explicit opt-in authorizes native delivery. The
+  // modality check above is a negative gate only; a missing/empty list neither
+  // authorizes nor refuses (see module doc: no positive capability re-check).
   if (!Array.isArray(nativeRoutes) || !nativeRoutes.includes(key)) {
     return { mode: "aux", reason: "route-not-whitelisted" };
   }

@@ -56,20 +56,38 @@ function sleep(ms, signal) {
 }
 
 /**
+ * Resolve the delivery decision once per tool call. The decision is a property
+ * of the batch — every image in one call shares the same main route, the same
+ * configuration and the same main-model modalities — while
+ * `service.visionDelivery` probes the main route and (through index.js)
+ * `llm.resolveModelInfo` on every invocation, none of which is cached. A
+ * per-image decision therefore repeated that work once per image *and* once
+ * per automatic retry.
+ *
+ * @param service the aux service (may not implement visionDelivery at all).
+ * @param exec tool execution context.
+ * @returns {Promise<{mode: "aux"|"native", reason: string}>}
+ */
+async function resolveDelivery(service, exec) {
+  if (typeof service.visionDelivery !== "function") return { mode: "aux", reason: "no-router" };
+  return await service.visionDelivery(exec);
+}
+
+/**
  * Analyze one image, retrying once when the failure class is transient
  * (rate limit / timeout / connection). The retry re-enters the whole route
  * chain, so a primary route that just entered cooldown can land on a backup.
  * Non-transient failures and aborted calls are rethrown untouched.
  */
-async function analyzeWithRetry(service, item, question, exec) {
+async function analyzeWithRetry(service, item, question, exec, delivery) {
   try {
-    return await analyzeOne(service, item, question, exec);
+    return await analyzeOne(service, item, question, exec, delivery);
   } catch (error) {
     const kind = classifyFailure(error, exec.signal);
     if (exec.signal?.aborted === true || !isRetryableFailure(kind)) throw error;
     await sleep(RETRY_DELAY_MS, exec.signal);
     if (exec.signal?.aborted === true) throw error;
-    return await analyzeOne(service, item, question, exec);
+    return await analyzeOne(service, item, question, exec, delivery);
   }
 }
 
@@ -135,6 +153,11 @@ export async function runVision(service, args, exec) {
     throw new Error("vision_analyze: provide one of attachmentId, imagePath, imageUrl, or an images array");
   if (images.length > 0 && single > 0)
     throw new Error("vision_analyze: provide either the images array or a single image source, not both");
+  // The `images` entries are exactly-one; the classic top-level fields must be
+  // too. resolveImageRef silently prefers attachmentId over imagePath over
+  // imageUrl, so accepting two sources would analyze a different image than
+  // the caller asked for instead of failing loudly.
+  if (single > 1) throw new Error("vision_analyze: provide exactly one of attachmentId, imagePath, or imageUrl");
   if (images.length > 0 && images.some((item) => !validImageItem(item))) {
     throw new Error(
       "vision_analyze: each images entry must be an object with exactly one of attachmentId, imagePath, or imageUrl",
@@ -161,8 +184,11 @@ export async function runVision(service, args, exec) {
     images.length > 0
       ? images
       : [{ attachmentId: args.attachmentId, imagePath: args.imagePath, imageUrl: args.imageUrl }];
+  // One delivery decision for the whole batch (was: one per image, plus one
+  // per automatic retry — see resolveDelivery).
+  const delivery = await resolveDelivery(service, exec);
   const settled = await mapWithConcurrency(items, Math.min(maxImages, 4), (item) =>
-    analyzeWithRetry(service, item, question, exec),
+    analyzeWithRetry(service, item, question, exec, delivery),
   );
   const events = sessionEvents(exec.agent?.session);
   if (images.length === 0) {
@@ -194,6 +220,11 @@ export async function runVision(service, args, exec) {
     analyses: results,
     provider: firstOk?.provider ?? "",
     model: firstOk?.model ?? "",
+    // Top-level delivery route of the batch. The output schema requires it
+    // (register.js) and every entry in this batch shares the single decision
+    // made above; failed entries carry the "aux" fallback label, so the batch
+    // decision — not entries[0] — is authoritative.
+    mode: delivery?.mode ?? results[0]?.mode ?? "aux",
   };
 }
 
@@ -211,15 +242,18 @@ function nativeDeliveryNote(question) {
   return `[原生视觉交付] 图片已作为附件随本次工具结果返回,请直接查看该图片后回答。问题: ${question}`;
 }
 
-/** Analyze exactly one image through the auxiliary vision route. */
-export async function analyzeOne(service, source, question, exec) {
+/** Analyze exactly one image through the auxiliary vision route.
+ * @param service the aux service.
+ * @param source one image source (attachmentId / imagePath / imageUrl).
+ * @param question the caller's intent.
+ * @param exec tool execution context.
+ * @param delivery optional batch-level delivery decision (see runVision); when
+ * omitted it is resolved here, so direct callers keep the old contract. */
+export async function analyzeOne(service, source, question, exec, delivery) {
   const startedAt = Date.now();
   const ref = await resolveImageRef(service, source, exec);
-  const delivery =
-    typeof service.visionDelivery === "function"
-      ? await service.visionDelivery(exec)
-      : { mode: "aux", reason: "no-router" };
-  if (delivery.mode === "native") {
+  const decision = delivery ?? (await resolveDelivery(service, exec));
+  if (decision.mode === "native") {
     if (typeof ref?.attachmentId !== "string" || ref.attachmentId.length === 0) {
       // Never silently fall back: a chosen-but-failed native delivery is
       // visible to the caller, with the escape hatch named explicitly.
@@ -235,8 +269,8 @@ export async function analyzeOne(service, source, question, exec) {
     // analysis conclusion, only the image itself. The delivery is still
     // observable through the existing aux/llm-call event with mode="native"
     // (no new event type, so no patch/whitelist change).
-    const provider = delivery.mainRoute?.provider ?? "";
-    const model = delivery.mainRoute?.model ?? "";
+    const provider = decision.mainRoute?.provider ?? "";
+    const model = decision.mainRoute?.model ?? "";
     await recordAuxEvent(service, exec.agent?.session, {
       task: "vision",
       provider,

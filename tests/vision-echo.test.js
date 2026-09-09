@@ -122,6 +122,8 @@ test("trace echo: 输出 schema 锁形 —— ref 多一字段或少一必填字
   assert.deepEqual(validateJsonSchemaValue(schema, bare, "value"), [], "无可选字段的 ref 应通过");
 });
 
+// 形状级用例:这里手工构造的值是 schema 接受域的说明。真实 runVision 返回是否
+// 满足该 schema 由 tests/vision-batch-mode.test.js 端到端锁定(含顶层 mode)。
 test("trace echo: 输出 schema 接受无 attachment 的失败条目(多图)", () => {
   const schema = captureVisionDefinition().output.schema;
   const value = {
