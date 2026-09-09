@@ -2,7 +2,7 @@
 
 > 状态:✅ 活跃
 > 最后核实:2026-09-09
-> 🔻 版本快照:dsh-aux v0.4.2 发布(含 0.4.2-FIX1 与未发布段的图库修复)/ DSH 0.1.2 线
+> 🔻 版本快照:dsh-aux v0.4.2 发布(含 0.4.2-FIX1 与未发布段的图库修复)/ DSH 0.1.5-alpha.1(主支单版本)
 > 说明:设计已实现并随版本演进;§8 阶段清单与 §12 验收复选框是实施期内容,现状以代码与 CHANGELOG 为准。
 > 分支:`feat/aux-patch-diagnostics`
 > 作者:AUX maintainer / AI agent

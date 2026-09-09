@@ -2,6 +2,23 @@
 
 ## 未发布 (Unreleased)
 
+### 文档与工程
+
+- **文档树索引与 CI 闸**:`docs/README.md` 成为 `docs/` 的唯一索引与规则页,含五词状态表
+  (✅ 活跃 / 🟡 部分被取代 / 🔵 已实现(保留作回执) / ⬜ 历史 / 🗄 已归档)、每篇的状态头
+  (状态 + 最后核实 + 🔻 易腐烂标注)与 `docs/archive/**` 的退役头(退役原因 / 取代者 / 复盘点);
+  已实现的设计迁入 `docs/archive/`。新增、移动、退役文档必须同步索引,否则
+  `scripts/ci-docs-index.mjs` 在 CI 中阻塞。
+- **上游功能请求文档**:新增 `docs/design/upstream-requests.md` 与中文版,按对插件生态的代价
+  记录三条请求(受支持的请求投影缝 / 附件列举与回收 seam / 插件自有会话事件类型的准入)
+  与一条低优先级装饰项(消息图片画廊)。
+- **PROJECT 单一真相**:`PROJECT.AI.md` 由 `PROJECT.md` 生成(`scripts/gen-project-ai.mjs`,
+  CI 以 `--check` 把关),事实只在 `PROJECT.md` 维护一份,代理视图不再手改。
+- **安装指南对齐 0.1.5 线**:`dsh-aux/AI.md` 的支持线、工具清单与自愈说明更新到
+  `0.1.5-alpha.1` 单版本,并写明 self-heal 会打 P12/P13、补丁写入后需重启 DSH 生效。
+- **未纳入本版**:Phase 4 前端 UX(消息图片画廊角标 / 设置页分区 / `/aux models` 能力探测)
+  已归档到 `archive/phase4-ui-2026-09-09`,不随本版发布。
+
 ### 评审复核后的修复(2026-09-09)
 
 - **图片删除 fail-closed 全覆盖**:`deletionReady` 此前只覆盖会话清理;现集中为

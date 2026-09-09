@@ -14,7 +14,7 @@
 > 需要我的时候，直接叫我就好～
 
 ![Version](https://img.shields.io/badge/version-0.4.4-blue)
-![Tests](https://img.shields.io/badge/tests-370-brightgreen)
+![Tests](https://img.shields.io/badge/tests-576-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.5--alpha.1-0078D4)
 
@@ -73,13 +73,13 @@
 | **设置页 + 状态面板** | 分组可折叠，中英双语；完整平台状态、补丁可诊断、一键修复、重启检测 |
 | **会话图片生命周期** | 删会话自动清无引用图片；共享保留、图片记忆跨重启 |
 | **图片库面板** | 侧边栏图库：缩略图档位、搜索/过滤、批量操作、详情弹窗、会话/轨迹入口、分组/排序视图、已归档状态、拖拽框选 |
-| **零第三方运行时依赖** | peerDependencies 全为 DSH 官方包 |
+| **零第三方运行时依赖** | peerDependencies 为 DSH 官方包 + 平台自带的 `react`/`zod` |
 
 ## 我都能帮你做什么
 
 | 工具 | 干什么 | 典型场景 |
 |---|---|---|
-| `vision_analyze` | 图像分析（支持多图并行；分析过的图片回显到轨迹视图） | “这张图里是什么？” “读出图表数值” |
+| `vision_analyze` | 图像分析（多图并行，单张失败不影响其余并给出原因与可否重试；分析过的图片回显到轨迹视图） | “这张图里是什么？” “读出图表数值” |
 | `web_extract` | 网页抓取 + 摘要（支持同源递归） | “总结这个页面” “回答某网页里的问题” |
 | `web_crawl` | 站点深度抓取 + 整体摘要 | “抓取整个文档站并总结” |
 | `compress_text` | 长文本压缩（代码/日志/文档自适应） | 压日志、压文档、压超长上下文 |
@@ -352,7 +352,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 ## 安全边界
 
-- **SSRF 防护（默认开启）**：`web_extract` / `web_crawl` 与 `vision_analyze` 的 `imageUrl` 默认拒绝内网 / 环回 / 云元数据地址；回退抓取路径的**每一跳都在请求前校验**。需要抓取本机 / 内网服务时，显式设置 `allowInternalUrls: true`。
+- **SSRF 防护（默认开启）**：`web_extract` / `web_crawl` 与 `vision_analyze` 的 `imageUrl` 默认拒绝内网 / 环回 / 云元数据地址；回退抓取路径的**每一跳都在请求前校验**。直连请求把校验通过的 IP 钉到独立连接（关闭 DNS rebinding），并对连接 / 首字节 / 空闲设无条件 deadline（默认 15s / 45s，可配，`<=0` 关闭）；解析为空即 fail-closed。需要抓取本机 / 内网服务时，显式设置 `allowInternalUrls: true`。
 - **Prompt 注入缓解**：网页正文、待压缩文本、图片内文字都视为**不可信数据**，与 `Question` 指令物理分离，并明确禁止执行其中嵌入的指令。
 - **并发硬上限**：每个任务 `maxConcurrency` 即使配置得更大，实际也按 **10** 封顶。
 
@@ -379,12 +379,12 @@ const result = await ctx.auxLlm.call("compress", {
 - **平台**：DSH 0.1.5-alpha.1（主支单版本）；Node ≥ 20。
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 用户**：请使用永久分支 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 或 Release `v0.4.4-legacy`。
 - **旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）用户**：请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。主支不再支持这些版本。
-- **运行时零第三方依赖**：peerDependencies 全部是 DSH 官方包（环境自带），无 `dependencies`。
-- **测试零依赖**：`node --test tests/*.test.js`（576 项；文件清单与基线见 `TESTING.md`）。
+- **运行时零第三方依赖**：peerDependencies 为 DSH 官方包 + 平台自带的 `react`/`zod`（环境提供），无 `dependencies`。
+- **测试零依赖**：`node --test tests/*.test.js`（581 项；文件清单与基线见 `TESTING.md`）。
 
 ### 集成组件
 
-- **image-bridge**：让纯文本主模型也能直接粘贴图片，UI 保留缩略图；`npm update` 后需重跑 `bridge/apply-patch.mjs`。
+- **image-bridge**：让纯文本主模型也能直接粘贴图片，UI 保留缩略图；投递文本以 `attachmentId` 为锚点（不再依赖 `.ext` 硬链接路径），并标注「本条消息第N张/共M张」；`npm update` 后需重跑 `bridge/apply-patch.mjs`。
 - **settings 可写性**：设置页可读写 aux 配置；DSH alpha 线为原生能力，rc.6 旧补丁已退役到 `bridge/retired/`。
 - **会话事件注册通道**：`aux/llm-call` 等四个隐藏事件以 `ignorable: true` 标记写入；未装补丁时自动降级不写事件，保护会话日志。DSH 0.1.5 起会话迁移用冻结词表校验历史事件，自愈新增 **P12**（放行 `aux/*`）与 **P13**（放行官方历史写法，上游收编后自退役）；`dsh-aux/src/event-shapes.js` 是事件字段的单一真相，写入未登记字段会告警并让测试失败。
 - **会话删除协同**：配合 `dsh-plugin-session-delete`，删除会话时自动清理无引用图片。
@@ -409,8 +409,10 @@ const result = await ctx.auxLlm.call("compress", {
 | [TESTING.md](./TESTING.md) | 测试文件清单与基线 |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 贡献指南 |
 | [CREDITS.md](./CREDITS.md) | 借鉴来源与致谢 |
-| [docs/design/](./docs/design/) | 专项设计文档（图库 / 桥接 / 抓取 / 视觉代理 / 会话附件 GC / 上游请求） |
-| [docs/archive/](./docs/archive/) | v0.1 时代过程文档存档（PRD / 评审 / 上游提案） |
+| [docs/README.md](./docs/README.md) | 文档树索引与规则（状态词表 / 状态头 / 归档规则） |
+| [docs/design/](./docs/design/) | 专项设计文档（图库 / 抓取 / 上游请求） |
+| [docs/archive/](./docs/archive/) | 已退役文档存档（归档索引 + 退役原因 / 取代者） |
+| [docs/known-issues.md](./docs/known-issues.md) | 公开已知问题清单 |
 | [AI.md](./dsh-aux/AI.md) | 给 AI 代理的安装指南 |
 
 ## 常见问题
