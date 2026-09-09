@@ -24,6 +24,7 @@
 | `dsh-workflow-worker-thread` | workflow `agent()` 子代理也走 AUX 路由 |
 | `dsh-tool-skill` | schema 增加可选 `task` 参数供预审桥接 |
 | `dsh-session` | P7 ignorable 写入口 + P8 `aux/llm-call` 白名单 |
+| `dsh-session-format-v0-to-v1` | P12 放行 `aux/*` 事件 + P13 放行官方历史写法(0.1.5 旧会话迁移) |
 
 ## 安装 / 升级
 
@@ -38,7 +39,7 @@ node apply-patch.mjs        # 自动识别状态:原始 → 已补丁 / 中间�
 #   dsh-tool-skill(schema)
 ```
 
-> 自愈：`node bridge/self-heal.mjs` 会重打 P1-P6/P11 + P7/P8，并在 DSH 启动脚本中幂等执行。
+> 自愈：`node bridge/self-heal.mjs` 会重打 P1-P6/P11 + P7/P8 + P12/P13，并在 DSH 启动脚本中幂等执行。
 
 ## 退役补丁
 
@@ -47,6 +48,22 @@ node apply-patch.mjs        # 自动识别状态:原始 → 已补丁 / 中间�
 - rc.8 专用 agent-loop / subagent 原始块
 
 这些文件移入 `bridge/retired/`，不在主支参与安装/检测；未来需要时可直接从 legacy 分支或 retired 目录参考/复用。
+
+## P12/P13 — 0.1.5 会话迁移放行
+
+DSH 0.1.5 的会话读取管线新增 v0→v1 迁移,对每个历史事件做两道冻结校验(冻结词表
+`RELEASED_V0_EVENT_DISPOSITIONS` + 逐类型语义 switch),并对**多余载荷成员**零容忍;
+未知类型连 `ignorable: true` 都不放行 ⇒ 含 `aux/*` 事件的旧会话、以及官方历史写端
+留下的 `origin` / `stack` / `replayState` 形状,一律打不开且源工件不变。
+
+- **P12(AUX 自有)**:按 `dsh-aux/src/event-shapes.js` 的登记表为四个 `aux/*` 事件补
+  disposition 与透传 case;键集是**已发布形态 ∪ 当前形态**的并集。
+- **P13(官方写端缺口,自退役)**:`permission/preset` 的 `origin`、abort cause 的 `stack`、
+  官方 `thinking/language`、provider 扩展的 `finish.replayState`。上游把这些形状收进
+  词表后探测命中即跳过。`DSH_AUX_NO_OFFICIAL_ADMISSIONS=1` 可只保留 P12。
+- 目标文件:`node_modules/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js`
+  (v1→v2 / v2→v3 的词表派生自 v0,一处改动全链生效)。
+- 逐项幂等、备份 + `node --check` 门;识别第三方已打过的同内容补丁。
 
 ## 技术要点
 

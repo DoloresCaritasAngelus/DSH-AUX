@@ -2,6 +2,25 @@
 
 ## 未发布 (Unreleased)
 
+### 0.1.5 会话迁移放行(P12/P13)
+
+- **P12 — AUX 事件进冻结词表**:DSH 0.1.5 的 v0→v1 会话迁移用冻结词表
+  (`dsh-session-format-v0-to-v1` 的 `RELEASED_V0_EVENT_DISPOSITIONS`)校验历史事件,
+  未知类型连 `ignorable: true` 都不放行、多余载荷成员直接拒(源工件不变),含
+  `aux/*` 事件的旧会话因此打不开。`bridge/self-heal.mjs` 新增 P12:按
+  `dsh-aux/src/event-shapes.js` 的登记表为四个 AUX 事件补 disposition 与透传 case,
+  键集取"已发布形态 ∪ 当前形态"的并集;逐项幂等、备份 + `node --check` 门。
+- **P13 — 官方写端缺口临时放行**:同一文件里一并放行官方历史写法——
+  `permission/preset` 的 `origin`(0.1.1-rc.1)、abort cause 的 `stack`(0.1.3 线)、
+  官方 `thinking/language`、provider 扩展的 `assistant/chunk finish.replayState`。
+  每项先探测上游是否已收编,已收编即跳过(自退役);`DSH_AUX_NO_OFFICIAL_ADMISSIONS=1`
+  只保留 P12。`/aux status` 的补丁台账新增 P12/P13 两行。
+- **写端闸**:新增 `dsh-aux/src/event-shapes.js`(事件 × 允许字段单一真相)与
+  `tests/event-shapes.test.js`(扫描全部写入点断言字段已登记);`events.js` 在写入前
+  对未登记字段告警一次,避免"加了字段、下次 DSH 升级才发现旧会话读不出来"。
+- **测试**:新增 `tests/event-shapes.test.js`、`tests/format-admissions.test.js`;
+  全量 494 → 510 条。
+
 ### 修复
 
 - **用户消息图片查找失效(P0)**:`user/message` 事件的 `data` 就是扁平 `UserMessage`

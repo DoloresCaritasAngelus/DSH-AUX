@@ -6,7 +6,7 @@
 > snapshots; behaviour statements are from that checkout.
 > Status: draft for the maintainers. Not filed as an issue.
 
-Two requests, ordered by cost to the plugin ecosystem. Both exist because the
+Three requests, ordered by cost to the plugin ecosystem. They exist because the
 plugin today reaches below the public surface — one through a local patch of a
 shipped bundle, one through a documented-as-forbidden use of an opaque value.
 
@@ -161,6 +161,59 @@ explicitly asks consumers not to do.
 
 ---
 
+## Request 3 — Admission for plugin-owned session event types
+
+### What dsh-aux needs to do
+
+AUX records four hidden, `ignorable: true` session events (`aux/llm-call`,
+`aux/debug`, `aux/platform-status`, `aux/image-library`) through the public
+`session.append(type, data, undefined, { ignorable: true })` API so that its
+status projections and `/aux history` can replay from the session log without
+re-running commands.
+
+### Why the current seams do not work
+
+DSH 0.1.5's v0→v1 migration validates every historical event against
+`RELEASED_V0_EVENT_DISPOSITIONS`, a frozen inventory of official event types and
+their payload members, and `assertReleasedEventPayload` adds a per-type semantic
+validator. A type outside the inventory is refused **even when
+`ignorable: true`**; a payload member outside its disposition is refused with
+`has unexpected member`. Either refusal makes the whole historical session
+unopenable and leaves the source artifact unchanged. `KNOWN_SESSION_EVENT_TYPES`
+in `dsh-session` does not help: the v0 path never consults it.
+
+There is no registration seam. `defineReleasedPayloadDisposition` is exported,
+but it is only a frozen-object constructor; the inventory itself is
+module-private and `Object.freeze`d.
+
+### Proposed API
+
+Any of:
+
+1. **Honour `ignorable` in the v0 path**, the way the v1 path already does
+   (`assertReleasedArtifactCoordinates` has an `ignorableCurrent` branch when
+   `allowLegacySteering` is false). An unknown event carrying `ignorable: true`
+   would be preserved as opaque JSON instead of refusing the log.
+2. **A registration seam** for plugin-owned types, e.g. a public
+   `registerReleasedEventDisposition(type, { required, optional, opaque })`
+   applied before migration runs.
+3. At minimum, **a release gate** that diffs each tagged writer's emitted
+   payload shapes against the inventory, so a shape an official build writes can
+   never be missing from the reader.
+
+### Acceptance
+
+- A session containing `aux/*` events written on 0.1.2 opens on 0.1.5 with no
+  local patch, and the events stay byte-identical in the migrated artifact.
+- The official shapes reported in deepseek-harness#5818 (`permission/preset`
+  `origin`, `assistant/chunk` `finish.replayState`) plus `thinking/language` and
+  the aborted-cause `stack` member are admitted the same way.
+
+### Impact if not provided
+
+Every plugin that logs session events must maintain a patch of a frozen official
+table inside `node_modules`, and every user of such a plugin loses access to
+older sessions until that patch is re-cut for the next release.
 ## Optional (lower priority) — decorate the shipped image gallery
 
 `conversation.message.images` is a **single** slot whose registration

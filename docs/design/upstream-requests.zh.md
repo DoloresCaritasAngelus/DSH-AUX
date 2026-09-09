@@ -5,7 +5,7 @@
 > 基线:DSH **0.1.5-alpha.1**(`5dda764ed3`)。源码行号为该版本的快照。
 > 状态:交给维护者的草稿,**尚未**向上游开 issue。
 
-本文档含两条请求,按对插件生态的代价排序。两条都源于同一类缺口:插件今天不得不
+本文档含三条请求,按对插件生态的代价排序。它们都源于同一类缺口:插件今天不得不
 **越过公开面**——一条靠本地补丁改写出厂 bundle,一条靠"文档明令禁止"的方式使用
 不透明标识。
 
@@ -135,6 +135,50 @@ interface AttachmentService {
 
 ---
 
+## 请求 3 —— 插件自有会话事件类型的准入
+
+### dsh-aux 需要做什么
+
+AUX 通过公开 API `session.append(type, data, undefined, { ignorable: true })` 写入四个
+隐藏的、`ignorable: true` 的会话事件(`aux/llm-call`、`aux/debug`、
+`aux/platform-status`、`aux/image-library`),让状态投影与 `/aux history` 能从会话
+日志回放,而不必重新执行命令。
+
+### 为什么现有缝不可用
+
+DSH 0.1.5 的 v0→v1 迁移用冻结清单 `RELEASED_V0_EVENT_DISPOSITIONS` 校验每个历史
+事件(类型 + 载荷成员),再由 `assertReleasedEventPayload` 做逐类型语义校验。不在
+清单里的类型**连 `ignorable: true` 都拒**;不在 disposition 里的载荷成员按
+`has unexpected member` 拒。两者任一命中,整个历史会话都打不开,且源工件保持不变。
+`dsh-session` 的 `KNOWN_SESSION_EVENT_TYPES` 无效:v0 路径根本不查它。
+
+官方没有注册缝:`defineReleasedPayloadDisposition` 虽然导出,但只是 frozen 构造器,
+清单本身模块私有且被 `Object.freeze`。
+
+### 建议 API
+
+任一即可:
+
+1. **v0 路径尊重 `ignorable`** —— 与 v1 路径一致(`assertReleasedArtifactCoordinates`
+   在 `allowLegacySteering` 为 false 时有 `ignorableCurrent` 分支):未知但带
+   `ignorable: true` 的事件按 opaque JSON 保留,而不是拒绝整个日志;
+2. **插件事件类型的注册面**,例如公开的
+   `registerReleasedEventDisposition(type, { required, optional, opaque })`,在迁移前生效;
+3. 至少加一道**发布闸**:把每个 tag 写端实际发出的载荷形状与清单做差集,官方自己写的
+   形状就不会从读端遗漏。
+
+### 验收标准
+
+- 0.1.2 上写入、含 `aux/*` 事件的会话,在 0.1.5 上无需本地补丁即可打开,且迁移产物里
+  这些事件逐字节不变;
+- deepseek-harness#5818 报告过的官方形状(`permission/preset` 的 `origin`、
+  `assistant/chunk` 的 `finish.replayState`)以及 `thinking/language`、abort cause 的
+  `stack` 同样被放行。
+
+### 不提供的后果
+
+每个会写会话事件的插件都得在 `node_modules` 里维护一份官方冻结表的补丁;插件的每个
+用户在这些补丁为下一个版本重切之前,都读不到自己的旧会话。
 ## 可选(低优先)—— 装饰出厂图片画廊
 
 `conversation.message.images` 是 **single** 槽,注册即 "replaces the shipped

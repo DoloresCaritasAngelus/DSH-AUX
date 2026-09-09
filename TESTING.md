@@ -10,7 +10,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **494**(2026-09-09)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **510**(2026-09-09)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 
@@ -56,6 +56,8 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 | `tests/image-gc-debt.test.js` | 图片 GC 债(P4):`attachment-refs.json` 旁挂表读写/降级、`imageHostPath` 回收与 mediaType 派生 `.ext`、旁挂缺失回退不拒删、`request-images/` 总量上限 + mtime LRU、`object-path` 单模块命名规则 |
 | `tests/image-lifecycle.test.js` | 图片生命周期(P3):`collectImageRefs` 递归工具产物、persistence shim(新 `list/open` + 旧 `listSnapshots/inspect`)、恢复屏障与 fail-closed 全局拒删、`.trash` 回收与清扫、`resolveImageRef` 递归与"已回收"文案 |
 | `tests/session-append-ignorable.test.js` | P7 append ignorable:每个变体的信封语义、surface 元数据共存、变体表两处同步、0.1.5 端到端(AUX → 补丁后的 append → `ignorable:true`) |
+| `tests/event-shapes.test.js` | 写端闸:AUX 事件类型/载荷字段必须登记在 `event-shapes.js`(静态扫描全部写入点 + `unknownEventKeys` 判定 + bridge disposition 覆盖) |
+| `tests/format-admissions.test.js` | P12/P13 纯函数:补什么/幂等/救援补丁识别/产物 `node --check`/锚点缺失只告警 |
 | `tests/readme-sync.test.js` | 单一真相:包内 README == 根 README 生成快照(防漂移) |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
 | `tests/subagent-route.test.js` | subagent 路由判定(native/manual/vision-aware) |

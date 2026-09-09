@@ -375,13 +375,13 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are all official DSH packages (bundled with the platform); no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (494 tests); file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (510 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 
 - **image-bridge**: lets text-only main models receive pasted images while keeping thumbnails; re-run `bridge/apply-patch.mjs` after `npm update`.
 - **settings writability**: the settings page can read/write aux config; native on the DSH alpha line, rc.6 patch retired to `bridge/retired/`.
-- **session event registration channel**: `aux/llm-call` is written with `ignorable: true`; if the patch is missing, events are downgraded (not written) to protect session logs.
+- **session event registration channel**: the four hidden events (including `aux/llm-call`) are written with `ignorable: true`; if the patch is missing, events are downgraded (not written) to protect session logs. Since DSH 0.1.5 the session migration validates historical events against a frozen vocabulary, so self-heal now applies **P12** (admits `aux/*`) and **P13** (admits official historical shapes, self-retiring once upstream ships); `dsh-aux/src/event-shapes.js` is the single source of truth for event fields — an unregistered field warns and fails the test suite.
 - **session deletion synergy**: works with `dsh-plugin-session-delete` to clean up unreferenced images when a session is deleted.
 - **image ownership & delete safety**: a `session/event` ownership hook plus a `session/created` recovery barrier (in-memory log scan); deletions are refused globally while a live session is unbackfilled (fail-closed, visible in `/aux status`); reclaim moves objects into `objects/.trash/` (7-day recovery window).
 - **GC debt**: an `attachment-refs.json` sidecar plus official `imageHostPath` reclamation and full `.ext` hard-link cleanup; the derived `request-images/` cache is reclaimed by mtime LRU under a total cap (256 MiB by default, `requestImagesMaxMiB`).

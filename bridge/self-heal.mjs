@@ -15,8 +15,10 @@
  *      重跑 bridge/apply-patch.mjs(幂等);
  *   3. P7 session append ignorable 写入口:缺失时外科式补上(专用块,不做白名单整跑);
  *   4. P8 白名单:保证 lib/index.js 与 lib/types/known-event-types.js 都含
- *      "aux/llm-call"(不负责 thinking/language——那是 dsh-thinking-zh 插件的事);
- *   5. 旧版 rc.6 settings 补丁(P9/P10)已退役,见 bridge/retired/,主支不再调用。
+ *      "aux/llm-call";
+ *   5. P12/P13:v0 冻结词表(dsh-session-format-v0-to-v1)放行 aux/* 事件与官方
+ *      历史写法,否则 0.1.5 打不开含这些事件的历史会话;
+ *   6. 旧版 rc.6 settings 补丁(P9/P10)已退役,见 bridge/retired/,主支不再调用。
  *
  * 用法:
  *   node bridge/self-heal.mjs            # 实际自愈(写盘)
@@ -37,6 +39,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deployedFile, guardPackageFile, guardTarget } from "./target.js";
+import { planFormatV0Patch } from "./format-admissions.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url)); // <repo>/bridge
 const REPO = resolve(HERE, "..");
@@ -172,7 +175,7 @@ function ensureSessionAppendIgnorable() {
   log(`P7 已打(${label},备份 ${bak})`);
 }
 
-/** P8: 保证两处白名单都含 aux/llm-call(不负责 thinking/language)。 */
+/** P8: 保证两处白名单都含 aux/llm-call(thinking/language 见 P13)。 */
 function ensureWhitelist(root) {
   const files = [
     guardPackageFile(join(root, "node_modules/@deepseek-ai/dsh-session/lib/index.js"), "dsh-aux-self-heal"),
@@ -223,6 +226,46 @@ function ensureWhitelist(root) {
   }
 }
 
+/**
+ * P12/P13: 0.1.5 的 v0→v1 冻结词表放行。
+ * P12 = AUX 自有 aux/* 事件;P13 = 官方写端缺口(可自退役,见 format-admissions.mjs)。
+ */
+function ensureFormatAdmissions(root) {
+  const file = join(root, "node_modules/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js");
+  if (!existsSync(file)) {
+    log("P12/P13 目标缺失(dsh-session-format-v0-to-v1 未安装),跳过");
+    return;
+  }
+  guardPackageFile(file, "dsh-aux-self-heal");
+  const data = readFileSync(file, "utf8");
+  const includeOfficialGaps = process.env.DSH_AUX_NO_OFFICIAL_ADMISSIONS !== "1";
+  const plan = planFormatV0Patch(data, { includeOfficialGaps });
+  for (const item of plan.skipped) log(`P12/P13 已就绪,跳过: ${item}`);
+  for (const warning of plan.warnings) log(`⚠️ P12/P13 ${warning}`);
+  if (plan.applied.length === 0) {
+    log("P12/P13 无需改动");
+    return;
+  }
+  if (DRY) {
+    log(`[dry-run] 将应用 P12/P13: ${plan.applied.join(", ")}`);
+    return;
+  }
+  const bak = backupFile(file, "P12/P13");
+  try {
+    writeFileSync(file, plan.text);
+  } catch (error) {
+    log(`P12/P13 写盘失败,已回滚: ${error?.message ?? error}`);
+    copyFileSync(bak, file);
+    return;
+  }
+  if (!syntaxCheck(file, "P12/P13")) {
+    copyFileSync(bak, file);
+    log("P12/P13 语法检查失败,已回滚");
+    return;
+  }
+  log(`P12/P13 已应用: ${plan.applied.join(", ")}`);
+}
+
 function main() {
   const root = detectDshRoot();
   if (!root) {
@@ -248,6 +291,7 @@ function main() {
   });
   step("P7", () => ensureSessionAppendIgnorable());
   step("P8", () => ensureWhitelist(root));
+  step("P12/P13", () => ensureFormatAdmissions(root));
   log(DRY ? "dry-run 完成(未写盘)" : "自愈完成。若本次有修复,请重启 DSH 生效。");
 }
 

@@ -6,6 +6,7 @@
  */
 import { AUX_CALL_EVENT, AUX_DEBUG_EVENT, AUX_PLATFORM_EVENT, AUX_IMAGE_LIBRARY_EVENT } from "./config.js";
 import { readPackageFile } from "./bridge-locate.js";
+import { unknownEventKeys } from "./event-shapes.js";
 
 /** One auxiliary call outcome. */
 export class AuxCallError extends Error {
@@ -77,6 +78,22 @@ export async function sessionEventsSupported(service) {
   return service._sessionEventsSupportedCache;
 }
 
+/** Warn once per (type, key) when a payload carries members the v0 frozen vocabulary would reject. */
+const SHAPE_WARNED_KEYS = new Set();
+
+function warnUnknownEventKeys(service, type, data) {
+  const unknown = unknownEventKeys(type, data);
+  if (unknown.length === 0) return;
+  const cacheKey = `${type}:${unknown.join(",")}`;
+  if (SHAPE_WARNED_KEYS.has(cacheKey)) return;
+  SHAPE_WARNED_KEYS.add(cacheKey);
+  service?.ctx?.logger?.warn?.(
+    `dsh-aux: ${type} payload has unregistered member(s) ${unknown.join(", ")} — ` +
+      "0.1.5 migration would refuse historical sessions carrying them; register them in " +
+      "dsh-aux/src/event-shapes.js and bridge/format-admissions.mjs",
+  );
+}
+
 /**
  * Log one auxiliary call as a session event, when a session is present.
  * The event is marked ignorable (requires the dsh-session ignorable patch,
@@ -107,6 +124,7 @@ export async function recordAuxEvent(service, session, data) {
     for (const [key, value] of Object.entries(data)) {
       if (value !== void 0) clean[key] = value;
     }
+    warnUnknownEventKeys(service, AUX_CALL_EVENT, clean);
     session.append(AUX_CALL_EVENT, clean, void 0, { ignorable: true });
   } catch {
     /* event logging must never fail the call */
@@ -185,6 +203,7 @@ export async function recordDebugEvent(service, session, data) {
     for (const [key, value] of Object.entries(redacted)) {
       if (value !== void 0) clean[key] = value;
     }
+    warnUnknownEventKeys(service, AUX_DEBUG_EVENT, clean);
     session.append(AUX_DEBUG_EVENT, clean, void 0, { ignorable: true });
   } catch {
     /* debug logging must never fail the call */
@@ -205,6 +224,7 @@ export async function recordPlatformEvent(service, session, data) {
     for (const [key, value] of Object.entries(data)) {
       if (value !== void 0) clean[key] = value;
     }
+    warnUnknownEventKeys(service, AUX_PLATFORM_EVENT, clean);
     session.append(AUX_PLATFORM_EVENT, clean, void 0, { ignorable: true });
   } catch {
     /* platform status logging must never fail */
@@ -224,6 +244,7 @@ export async function recordImageLibraryEvent(service, session, data) {
     for (const [key, value] of Object.entries(data)) {
       if (value !== void 0) clean[key] = value;
     }
+    warnUnknownEventKeys(service, AUX_IMAGE_LIBRARY_EVENT, clean);
     session.append(AUX_IMAGE_LIBRARY_EVENT, clean, void 0, { ignorable: true });
   } catch {
     /* image-library logging must never fail */
