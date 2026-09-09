@@ -4,7 +4,7 @@
 > AI/自动化代理请读 [PROJECT.AI.md](./PROJECT.AI.md) —— 它由本文件生成
 > （`node scripts/gen-project-ai.mjs`），**不要手改**；事实只在本文件维护一份。
 
-> 🔻 快照（2026-09-09）：包版本 `0.4.4` · 主支 DSH `0.1.5-alpha.1` · 测试基线 581。
+> 🔻 快照（2026-09-09）：包版本 `0.4.5` · 主支 DSH `0.1.5-alpha.1` · 测试基线 581。
 > 版本号、测试数与外部快照易腐烂，以代码、`CHANGELOG.md` 与实跑为准。
 
 ## 项目是什么
@@ -16,7 +16,7 @@ DSH-AUX 是 DeepSeek Harness（DSH）的辅助模型系统：给主 agent 配一
 - 名称：`@dolorescaritasangelus/dsh-aux`（工作区 DSH-AUX）
 - 仓库：https://github.com/DoloresCaritasAngelus/DSH-AUX
 - 用途：DeepSeek Harness（DSH）的辅助模型系统
-- 当前版本：`0.4.4`（`dsh-aux/package.json`）🔻 版本号与徽章随发布单独更新
+- 当前版本：`0.4.5`（`dsh-aux/package.json`）🔻 版本号与徽章随发布单独更新
 - Node：>= 20
 - 运行时依赖：无 `dependencies`；peerDependencies 为 DSH 官方包 + DSH 客户端环境自带的 `react` / `zod`
 <!-- /ai:section -->

@@ -16,7 +16,7 @@
 - 名称：`@dolorescaritasangelus/dsh-aux`（工作区 DSH-AUX）
 - 仓库：https://github.com/DoloresCaritasAngelus/DSH-AUX
 - 用途：DeepSeek Harness（DSH）的辅助模型系统
-- 当前版本：`0.4.4`（`dsh-aux/package.json`）🔻 版本号与徽章随发布单独更新
+- 当前版本：`0.4.5`（`dsh-aux/package.json`）🔻 版本号与徽章随发布单独更新
 - Node：>= 20
 - 运行时依赖：无 `dependencies`；peerDependencies 为 DSH 官方包 + DSH 客户端环境自带的 `react` / `zod`
 
