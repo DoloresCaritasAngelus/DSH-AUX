@@ -224,7 +224,10 @@ export function assertSafeHttpUrl(rawUrl, options = {}) {
  * @param rawUrl the URL string supplied by the model/user.
  * @param options { allowInternalUrls?, lookup?, label? }
  * @returns `{ url, addresses }`; `addresses` is empty when nothing had to be
- *   resolved (internal URLs allowed, a literal IP, or no lookup available).
+ *   resolved (internal URLs allowed or no lookup available). A strict
+ *   resolution that returns no usable address THROWS (fail closed).
+ * @throws when the hostname cannot be resolved, resolves to a private address,
+ *   or (strict mode) resolves to no usable address at all.
  */
 export async function resolveSafeFetchTarget(rawUrl, options = {}) {
   const label = options.label ?? "web_extract";
@@ -254,6 +257,16 @@ export async function resolveSafeFetchTarget(rawUrl, options = {}) {
     }
     const family = isIP(address);
     if (family !== 0) addresses.push({ address, family });
+  }
+  // Fail CLOSED: a strict resolution that yields no usable address must not
+  // fall through to a transport that resolves for itself (that would silently
+  // drop the pinning the guard exists for). The default dns.promises.lookup
+  // always returns parseable IPs or throws, so this only triggers on an
+  // injected/faulty resolver — exactly the case that used to fail open.
+  if (addresses.length === 0) {
+    throw new Error(
+      `${label}: hostname "${hostname}" resolved to no usable address; refusing to fetch without a pinned address set`,
+    );
   }
   return { url: parsed, addresses };
 }

@@ -13,11 +13,30 @@ import { fetchWithSsrf, pinnedLookup, requestDirect, resolveSafeFetchTargetForSe
 
 /** One local HTTP server for the real-socket cases. */
 function listen(handler) {
+  return listenOn("127.0.0.1", 0, handler);
+}
+
+/** Listen on a specific loopback address/port (127.0.0.2 shares 127.0.0.0/8). */
+function listenOn(host, port, handler) {
   const server = createServer(handler);
   return new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(port, host, () => {
       const address = server.address();
-      resolve({ server, port: address.port, url: "http://127.0.0.1:" + address.port });
+      resolve({ server, port: address.port, url: "http://" + host + ":" + address.port });
+    });
+  });
+}
+
+/** Close a server and drop any socket still held open by a test. */
+async function closeServer(server) {
+  if (typeof server.closeAllConnections === "function") server.closeAllConnections();
+  // A half-open connection can keep the close callback from firing; the
+  // listening handle is already released, so a short grace period suffices.
+  await new Promise((resolve) => {
+    const grace = setTimeout(resolve, 250);
+    server.close(() => {
+      clearTimeout(grace);
+      resolve();
     });
   });
 }
@@ -166,4 +185,81 @@ test("resolveSafeFetchTargetForService: 字面量 IP 直接钉扎,内网解析�
     "http://internal.test/x",
   );
   assert.deepEqual(allowed.addresses, [], "allowInternalUrls 时不解析也不钉扎");
+});
+
+test("池复用: 同一 host:port 上两次不同钉扎集必须各打本次钉扎地址", async () => {
+  const internalHits = [];
+  const publicHits = [];
+  // 127.0.0.2 模拟内网、127.0.0.1 模拟公网,两个 server 共享同一个端口,
+  // 使 http.globalAgent 的池键(host:port)完全相同 —— 修复前第二次请求会
+  // 复用第一次的 socket,被 127.0.0.2 的服务应答,本次钉扎集被完全绕过。
+  const internal = await listenOn("127.0.0.2", 0, (req, res) => {
+    internalHits.push(req.url);
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end("INTERNAL-SIM");
+  });
+  const publicSrv = await listenOn("127.0.0.1", internal.port, (req, res) => {
+    publicHits.push(req.url);
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end("PUBLIC-SIM");
+  });
+  try {
+    const first = await requestDirect("http://victim.example.test:" + internal.port + "/one", {
+      addresses: [{ address: "127.0.0.2", family: 4 }],
+    });
+    assert.equal(await first.text(), "INTERNAL-SIM");
+    const second = await requestDirect("http://victim.example.test:" + internal.port + "/two", {
+      addresses: [{ address: "127.0.0.1", family: 4 }],
+    });
+    assert.equal(await second.text(), "PUBLIC-SIM", "第二次请求必须打到本次钉扎的 127.0.0.1");
+    assert.deepEqual(internalHits, ["/one"], "第一次钉扎的地址只应收到第一次请求");
+    assert.deepEqual(publicHits, ["/two"], "第二次钉扎的地址必须收到第二次请求");
+  } finally {
+    await closeServer(internal.server);
+    await closeServer(publicSrv.server);
+  }
+});
+
+test("连接隔离: 同一 host:port 顺序请求各建新连接(keep-alive 池不复用)", async () => {
+  let connections = 0;
+  const connectionHeaders = [];
+  const { server, port } = await listen((req, res) => {
+    connectionHeaders.push(req.headers.connection);
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end("ok");
+  });
+  server.on("connection", () => {
+    connections += 1;
+  });
+  try {
+    const addresses = [{ address: "127.0.0.1", family: 4 }];
+    const first = await requestDirect("http://pooled.example.test:" + port + "/first", { addresses });
+    assert.equal(await first.text(), "ok");
+    const second = await requestDirect("http://pooled.example.test:" + port + "/second", { addresses });
+    assert.equal(await second.text(), "ok");
+    // 池复用会破坏「连接 = 本次校验地址」:agent:false 后每次直连必须新建 TCP。
+    assert.equal(connections, 2, "每次直连都应新建连接(修复前池复用为 1)");
+    // 记录 agent:false 的线上副作用:连接语义从 keep-alive 变为 close。
+    assert.deepEqual(connectionHeaders, ["close", "close"], "不复用连接的直接后果:每请求一个连接");
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("契约: requestDirect 的 Response.url 恒为空串,调用方必须用 finalUrl", async () => {
+  const { server, port } = await listen((req, res) => {
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end("ok");
+  });
+  try {
+    const response = await requestDirect("http://url-contract.example.test:" + port + "/x", {
+      addresses: [{ address: "127.0.0.1", family: 4 }],
+    });
+    // WHATWG Response 的构造函数没有 url 入参,手工构造的 Response.url 只能为空。
+    // 这是文档化契约(见 fetch.js requestDirect 注释),不是待修 bug。
+    assert.equal(response.url, "", "response.url 必须为空串:调用方只能读 fetchWithSsrf 的 finalUrl");
+    assert.equal(await response.text(), "ok");
+  } finally {
+    await closeServer(server);
+  }
 });
