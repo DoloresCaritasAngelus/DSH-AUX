@@ -48,16 +48,16 @@ const UNRELEASED = "## 未发布 (Unreleased)";
 
 /**
  * 构造假 CHANGELOG。
- * @param options.count `## 0.x` 段数(基线为 23)。
+ * @param options.count `## 0.x` 段数(基线为 24)。
  * @param options.withBody 段内是否带非空正文。
- * @param options.sentinel044 是否包含 v0.4.4 哨兵段。
+ * @param options.sentinel045 是否包含 v0.4.5 哨兵段。
  * @param options.unreleased 是否包含「未发布 (Unreleased)」节。
  */
-function fakeChangelog({ count = 24, withBody = true, sentinel044 = true, unreleased = true } = {}) {
+function fakeChangelog({ count = 24, withBody = true, sentinel045 = true, unreleased = true } = {}) {
   const parts = [];
   if (unreleased) parts.push(`${UNRELEASED}\n`);
   for (let i = 0; i < count; i++) {
-    const version = sentinel044 && i === 0 ? "0.4.4" : `0.9.${i}`;
+    const version = sentinel045 && i === 0 ? "0.4.5" : `0.9.${i}`;
     parts.push(`## ${version} (2026-01-01) — 假版本\n`);
     if (withBody) parts.push("- 假正文。\n");
   }
@@ -84,9 +84,9 @@ test("ci-doc-hygiene: 发布段空正文(变异 B)→ 非零退出", () => {
   assert.doesNotMatch(result.stderr, /\[发布历史截断\]|\[发布历史缺失\]|\[结构缺失\]/);
 });
 
-test("ci-doc-hygiene: v0.4.4 哨兵缺失 → 非零退出", () => {
-  const result = runHygiene(fakeChangelog({ sentinel044: false }));
-  assert.notEqual(result.status, 0, "缺少 v0.4.4 段必须阻塞");
+test("ci-doc-hygiene: v0.4.5 哨兵缺失 → 非零退出", () => {
+  const result = runHygiene(fakeChangelog({ sentinel045: false }));
+  assert.notEqual(result.status, 0, "缺少 v0.4.5 段必须阻塞");
   assert.match(result.stderr, /\[发布历史缺失\]/);
 });
 
