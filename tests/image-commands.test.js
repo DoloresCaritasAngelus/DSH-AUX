@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createImageFixture } from "./helpers/image-fixture.js";
-import { handleImagesCommand, handleImageCommand } from "../dsh-aux/src/commands.js";
+import { handleAuxCommand, handleImagesCommand, handleImageCommand } from "../dsh-aux/src/commands.js";
 
 function makeHash(seed) {
   const raw = seed
@@ -146,6 +146,36 @@ test("/aux image gc-orphans removes orphan and skips referenced", async () => {
     const data = JSON.parse(result.text);
     assert.deepEqual(data.deleted, [orphan]);
     assert.deepEqual(data.skipped, []);
+  } finally {
+    process.env.DSH_HOME = prev;
+    await fixture.cleanup();
+  }
+});
+
+test("/aux image delete|gc-orphans 与 /aux gc-images: 冻结期经命令层拒绝(DELETION_FROZEN)", async () => {
+  const fixture = await createImageFixture();
+  const prev = process.env.DSH_HOME;
+  process.env.DSH_HOME = fixture.home;
+  try {
+    const id = attachmentIdFor("cmd-frozen");
+    const { file } = await fixture.writeObject(id, { mediaType: "image/png", bytes: 8 });
+    const service = makeService();
+    service._liveBackfillPending = new Set(["s-live"]);
+
+    const del = await handleImageCommand(service, ["delete", id, "--force"]);
+    assert.equal(del.kind, "error", del.text);
+    assert.ok(del.text.includes("DELETION_FROZEN"), "单删必须经命令层拒绝: " + del.text);
+
+    const orphans = await handleImageCommand(service, ["gc-orphans"]);
+    assert.equal(orphans.kind, "error", orphans.text);
+    assert.ok(orphans.text.includes("DELETION_FROZEN"), "孤儿回收必须经命令层拒绝: " + orphans.text);
+
+    const gc = await handleAuxCommand(service, void 0, "gc-images 1");
+    assert.equal(gc.kind, "error", gc.text);
+    assert.ok(gc.text.includes("DELETION_FROZEN"), "gc-images 必须经命令层拒绝: " + gc.text);
+
+    const { lstat } = await import("node:fs/promises");
+    await lstat(file);
   } finally {
     process.env.DSH_HOME = prev;
     await fixture.cleanup();

@@ -16,6 +16,7 @@ import {
   recordAttachmentRefs,
 } from "../dsh-aux/src/images/attachment-refs.js";
 import { cleanupSessionImages } from "../dsh-aux/src/images/ownership.js";
+import { deleteOrphans } from "../dsh-aux/src/images/image-actions.js";
 import { extensionForMediaType, objectFileInfo, objectPathForId } from "../dsh-aux/src/images/object-path.js";
 import { sweepRequestImages } from "../dsh-aux/src/images/request-images.js";
 
@@ -182,5 +183,26 @@ test("cleanupSessionImages: 陈旧异扩展名硬链接一并删净(同 inode �
     assert.equal(await exists(target.file), false, "对象本体应被回收");
     assert.equal(await exists(target.extPath), false, "mediaType 对应的 .ext 应被删除");
     assert.equal(await exists(stale), false, "陈旧异扩展名硬链接也必须删净");
+  });
+});
+
+test("deleteOrphans: 不把 objects/.trash 里的对象当孤儿永久删除", async () => {
+  const fixture = await createImageFixture();
+  await withHome(fixture, async () => {
+    const trashRoot = join(fixture.objectsRoot, ".trash");
+    await fsPromises.mkdir(trashRoot, { recursive: true });
+    // A file shaped exactly like an object, parked inside the trash: before
+    // the fix the orphan scan treated .trash as a bucket and permanently
+    // unlinked it.
+    const trashed = join(trashRoot, hash("a"));
+    await fsPromises.writeFile(trashed, "trashed");
+    const orphan = await fixture.writeObject(id("b"), { mediaType: "image/png" });
+    const service = makeService();
+
+    const result = await deleteOrphans(service);
+
+    assert.deepEqual(result.deleted, [id("b")], "只应回收真正的孤儿: " + JSON.stringify(result.deleted));
+    assert.equal(await exists(trashed), true, ".trash 内的条目不得被当孤儿删除");
+    assert.equal(await exists(orphan.file), false);
   });
 });

@@ -17,10 +17,9 @@ import { randomUUID } from "node:crypto";
 import { listSessionSnapshots, readSessionEvents, sessionEvents } from "../session-utils.js";
 import { sessionImageRefs } from "./refs.js";
 import { attachmentRefFor, loadAttachmentRefs, recordAttachmentRefs } from "./attachment-refs.js";
-import { IMAGE_EXTENSIONS, objectPathForId } from "./object-path.js";
+import { IMAGE_EXTENSIONS, TRASH_DIR_NAME, objectPathForId } from "./object-path.js";
+import { loadRetained } from "./retention.js";
 import { DEFAULT_REQUEST_IMAGES_MAX_BYTES, sweepRequestImages } from "./request-images.js";
-/** Reclaimed objects are parked here before they are unrecoverable. */
-const TRASH_DIR_NAME = ".trash";
 /** Recovery window for trashed objects (swept by reconcile / gc-images). */
 export const TRASH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -241,6 +240,33 @@ export function deletionBlockReason(service) {
   return `图片删除已冻结(fail-closed):${parts.join("、")}。`;
 }
 
+/**
+ * Build the fail-closed deletion error (machine-readable `code` =
+ * `DELETION_FROZEN`). `retryable` records that the condition clears itself:
+ * the barrier reopens as soon as the live-session backfill retry succeeds.
+ */
+export function deletionFrozenError(service) {
+  const reason = service !== null && typeof service === "object" ? deletionBlockReason(service) : void 0;
+  const error = new Error((reason ?? "图片删除已冻结(fail-closed):无法确认 live 会话归属登记状态。") + "可稍后重试。");
+  error.code = "DELETION_FROZEN";
+  error.retryable = true;
+  return error;
+}
+
+/**
+ * The single fail-closed deletion gate shared by EVERY entry point that makes
+ * an attachment object unrecoverable: session cleanup (which also enforces
+ * deletionReady inline), single delete, orphan reclaim and manual gc-images —
+ * `--force` paths included, because force overrides *known* references and
+ * cannot invent *unknown* ones. A non-object service is refused too: without
+ * it the barrier state cannot be evaluated, and an unevaluable barrier must
+ * never delete.
+ */
+export function assertDeletionReady(service) {
+  if (service === null || typeof service !== "object") throw deletionFrozenError(service);
+  if (!deletionReady(service)) throw deletionFrozenError(service);
+}
+
 /** Mark ownership state dirty and flush it shortly (debounced, never throws). */
 function markOwnershipDirty(service) {
   if (service._sessionImagesDirty) return;
@@ -380,14 +406,48 @@ async function backfillFromStoredLog(service, sessionId) {
 }
 
 /**
+ * Trash entry name written by trashImageObject:
+ * `<original-name>-<ingress-epoch-ms>-<uuid8>`.
+ *
+ * The ingress timestamp is encoded in the NAME on purpose. `rename(2)`
+ * preserves the object's original mtime, and `utimes` can fail on read-only /
+ * quota-limited filesystems, so a recovery window derived from filesystem
+ * times alone would be zero for an object that is already older than the
+ * window when it is trashed. The embedded stamp is authoritative; mtime is
+ * only a fallback when the stamp cannot be trusted.
+ */
+export const TRASH_ENTRY_RE = /^(?<base>.+?)-(?<stamp>\d{10,17})-(?<uuid>[0-9a-f]{8})$/;
+
+/**
+ * Classify one trash entry name.
+ *
+ * @returns {{ managed: false } | { managed: true, ingressMs: number|undefined }}
+ *   `managed: false` means the name was not written by this module and must
+ *   never be swept. `ingressMs: undefined` means the entry is ours but its
+ *   embedded stamp is unusable, so the caller falls back to mtime.
+ */
+function trashEntryIngress(name) {
+  const match = TRASH_ENTRY_RE.exec(name);
+  if (match === null) return { managed: false };
+  const stamp = Number(match.groups.stamp);
+  return { managed: true, ingressMs: Number.isSafeInteger(stamp) && stamp > 0 ? stamp : void 0 };
+}
+
+/**
  * Move one attachment object into the trash (recoverable) and drop its
  * companion `.ext` hard links — the inode stays alive through the trash entry,
  * so this reclaims the space without making an erroneous reclaim permanent.
+ * The entry name carries the ingress timestamp, which is what sweepTrash ages
+ * the recovery window by.
  *
- * @returns {Promise<{ ok: boolean, gone: boolean }>} `gone` marks an object
- *   that was already absent (nothing to reclaim, not a failure).
+ * @param {{ canTrash?: () => boolean }} [options] `canTrash` is a synchronous
+ *   recheck run immediately before the rename (no await in between): a
+ *   reference registered after the caller's decision keeps the object in place.
+ * @returns {Promise<{ ok: boolean, gone: boolean, skipped?: boolean }>}
+ *   `gone` marks an object that was already absent (nothing to reclaim, not a
+ *   failure); `skipped` marks a recheck veto.
  */
-async function trashImageObject(objectsRoot, objectPath, ref) {
+async function trashImageObject(objectsRoot, objectPath, ref, { canTrash } = {}) {
   const trashRoot = objectsRoot + "/" + TRASH_DIR_NAME;
   try {
     await mkdirDir(trashRoot, { recursive: true });
@@ -396,6 +456,12 @@ async function trashImageObject(objectsRoot, objectPath, ref) {
   }
   const name = objectPath.slice(objectPath.lastIndexOf("/") + 1);
   const target = `${trashRoot}/${name}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  // TOCTOU recheck: the "no other reference" decision was made before this
+  // function's await points, so a registration can land in between. This
+  // synchronous recheck runs with no further await before rename.
+  if (typeof canTrash === "function" && canTrash() === false) {
+    return { ok: false, gone: false, skipped: true };
+  }
   try {
     await renameFile(objectPath, target);
   } catch (error) {
@@ -420,29 +486,47 @@ async function trashImageObject(objectsRoot, objectPath, ref) {
 /**
  * Sweep trash entries older than the recovery window.
  *
+ * Two guards beyond the original mtime check:
+ *  - NAMESPACE: only entries whose name matches TRASH_ENTRY_RE (i.e. written by
+ *    trashImageObject) are ever unlinked. Foreign files parked in .trash are
+ *    left untouched.
+ *  - INGRESS CLOCK: the recovery window is measured from the timestamp encoded
+ *    in the entry name, not from mtime. rename(2) preserves the object's old
+ *    mtime, so an object older than the window would otherwise be swept the
+ *    moment it is trashed (window = 0). mtime is used only when the embedded
+ *    stamp is unusable.
+ *
  * @param {object} service The AUX service (unused today, kept for symmetry).
  * @param {{ maxAgeMs?: number }} [options] Recovery window override.
- * @returns {Promise<{ removed: number, bytes: number }>}
+ * @returns {Promise<{ removed: number, bytes: number, skippedForeign: number }>}
  */
 export async function sweepTrash(service, { maxAgeMs = TRASH_TTL_MS } = {}) {
   const home = dshHome();
-  if (home === void 0) return { removed: 0, bytes: 0 };
+  if (home === void 0) return { removed: 0, bytes: 0, skippedForeign: 0 };
   const trashRoot = `${home}/attachments/v1/objects/${TRASH_DIR_NAME}`;
   const cutoff = Date.now() - maxAgeMs;
   let removed = 0;
   let bytes = 0;
+  let skippedForeign = 0;
   let entries;
   try {
     entries = await readdirDir(trashRoot, { withFileTypes: true });
   } catch {
-    return { removed: 0, bytes: 0 };
+    return { removed: 0, bytes: 0, skippedForeign: 0 };
   }
   for (const entry of entries) {
     if (!entry.isFile() || entry.isSymbolicLink()) continue;
+    const ingress = trashEntryIngress(entry.name);
+    if (!ingress.managed) {
+      skippedForeign += 1;
+      continue;
+    }
     const path = `${trashRoot}/${entry.name}`;
     try {
       const info = await statFile(path);
-      if (!info.isFile() || info.mtimeMs >= cutoff) continue;
+      if (!info.isFile()) continue;
+      const ingressMs = ingress.ingressMs ?? info.mtimeMs;
+      if (ingressMs >= cutoff) continue;
       await unlinkFile(path);
       removed += 1;
       bytes += info.size;
@@ -450,7 +534,7 @@ export async function sweepTrash(service, { maxAgeMs = TRASH_TTL_MS } = {}) {
       /* best-effort sweep */
     }
   }
-  return { removed, bytes };
+  return { removed, bytes, skippedForeign };
 }
 
 function enqueueSessionImagesWrite(service, write) {
@@ -527,6 +611,32 @@ export async function liveSessionIds(service) {
     }
   } catch {
     /* persistence absent or unreadable */
+  }
+  return ids;
+}
+
+/**
+ * Every attachment id referenced by any session, from the on-disk ownership
+ * map plus the live in-memory map. The manual GC uses it to avoid deleting an
+ * object a session still references.
+ *
+ * Throws when the on-disk map cannot be read: the caller must refuse the sweep
+ * rather than assume "no references" (fail-closed).
+ *
+ * @param {object} service The AUX service.
+ * @returns {Promise<Set<string>>}
+ */
+export async function loadReferencedAttachmentIds(service) {
+  const ids = new Set();
+  const disk = await loadSessionImages();
+  for (const [, owned] of disk) {
+    if (owned instanceof Set) for (const attachmentId of owned) ids.add(String(attachmentId));
+  }
+  const memory = service?._sessionImages;
+  if (memory instanceof Map) {
+    for (const [, owned] of memory) {
+      if (owned instanceof Set) for (const attachmentId of owned) ids.add(String(attachmentId));
+    }
   }
   return ids;
 }
@@ -668,6 +778,17 @@ export async function cleanupSessionImages(service, sessionId) {
     // via /aux status; clears itself once a retry succeeds.
     if (!deletionReady(service)) return;
 
+    // Retained (user-pinned) objects are exempt from automatic cleanup. The
+    // read is fail-closed: if the retention list cannot be read we do not know
+    // what the user pinned, so nothing is deleted and the session stays in the
+    // map as a retry anchor for the next reconcile.
+    let retainedSet;
+    try {
+      retainedSet = await loadRetained();
+    } catch {
+      return;
+    }
+
     // Which other sessions reference each id? Check disk + live memory: the
     // debounced save may lag behind memory, so a live shared reference must
     // still protect the file.
@@ -676,6 +797,9 @@ export async function cleanupSessionImages(service, sessionId) {
     for (const attachmentId of mine) {
       const referencedElsewhere = hasOtherReference(map, memory, sessionId, attachmentId);
       if (referencedElsewhere) continue;
+      // Retained exemption: the owner is still dropped below (the object
+      // becomes a retained orphan), but the object itself is never trashed.
+      if (retainedSet.has(String(attachmentId))) continue;
       // Reclaim through the official host-path seam when the sidecar has the
       // full ref; only an unknown id falls back to the legacy derivation.
       const ref = refs.get(String(attachmentId)) ?? { attachmentId: String(attachmentId) };
@@ -684,7 +808,11 @@ export async function cleanupSessionImages(service, sessionId) {
         retry.add(attachmentId);
         continue;
       }
-      const outcome = await trashImageObject(objectsRoot, objectPath, ref);
+      const outcome = await trashImageObject(objectsRoot, objectPath, ref, {
+        // TOCTOU recheck: a reference registered after the check above (during
+        // the awaits of this function) vetoes the rename synchronously.
+        canTrash: () => !hasOtherReference(map, memory, sessionId, attachmentId),
+      });
       if (outcome.ok) removed += 1;
       else retry.add(attachmentId);
     }

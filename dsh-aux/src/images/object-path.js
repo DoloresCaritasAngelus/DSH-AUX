@@ -31,6 +31,12 @@ export const MEDIA_TYPE_EXTENSIONS = Object.freeze({
 });
 /** Every companion extension (fallback sweep when the media type is unknown). */
 export const IMAGE_EXTENSIONS = Object.freeze([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+/**
+ * Reclaimed-object park directory inside the objects root. It is NOT a normal
+ * hash bucket: its lifecycle belongs exclusively to sweepTrash, so bucket
+ * scans (gc-images / orphan reclaim / library listing) must skip it.
+ */
+export const TRASH_DIR_NAME = ".trash";
 
 /** Resolve the DSH home that hosts `attachments/v1`. */
 export function dshHome() {

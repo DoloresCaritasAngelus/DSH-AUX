@@ -4,6 +4,7 @@
  * @module @dolorescaritasangelus/dsh-aux/images/fs-utils
  */
 import { lstat as lstatFile, readdir } from "node:fs/promises";
+import { TRASH_DIR_NAME } from "./object-path.js";
 
 /**
  * Safely scan an objects root.
@@ -27,6 +28,10 @@ export async function scanObjectFiles(root) {
   }
 
   for (const bucketEnt of buckets) {
+    // The trash is not a hash bucket: its entries are managed exclusively by
+    // sweepTrash (which validates the trash namespace and the ingress clock).
+    // Scanning it here would let orphan reclaim unlink trashed objects.
+    if (bucketEnt.name === TRASH_DIR_NAME) continue;
     // Dirent check plus lstat: never descend through a symlinked directory.
     if (!bucketEnt.isDirectory() || bucketEnt.isSymbolicLink()) continue;
     const bucketPath = root + "/" + bucketEnt.name;

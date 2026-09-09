@@ -9,7 +9,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fsPromises from "node:fs/promises";
 import { join } from "node:path";
-import { createImageFixture } from "./helpers/image-fixture.js";
+import { createImageFixture, hashOf } from "./helpers/image-fixture.js";
+import { recordAttachmentRefs } from "../dsh-aux/src/images/attachment-refs.js";
 import { collectImageRefs, eventImageRefs } from "../dsh-aux/src/images/refs.js";
 import { listSessionSnapshots, readSessionEvents } from "../dsh-aux/src/session-utils.js";
 import {
@@ -337,24 +338,31 @@ test("cleanupSessionImages: 其他会话仍引用时保留对象", async () => {
   }
 });
 
-test("sweepTrash: 只清理超过恢复窗口的条目", async () => {
+test("sweepTrash: 只清理超过恢复窗口的、本模块写入的条目", async () => {
   const fixture = await createImageFixture();
   const prevHome = process.env.DSH_HOME;
   process.env.DSH_HOME = fixture.home;
   const service = makeService();
+  const DAY = 24 * 60 * 60 * 1000;
   try {
     const trashRoot = join(fixture.objectsRoot, ".trash");
     await fsPromises.mkdir(trashRoot, { recursive: true });
-    const old = join(trashRoot, "old-object");
-    const fresh = join(trashRoot, "fresh-object");
-    await fsPromises.writeFile(old, "old");
+    // Managed entries carry their ingress timestamp in the name.
+    const stale = join(trashRoot, `${hash("a")}-${Date.now() - 30 * DAY}-abcdef01`);
+    const fresh = join(trashRoot, `${hash("b")}-${Date.now()}-abcdef02`);
+    // Foreign file: not written by this module, must never be swept.
+    const foreign = join(trashRoot, "manual-recovery-note.txt");
+    await fsPromises.writeFile(stale, "old");
     await fsPromises.writeFile(fresh, "fresh");
-    const past = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    await fsPromises.utimes(old, past, past);
-    const result = await sweepTrash(service, { maxAgeMs: 7 * 24 * 60 * 60 * 1000 });
+    await fsPromises.writeFile(foreign, "keep");
+    const past = new Date(Date.now() - 30 * DAY);
+    await fsPromises.utimes(foreign, past, past);
+    const result = await sweepTrash(service, { maxAgeMs: 7 * DAY });
     assert.equal(result.removed, 1);
-    assert.equal(await exists(old), false);
+    assert.equal(await exists(stale), false);
     assert.equal(await exists(fresh), true);
+    assert.equal(await exists(foreign), true, "外来文件不得被清扫");
+    assert.equal(result.skippedForeign, 1);
   } finally {
     process.env.DSH_HOME = prevHome;
     await fixture.cleanup();
@@ -453,4 +461,174 @@ test("releaseLiveSession: 持久层不可读时保留(fail-closed)", async () =>
   service._liveBackfillFailed.add("s-x");
   assert.equal(await releaseLiveSession(service, "s-x"), false);
   assert.equal(deletionReady(service), false);
+});
+
+test("trash 窗口: 30 天龄对象入 trash 后按入站时刻计龄,7 天内不得被清", async () => {
+  const fixture = await createImageFixture();
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = fixture.home;
+  const service = makeService();
+  const DAY = 24 * 60 * 60 * 1000;
+  try {
+    const target = await fixture.writeObject(id("d"), { mediaType: "image/png" });
+    // The object is already 30 days old when it is reclaimed.
+    const past = new Date(Date.now() - 30 * DAY);
+    await fsPromises.utimes(target.file, past, past);
+    await fixture.writeSessionImages({ "s-1": [id("d")] });
+
+    await cleanupSessionImages(service, "s-1");
+
+    const trashRoot = join(fixture.objectsRoot, ".trash");
+    const entries = await fsPromises.readdir(trashRoot);
+    assert.equal(entries.length, 1, "对象应进入回收站");
+    const entry = join(trashRoot, entries[0]);
+    const st = await fsPromises.stat(entry);
+    assert.ok(
+      Date.now() - st.mtimeMs > 25 * DAY,
+      "rename 保留原始 mtime —— 这正是旧实现把窗口缩成 0 的成因,实际龄 " + (Date.now() - st.mtimeMs) / DAY + " 天",
+    );
+
+    const first = await sweepTrash(service);
+    assert.equal(first.removed, 0, "刚入站的 30 天龄对象必须保留完整恢复窗口,实际 removed=" + first.removed);
+    assert.equal(await exists(entry), true);
+
+    // Simulate 8 days passing by rewriting the ingress stamp in the name.
+    const base = entries[0].replace(/-\d{10,17}-[0-9a-f]{8}$/, "");
+    const aged = join(trashRoot, `${base}-${Date.now() - 8 * DAY}-abcdef01`);
+    await fsPromises.rename(entry, aged);
+    const second = await sweepTrash(service);
+    assert.equal(second.removed, 1, "窗口过期后应被清扫");
+    assert.equal(await exists(aged), false);
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fixture.cleanup();
+  }
+});
+
+test("sweepTrash: 名字时间戳不可用时回退 mtime", async () => {
+  const fixture = await createImageFixture();
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = fixture.home;
+  const service = makeService();
+  const DAY = 24 * 60 * 60 * 1000;
+  try {
+    const trashRoot = join(fixture.objectsRoot, ".trash");
+    await fsPromises.mkdir(trashRoot, { recursive: true });
+    // 17-digit stamps exceed Number.MAX_SAFE_INTEGER -> unusable -> mtime.
+    const stale = join(trashRoot, `${hash("e")}-99999999999999999-abcdef01`);
+    const fresh = join(trashRoot, `${hash("f")}-99999999999999998-abcdef02`);
+    await fsPromises.writeFile(stale, "old");
+    await fsPromises.writeFile(fresh, "fresh");
+    const past = new Date(Date.now() - 30 * DAY);
+    await fsPromises.utimes(stale, past, past);
+    const result = await sweepTrash(service, { maxAgeMs: 7 * DAY });
+    assert.equal(result.removed, 1);
+    assert.equal(await exists(stale), false);
+    assert.equal(await exists(fresh), true);
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fixture.cleanup();
+  }
+});
+
+test("cleanupSessionImages: 固化(retained)对象跳过 trash,owner 移除(留存为 retained-orphan)", async () => {
+  const fixture = await createImageFixture();
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = fixture.home;
+  const service = makeService();
+  try {
+    const target = await fixture.writeObject(id("1"), { mediaType: "image/png" });
+    await fixture.writeSessionImages({ "s-1": [id("1")] });
+    await fixture.writeRetention([id("1")]);
+
+    await cleanupSessionImages(service, "s-1");
+
+    assert.equal(await exists(target.file), true, "固化对象不得入回收站");
+    assert.equal(await exists(target.extPath), true, "固化对象 .ext 硬链接不得删除");
+    assert.equal(
+      (await fsPromises.readdir(join(fixture.objectsRoot, ".trash")).catch(() => [])).length,
+      0,
+      "固化对象不得产生任何 trash 条目",
+    );
+    assert.equal(service._sessionImages.has("s-1"), false, "会话仍应从归属表移除(成为 retained-orphan)");
+    const map = JSON.parse(await fsPromises.readFile(fixture.sessionImagesPath, "utf8"));
+    assert.equal(map["s-1"], void 0, "磁盘映射同样移除已删会话");
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fixture.cleanup();
+  }
+});
+
+test("cleanupSessionImages: retained 清单不可读时拒绝删除(fail-closed),owner 保留", async () => {
+  const fixture = await createImageFixture();
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = fixture.home;
+  const service = makeService();
+  try {
+    const target = await fixture.writeObject(id("2"), { mediaType: "image/png" });
+    await fixture.writeSessionImages({ "s-1": [id("2")] });
+    // A directory where the retention file should be -> readFile throws EISDIR.
+    await fsPromises.mkdir(join(fixture.v1, "image-retention.json"), { recursive: true });
+
+    await cleanupSessionImages(service, "s-1");
+
+    assert.equal(await exists(target.file), true, "无法判定固化时必须拒绝删除");
+    assert.equal(await exists(target.extPath), true);
+    assert.equal(
+      (await fsPromises.readdir(join(fixture.objectsRoot, ".trash")).catch(() => [])).length,
+      0,
+      "拒绝时不得产生 trash 条目",
+    );
+    const kept = JSON.parse(await fsPromises.readFile(fixture.sessionImagesPath, "utf8"));
+    assert.deepEqual(kept["s-1"], [id("2")], "无法判定固化时必须保留 owner 作为重试锚点");
+
+    // Once the retention file is readable again the same cleanup succeeds.
+    await fsPromises.rm(join(fixture.v1, "image-retention.json"), { recursive: true, force: true });
+    await cleanupSessionImages(service, "s-1");
+    assert.equal(await exists(target.file), false);
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fixture.cleanup();
+  }
+});
+
+test("cleanupSessionImages: 判定后 rename 前的新登记阻止对象入 trash(TOCTOU 复检)", async () => {
+  const fixture = await createImageFixture();
+  const prevHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = fixture.home;
+  const service = makeService();
+  try {
+    const target = await fixture.writeObject(id("3"), { mediaType: "image/png" });
+    await fixture.writeSessionImages({ "s-1": [id("3")] });
+    const ref = refOf("3", "image/png");
+    // The official host-path seam is the await boundary between the reference
+    // check and the rename; register a new owner from inside it.
+    const attachments = {
+      imageHostPath(value) {
+        service._sessionImages.set("s-2", new Set([value.attachmentId]));
+        return join(fixture.objectsRoot, hashOf(value.attachmentId).slice(0, 2), hashOf(value.attachmentId));
+      },
+    };
+    service.ctx.get = (name) => {
+      if (name === "attachments") return attachments;
+      if (name === "sessions") return { list: () => [] };
+      if (name === "sessionPersistence") return { list: async () => [] };
+      return void 0;
+    };
+    await recordAttachmentRefs(service, ref);
+
+    await cleanupSessionImages(service, "s-1");
+
+    assert.equal(await exists(target.file), true, "新登记必须阻止对象被移出对象目录");
+    assert.equal(await exists(target.extPath), true);
+    assert.equal(
+      (await fsPromises.readdir(join(fixture.objectsRoot, ".trash")).catch(() => [])).length,
+      0,
+      "不得产生 trash 条目",
+    );
+    assert.equal(service._sessionImages.get("s-1")?.has(id("3")), true, "被否决的对象应留作重试锚点");
+  } finally {
+    process.env.DSH_HOME = prevHome;
+    await fixture.cleanup();
+  }
 });

@@ -6,10 +6,10 @@
  */
 import { lstat as lstatFile, readdir, unlink as unlinkFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { ensureSessionImagesLoaded, loadSessionImages, saveSessionImages } from "./ownership.js";
+import { assertDeletionReady, ensureSessionImagesLoaded, loadSessionImages, saveSessionImages } from "./ownership.js";
 import { loadRetained, setRetained } from "./retention.js";
 import { scanObjectFiles } from "./fs-utils.js";
-import { dshHome, objectFileInfo, objectPathForId } from "./object-path.js";
+import { IMAGE_EXTENSIONS, dshHome, objectFileInfo, objectPathForId } from "./object-path.js";
 
 /** Derive the extensionless object file path for a valid attachment id. */
 function deriveObjectPath(attachmentId) {
@@ -68,9 +68,12 @@ async function referencesFor(service, attachmentId) {
 }
 
 /**
- * Delete the object file plus every sibling extension hardlink beginning with
- * `<hash>.`. Only real regular files are unlinked; symlinks are never followed
- * or removed. `requireBase` makes a missing base object a NOT_FOUND error.
+ * Delete the object file plus its companion extension hardlinks
+ * (`<hash>.png|.jpg|.jpeg|.webp|.gif` — the IMAGE_EXTENSIONS whitelist, the
+ * same namespace trashImageObject uses). A prefix match is NOT used: a foreign
+ * sibling such as `<hash>.bak` or `<hash>.notes` must survive. Only real
+ * regular files are unlinked; symlinks are never followed or removed.
+ * `requireBase` makes a missing base object a NOT_FOUND error.
  *
  * @returns the number of bytes actually reclaimed for this one object (the
  * backing inode size, counted once even when extension hardlinks exist).
@@ -109,7 +112,7 @@ async function deleteObjectFiles(attachmentId, { requireBase = true } = {}) {
   // Remove companion hardlinks (e.g. .png/.jpg/.webp/.gif) in the same real
   // bucket directory. lstat re-check keeps a symlink swap safe.
   let freedBytes = baseStat?.isFile() && baseRemoved ? baseStat.size : 0;
-  const prefix = hash + ".";
+  const companionNames = new Set(IMAGE_EXTENSIONS.map((ext) => hash + ext));
   try {
     const bucketStat = await lstatFile(bucketDir);
     if (!bucketStat.isDirectory() || bucketStat.isSymbolicLink()) {
@@ -118,7 +121,7 @@ async function deleteObjectFiles(attachmentId, { requireBase = true } = {}) {
     const entries = await readdir(bucketDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isFile() || entry.isSymbolicLink()) continue;
-      if (!entry.name.startsWith(prefix)) continue;
+      if (!companionNames.has(entry.name)) continue;
       const path = bucketDir + "/" + entry.name;
       let stat;
       try {
@@ -167,6 +170,13 @@ export async function removeFromOwnership(service, attachmentId) {
  */
 export async function deleteImage(service, attachmentId, opts = {}) {
   const force = opts?.force === true;
+  // Fail-closed gate FIRST, before the NOT_FOUND probe: while any live
+  // session's ownership is unknown this deletion is not allowed at all, so the
+  // frozen state is reported even for an id that does not exist (declared
+  // behaviour change: NOT_FOUND previously won the race). The gate applies to
+  // --force too: force overrides *known* references, it cannot invent
+  // *unknown* ones.
+  assertDeletionReady(service);
   await assertRegularObjectExists(attachmentId);
 
   const refs = await referencesFor(service, attachmentId);
@@ -190,6 +200,10 @@ export async function deleteImage(service, attachmentId, opts = {}) {
  */
 export async function deleteOrphans(service, opts = {}) {
   const includeRetained = opts?.includeRetained === true;
+  // Fail-closed gate: an orphan scan undercounts references while any live
+  // session's backfill is pending/failed; bulk deletion would permanently
+  // unlink objects such sessions still reference.
+  assertDeletionReady(service);
   const home = dshHome();
   const objectsRoot = home === void 0 ? void 0 : home + "/attachments/v1/objects";
   const scanned = objectsRoot === void 0 ? [] : await scanObjectFiles(objectsRoot);
