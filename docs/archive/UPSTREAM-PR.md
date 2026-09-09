@@ -1,5 +1,12 @@
 # 上游 PR 提案(Upstream PR Proposals)
 
+> 状态:🗄 已归档
+> 退役原因:上游 DSH 开源(MIT)但不开放 Issues/PR,“提上游合入”路径不存在;补丁策略改为台账制
+> 取代者:docs/design/upstream-requests.md(草稿,尚未开 issue)+ bridge/ 补丁台账
+> 复盘点:上游开放 Issue/PR 通道时
+> 最后核实:2026-09-09
+> 🔻 版本快照:DSH 0.1.2 线;上游行为易腐烂
+
 > dsh-aux 在部署中发现的两个平台扩展点,均已在本地以补丁形式落地并验证
 > (见 `bridge/` 目录,幂等 + 备份回滚)。以下为整理好的 upstream 建议,
 > 供提交到 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。

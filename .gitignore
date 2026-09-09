@@ -39,3 +39,4 @@ scripts/*
 !scripts/ci-install-smoke.mjs
 !scripts/ci-pack-check.mjs
 !scripts/ci-commit-lint.mjs
+!scripts/ci-docs-index.mjs

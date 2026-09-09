@@ -1,6 +1,9 @@
 # web_crawl 设计稿(深度站点抓取)
 
-> 状态:方案待审。承接 `WEB-EXTRACT-REVIEW.md` 的 **F1/F2**:web_extract 已落地
+> 状态:✅ 活跃
+> 最后核实:2026-09-09
+> 🔻 版本快照:核心 P0–P3 已上线;P4 的 domain/PSL、渲染 provider、web_search 联动明确延后(见文末)
+> 承接 `WEB-EXTRACT-REVIEW.md` 的 **F1/F2**:web_extract 已落地
 > 同源 BFS(`followLinks: "same-origin"` + 聚合摘要);web_crawl 把它升级为**独立
 > 的深度站点抓取工具**——更宽的范围、每页粒度、站点礼貌与预算、渲染 provider 边界。
 

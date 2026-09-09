@@ -1,5 +1,12 @@
 # web_extract 审查报告 (设计 + 代码 + 测试)
 
+> 状态:⬜ 历史
+> 退役原因:评审已闭环,修复已合入并有测试基线(tests/web-extract-fixes.test.js)
+> 取代者:tests/web-extract-fixes.test.js + CHANGELOG 的 web_extract 修复段
+> 复盘点:web_extract 抓取/SSRF 语义再次改动时
+> 最后核实:2026-09-09
+> 🔻 版本快照:2026-08;文内行号与测试数已腐烂
+
 > 由 3 个并行子代理审查(设计 / 代码 / 测试),合并排序。均为**发现项**,尚未实现修＜。
 
 ## 验证结论(不是 web_extract 的问题)

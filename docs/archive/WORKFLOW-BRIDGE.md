@@ -1,6 +1,13 @@
 # Workflow 子代理桥接 (Workflow Bridge) 设计稿
 
-> 状态:方案待审。承接 `SUBAGENT-BRIDGE.md`(mono subagent 工具透明接管),
+> 状态:🔵 已实现(保留作回执)
+> 退役原因:`aux.subagent.includeWorkflow` 已上线(默认 true),文档不再维护
+> 取代者:代码 dsh-aux/src/index.js + config.js 的 `aux.subagent.includeWorkflow`
+> 复盘点:workflow 引擎或子代理路由再次改动时
+> 最后核实:2026-09-09
+> 🔻 版本快照:dsh-aux v0.3.0 之后
+
+> 承接 `SUBAGENT-BRIDGE.md`(mono subagent 工具透明接管),
 > 把同一套 AUX 子代理路由扩展到 **`workflow` 引擎 `agent()` 批量扇出的子代理**。
 
 ## 1. 背景
