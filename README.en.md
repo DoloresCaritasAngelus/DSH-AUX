@@ -372,6 +372,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 ## Compatibility & Dependencies
 
 - **Platform**: DSH 0.1.5-rc.2 (single supported line on the main branch); Node ≥ 20.
+- **DSH `0.1.5-rc.1` users**: share this release — the two lines are equivalent for the AUX patch hosts (rc.1 → rc.2 changed version numbers only; see `CHANGELOG.md`).
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are official DSH packages plus the platform-provided `react`/`zod`; no `dependencies`.
