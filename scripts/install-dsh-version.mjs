@@ -9,12 +9,12 @@
  *   跑完本脚本后若不需要目标版本,请显式重装(例如
  *   `npm install --no-package-lock --no-audit --no-fund`)或改用独立工作树,
  *   不要让 node_modules 与 package.json 漂移 —— 那会静默改变本地测试口径
- *   (先例:本机 node_modules 停在 0.1.2-alpha.3,而 package.json 钉 0.1.5-alpha.1)。
+ *   (按还原后的 package.json 重新安装即可对齐)。
  *   `--keep` 时连 package.json 也不还原,仅供本地调试。
  *
  * DSH-AUX is not published to npm; this script only swaps the local
  * `@deepseek-ai/*` devDependencies used by the test suite so we can run the
- * same tests against the supported DSH line (main branch: 0.1.5-alpha.1) in
+ * same tests against the supported DSH line (supported line declared in compat.json) in
  * GitHub Actions without a full containerized DSH.
  *
  * Usage:
@@ -27,6 +27,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DSH_VERSIONED_PACKAGES, DSH_OVERRIDE_PACKAGES, EXTRA_DEV_PACKAGES } from "./dsh-packages.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..");
@@ -43,105 +44,8 @@ if (!version) {
   process.exit(2);
 }
 
-// DSH packages that share the same rc/version line.  `@deepseek-ai/cordis`
-// and `@deepseek-ai/schemastery` are independent stable packages, so they are
-// intentionally not rewritten.
-const DSH_VERSIONED_PACKAGES = [
-  "dsh-agent",
-  "dsh-agent-loop",
-  "dsh-compaction-basic",
-  "dsh-llm",
-  "dsh-session",
-  "dsh-settings",
-  "dsh-timeout",
-  "dsh-tool-fs",
-  "dsh-tool-skill",
-  "dsh-tool-subagent",
-  "dsh-tool-web",
-  "dsh-tools",
-  "dsh-workflow-worker-thread",
-];
-
-// Packages that must be present in the temporary package.json for each DSH
-// line. Only the currently supported line is kept (main branch:
-// 0.1.5-alpha.1); the frozen 0.1.2-alpha.2 ~ 0.1.2-rc.1 lines live on the
-// legacy branches (see TESTING.md「CI 辅助脚本」), so their dead matrix entries
-// were dropped (#42). dsh-api-session-controller is already a devDependency in
-// this repo, but adding it explicitly keeps the matrix robust when the
-// repository's default package.json changes.
-const EXTRA_DEV_PACKAGES = {
-  "0.1.5-alpha.1": ["dsh-api-session-controller"],
-};
-
 // Alpha lines no longer include dsh-host-apiproxy; the workspace devDependencies
 // carry the current supported line and install-dsh-version only swaps it.
-
-// All @deepseek-ai/dsh-* packages share the DSH release line. Forcing them all
-// (including transitive packages such as dsh-system-prompt) to the same version
-// prevents npm from resolving a newer DSH transitive package that conflicts
-// with an older pinned line during a compatibility-matrix install.
-const DSH_OVERRIDE_PACKAGES = [
-  "dsh-agent",
-  "dsh-agent-default-model",
-  "dsh-agent-loop",
-  "dsh-agent-presets",
-  "dsh-api-gateway",
-  "dsh-api-remotes",
-  "dsh-api-session-controller",
-  "dsh-api-settings-controller",
-  "dsh-api-workspace-controller",
-  "dsh-atomic-write",
-  "dsh-attachment",
-  "dsh-brand",
-  "dsh-client-connection",
-  "dsh-code-runtime",
-  "dsh-commands",
-  "dsh-compaction",
-  "dsh-compaction-basic",
-  "dsh-cordis-host-runner",
-  "dsh-credentials",
-  "dsh-file-reference",
-  "dsh-goal",
-  "dsh-home-paths",
-  "dsh-host-directory-picker",
-  "dsh-host-plugin-inventory",
-  "dsh-host-webserver",
-  "dsh-invariants",
-  "dsh-jobs",
-  "dsh-llm",
-  "dsh-message-feedback",
-  "dsh-native-command",
-  "dsh-output-retention",
-  "dsh-scope",
-  "dsh-session",
-  "dsh-session-persistence",
-  "dsh-session-projection",
-  "dsh-session-projection-cache",
-  "dsh-session-query",
-  "dsh-session-reference",
-  "dsh-session-title",
-  "dsh-settings",
-  "dsh-skill",
-  "dsh-storage",
-  "dsh-storage-domain",
-  "dsh-subagent",
-  "dsh-system-prompt",
-  "dsh-timeout",
-  "dsh-token-meter",
-  "dsh-tool-fs",
-  "dsh-tool-skill",
-  "dsh-tool-subagent",
-  "dsh-tool-web",
-  "dsh-tools",
-  "dsh-typert-protocol",
-  "dsh-typert-registry",
-  "dsh-user-approval",
-  "dsh-user-questions",
-  "dsh-web",
-  "dsh-workflow",
-  "dsh-workflow-worker-thread",
-  "dsh-workspace",
-];
 
 // Representative packages spanning entrypoint, bridge targets and transitive
 // surface; install success plus overrides are verified across all of them.

@@ -2,6 +2,37 @@
 
 ## 未发布 (Unreleased)
 
+## 0.4.6 (2026-09-11) — DSH 0.1.5-rc.2 兼容
+
+### 兼容性
+
+- **主支支持线更新为 `0.1.5-rc.2`**:`peerDependencies`、`dsh-aux/package.json`、CI compat 矩阵、
+  README / TESTING / PROJECT 的声明与徽章同步(此前停在 `0.1.5-alpha.1`)。
+- **补丁面在 rc.1 → rc.2 之间零位移**:7 个 bridge 宿主包在该区间只有 `package.json` 版本号
+  变更(40 文件 / +40 / -40),无源码改动,故 P1-P13 锚点无需重切。`alpha.1 → rc.2` 区间只有两处
+  源码变化:`dsh-api-session-controller`(新增 `reveal` 文件管理器动作与 `workspaceDesktop()`,与
+  图片能力门控无关)与 `dsh-session`(新增官方事件类型 `deliverables/presented`、`subagent/catalog`,
+  与 `aux/*` 词条不冲突)。rc.1 用户可与 rc.2 共用同一 AUX 版本。
+- **测试基线**:581 → **597**(新增五个闸:三个脚本的回归测试 + doctor 版本判定 + 仓库脚本可达性)。
+
+### 工程
+
+- **DSH 版本单一真相源**:新增 `compat.json`(DSH 版本 / 包版本 / 测试基线 / 快照日期)与
+  `scripts/sync-compat.mjs`,把原先散落在 `package.json`(devDependencies + overrides)、CI 矩阵、
+  `doctor` 支持范围、README 徽章与正文、`TESTING` / `PROJECT` / `PROJECT.AI` / PR 模板 / `AI.md` /
+  `status.js` 的 23 处版本与数字收敛为「改一处、其余同步」。规则带锚点,文档被改写即报错
+  (退出码 2)而非静默跳过;CI 新增 `sync-compat --check` 闸。
+- **包清单共用**:`scripts/dsh-packages.mjs` 集中 devDependencies / overrides / 各支持线的额外依赖 /
+  宿主包源码路径映射,`install-dsh-version.mjs` 与 `compat-delta.mjs` 共用一份,新增支持线时
+  漏登记会明确报错(而非装出一套混合版本)。
+- **`scripts/compat-delta.mjs`**:用 `git diff` 判定「某次 DSH 版本变动是否触及补丁宿主包源码」,
+  三态结论 —— 0 锚点不可能位移 / 1 需逐个复核 / 2 宿主包映射过期或环境错误(映射过期不再给出
+  「安全」结论)。
+- **`scripts/compat-evidence.mjs`**:一次跑完版本断言、self-heal dry-run、`apply-patch --dry-run`、
+  `doctor` 与(可选)全量测试,输出可直接贴进 PR / CHANGELOG 的兼容性证据块。
+- **`doctor` 版本判定修复**:支持范围此前停在 `0.1.2` 线,导致 `0.1.5` 部署恒报「不在主支支持范围」;
+  现直接读 `compat.json`,与支持声明同源。
+
 ## 0.4.5 (2026-09-09) — DSH 0.1.5-alpha.1 兼容 + 图片生命周期 + vision 原生交付
 
 ### 文档与工程

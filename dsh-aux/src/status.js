@@ -35,7 +35,7 @@ const PATCH_PACKAGES = [
 
 /**
  * Patch ledger: one row per local bridge patch that dsh-aux maintains.
- * Main branch supports DSH 0.1.5-alpha.1 (single version).
+ * Main branch supports DSH 0.1.5-rc.2 (single version).
  * Retired legacy patches (host-apiproxy / rc.6 settings) live in
  * `bridge/retired/` and are intentionally not listed here.
  *

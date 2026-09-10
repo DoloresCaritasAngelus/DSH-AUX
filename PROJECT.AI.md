@@ -16,7 +16,7 @@
 - 名称：`@dolorescaritasangelus/dsh-aux`（工作区 DSH-AUX）
 - 仓库：https://github.com/DoloresCaritasAngelus/DSH-AUX
 - 用途：DeepSeek Harness（DSH）的辅助模型系统
-- 当前版本：`0.4.5`（`dsh-aux/package.json`）🔻 版本号与徽章随发布单独更新
+- 当前版本：`0.4.6`（`dsh-aux/package.json`）🔻 版本号与徽章随发布单独更新
 - Node：>= 20
 - 运行时依赖：无 `dependencies`；peerDependencies 为 DSH 官方包 + DSH 客户端环境自带的 `react` / `zod`
 
@@ -24,7 +24,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 当前支持 | DSH `0.1.5-alpha.1`（主支单版本，CI compat 矩阵同此） |
+| 当前支持 | DSH `0.1.5-rc.2`（主支单版本，CI compat 矩阵同此） |
 | 冻结线 | DSH `0.1.2-alpha.2` ~ `0.1.2-rc.1` → 分支 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` / Release `v0.4.4-legacy`；只收安全修复 |
 | 更旧线 | DSH `0.1.0-rc.6` ~ `0.1.1-rc.2` → 分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` / Release `v0.4.1-legacy` |
 | 主分支原则 | 只保留 0.1.5 线，保持轻量，不为旧版留兼容代码；legacy 分支不随主支改动 |
@@ -105,10 +105,10 @@
 
 ## Tests / quality gates
 
-- 全量测试：`node --test tests/*.test.js`；🔻 基线 **581**（2026-09-09 快照，以实跑 `# pass/# fail` 为准，文件清单见 `TESTING.md`）。
+- 全量测试：`node --test tests/*.test.js`；🔻 基线 **597**（2026-09-11 快照，以实跑 `# pass/# fail` 为准，文件清单见 `TESTING.md`）。
 - 本机验证清代理环境：`env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy -u NODE_USE_ENV_PROXY NO_PROXY='*' no_proxy='*' node --test tests/*.test.js`。
 - CI 门禁（`.github/workflows/ci.yml` test job）：提交信息规范、ESLint（0 error）、Prettier、全量测试、`ci-doc-hygiene`、`ci-docs-index`、`gen-package-readme --check`、`gen-project-ai --check`、`ci-syntax-check`、`ci-pack-check`、`bash -n`、`ci-fake-dsh`。
-- compat job：DSH 矩阵 `[0.1.5-alpha.1]`；`0.1.2-alpha.2` ~ `0.1.2-rc.1` 冻结在 legacy 分支 / `v0.4.4-legacy` Release。
+- compat job：DSH 矩阵 `[0.1.5-rc.2]`；`0.1.2-alpha.2` ~ `0.1.2-rc.1` 冻结在 legacy 分支 / `v0.4.4-legacy` Release。
 - 补丁 dry-run（不写盘）：`node bridge/apply-patch.mjs --dry-run`、`node bridge/self-heal.mjs --dry-run`、`node bridge/patch-session-ignorable.mjs --dry-run`。
 - `scripts/doctor.mjs` 做部署健康检查（symlink/profile/补丁/白名单/版本），不修改任何文件。
 
