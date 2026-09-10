@@ -49,7 +49,7 @@ jobs:
 
   # 包级 DSH 版本兼容矩阵:不需要容器,直接用 npm 切换 @deepseek-ai/* 版本。
   # 主支只支持 0.1.5-rc.2(单版本);0.1.2 线冻结在 legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1。
-  compat:
+  compat-matrix:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -73,6 +73,21 @@ jobs:
         run: node scripts/gen-package-readme.mjs --check
       - name: PROJECT 单一真相检查
         run: node scripts/gen-project-ai.mjs --check
+
+  # 分支保护的 required checks 按名字精确匹配,而矩阵 job 的检查名必然带上矩阵值
+  # (compat-matrix (0.1.5-rc.2))。直接要求矩阵 job,等于每次换支持线都要改仓库设置,
+  # 而旧名字永远不会再产生 —— PR 会永久停在 blocked。
+  # 因此矩阵只负责跑,唯一 required check 是这个固定名字的汇总闸:矩阵怎么变,它都叫 compat。
+  compat:
+    name: compat
+    needs: [compat-matrix]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 汇总兼容矩阵结果
+        run: |
+          echo "compat-matrix: ${{ needs.compat-matrix.result }}"
+          test "${{ needs.compat-matrix.result }}" = "success"
 
   # 真实补丁落盘 + doctor 冒烟:在 fake DSH 根里实际打一遍补丁并跑 self-heal,
   # 最后用 doctor 验证 deployment 状态。只在当前 DSH 默认版本上跑,控制成本。

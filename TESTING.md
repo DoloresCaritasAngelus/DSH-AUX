@@ -29,6 +29,9 @@ node scripts/compat-evidence.mjs --dsh-root <root> [--with-tests]      # 生成�
 ```
 
 - 当前 DSH 兼容矩阵:`0.1.5-rc.2`(主支单版本)。
+- **分支保护的 required checks 用固定名 `compat`**(CI 里的汇总闸),不是矩阵 job 的检查名:
+  矩阵 job 的名字必然带版本号(`compat-matrix (0.1.5-rc.2)`),写进保护规则后,换支持线时会
+  永远等待一个不再产生的检查、PR 永久停在 blocked。升级支持线只需改 `compat.json`。
 - `0.1.2-alpha.2` ~ `0.1.2-rc.1` 已冻结:使用 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 分支 / `v0.4.4-legacy` Release。
 - 旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）请使用 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 分支 / `v0.4.1-legacy` Release。
 - 注:本机 `.npmrc` 指向 `registry.npmmirror.com`,该镜像对 0.1.5 线滞后
