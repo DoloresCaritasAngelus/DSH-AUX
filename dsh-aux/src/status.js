@@ -59,7 +59,7 @@ const PATCH_LEDGER = [
     id: "bridge-session-controller",
     group: "P1-P6",
     pkg: "dsh-api-session-controller",
-    mark: "dsh-aux image bridge v3 (local patch)",
+    mark: "dsh-aux image bridge v4 (local patch)",
     description: "alpha.x session-controller 图片门控移除",
   },
   {

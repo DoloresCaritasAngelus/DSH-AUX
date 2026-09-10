@@ -24,8 +24,8 @@ const REPO = resolve(HERE, "..");
 const APPLY = join(REPO, "bridge/apply-patch.mjs");
 const ORIG_BLOCK = readFileSync(join(REPO, "bridge/orig-session-controller-prompt-block.txt"), "utf8").trimEnd();
 
-/** 目标标记:补丁成功写入后应出现(dsh-aux/src/image-bridge.js 的 v3 判据)。 */
-const PATCH_MARK = "dsh-aux image bridge v3 (local patch)";
+/** 目标标记:补丁成功写入后应出现(image-bridge 以版本容忍正则识别)。 */
+const PATCH_MARK = "dsh-aux image bridge v4 (local patch)";
 
 /**
  * 建一个只含 session-controller 目标的 fake DSH 根。
@@ -44,7 +44,8 @@ function fakeRoot({ indentShift = 0, mutate = false } = {}) {
     .map((line) => "\t".repeat(indentShift) + line)
     .join("\n");
   const file = join(dir, "index.js");
-  writeFileSync(file, `function outer() {\n${block}\n}\n`);
+  // 同 bridge-block-match:真实上下文是 async 闭包,补丁块保留 await。
+  writeFileSync(file, `async function outer() {\n${block}\n}\n`);
   return { root, dir, file };
 }
 

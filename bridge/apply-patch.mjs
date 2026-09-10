@@ -52,6 +52,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // 一行注释击穿,令旧路径文本永久留存。
 const ANCHOR_TEXT_ORIG_BLOCK = await readFile(join(HERE, "orig-agent-loop-anchor-text-block.txt"), "utf8");
 const ANCHOR_TEXT_PATCHED_BLOCK = await readFile(join(HERE, "patched-agent-loop-anchor-text-block.txt"), "utf8");
+// v3 注释式门控块:已装旧补丁的部署要靠它原地升级(见 SESSION_CONTROLLER 目标的 states 顺序)。
+const SESSION_GATE_V3_BLOCK = await readFile(join(HERE, "patched-session-controller-prompt-v3-block.txt"), "utf8");
 
 // 本工具专属备份 tag:--rollback 只认自己写下的备份,避免弹出 self-heal 的
 // .bak-selfheal-*(字典序 "s" 排最前,回滚会变成静默 no-op)。
@@ -206,9 +208,18 @@ const TARGETS = [
   {
     label: "dsh-api-session-controller (prompt)",
     file: SESSION_CONTROLLER_FILE,
-    mark: "dsh-aux image bridge v3 (local patch)",
+    mark: "dsh-aux image bridge v4 (local patch)",
     states: [
-      { name: "patched", detect: (d) => d.includes("dsh-aux image bridge v3 (local patch)"), action: "skip" },
+      // 旧 v3 门控块必须排在 skip 之前:否则已装旧补丁的部署会被判为「已打补丁」
+      // 而永不更新,门控就永远停在「无条件移除」那个错误状态。
+      {
+        name: "gate-v3-upgrade",
+        detect: (d) => blockPattern(SESSION_GATE_V3_BLOCK).test(d),
+        block: SESSION_GATE_V3_BLOCK,
+        replacement: await readFile(join(HERE, "patched-session-controller-prompt-block.txt"), "utf8"),
+        action: "replace",
+      },
+      { name: "patched", detect: (d) => d.includes("dsh-aux image bridge v4 (local patch)"), action: "skip" },
       {
         name: "original-alpha2",
         detect: (d) => d.includes('Model "${current.model}" does not support image input.'),

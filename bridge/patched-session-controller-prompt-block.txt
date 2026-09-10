@@ -1,4 +1,18 @@
-// dsh-aux image bridge v3 (local patch): text-only models can
-					// receive images. agent-loop rewrites image blocks to vision_analyze
-					// at the model-input boundary, so the session-controller capability
-					// gate is no longer needed.
+				// dsh-aux image bridge v4 (local patch): when the bridge is on, agent-loop rewrites
+					// image blocks to vision_analyze at the model-input boundary, so this capability
+					// gate would reject exactly the models the bridge exists to support and must stand
+					// down. When the bridge is off (platform switch imageBridge=native, or dsh-aux is
+					// not mounted), the official gate stays in force -- otherwise a text-only model
+					// would receive image blocks that nothing rewrote.
+				const auxImageBridge = (() => {
+					try {
+						return this.ctx.get("auxLlm")?._enabled?.imageBridge !== "native";
+					} catch {
+						return false;
+					}
+				})();
+				if (hasImage && !auxImageBridge) {
+					const current = this.agents.selectionFor(agent).current;
+					const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model);
+					if (model.inputModalities !== void 0 && !model.inputModalities.includes("image")) throw new RemoteError("session/attachment-invalid", `Model "${current.model}" does not support image input.`, { reason: "MODEL_DOES_NOT_SUPPORT_IMAGES" });
+				}

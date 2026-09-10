@@ -1,0 +1,4 @@
+// dsh-aux image bridge v3 (local patch): text-only models can
+					// receive images. agent-loop rewrites image blocks to vision_analyze
+					// at the model-input boundary, so the session-controller capability
+					// gate is no longer needed.
