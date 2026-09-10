@@ -1,8 +1,8 @@
 /**
  * DSH 官方包清单(单一真相源:版本切换器与兼容同步器共用一份)。
  *
- * 这些名字必须与 npm 上 `@deepseek-ai/` 下的真实包名一致;写错不会报错,
- * 只会让某个包的版本静默停在旧线,所以新增支持线后要跑 `sync-compat.mjs --check`。
+ * 这些名字必须与 npm 上 `@deepseek-ai/` 下的真实包名一致:名单缺项时 npm 只会让该包停在
+ * 别的版本而不报错,因此 sync-compat 对 devDependencies / overrides 的缺项直接报错。
  */
 
 /** 版本随 DSH 发布线走、需要写进 devDependencies 的包。 */

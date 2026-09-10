@@ -2,10 +2,9 @@
 /**
  * sync-compat — DSH 兼容性与发布数字的同步器(单一真相源 = <repo>/compat.json)。
  *
- * 为什么存在:版本号、测试基线与包版本原本散落在 package.json(13 个 devDependencies +
- * 60 个 overrides)、CI 矩阵、doctor 支持范围、README 徽章与正文、TESTING / PROJECT /
- * PR 模板里;每次升级都要手工对齐,漏一处就产生静默漂移(先例:doctor.mjs 的支持范围停在
- * 0.1.2 线而主支声明早已是 0.1.5;README 徽章停在 576 而基线是 581)。
+ * 为什么存在:版本号、测试基线与包版本分布在 package.json(devDependencies + overrides)、
+ * CI 矩阵、doctor 支持范围、README 徽章与正文、TESTING / PROJECT / PR 模板等位置;逐个手工
+ * 对齐时漏改任何一处都会留下静默漂移,而漂移通常要到下次升级才暴露。
  *
  * 契约:
  *   - compat.json 是唯一可手改处,其余位置都是它的生成物或引用;

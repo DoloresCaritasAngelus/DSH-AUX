@@ -9,7 +9,7 @@
  *   跑完本脚本后若不需要目标版本,请显式重装(例如
  *   `npm install --no-package-lock --no-audit --no-fund`)或改用独立工作树,
  *   不要让 node_modules 与 package.json 漂移 —— 那会静默改变本地测试口径
- *   (先例:本机 node_modules 停在 0.1.2-alpha.3,而 package.json 钉 0.1.5-alpha.1)。
+ *   (按还原后的 package.json 重新安装即可对齐)。
  *   `--keep` 时连 package.json 也不还原,仅供本地调试。
  *
  * DSH-AUX is not published to npm; this script only swaps the local

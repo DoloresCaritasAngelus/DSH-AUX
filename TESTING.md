@@ -69,6 +69,7 @@ node scripts/compat-evidence.mjs --dsh-root <root> [--with-tests]      # 生成�
 | `tests/event-shapes.test.js` | 写端闸:AUX 事件类型/载荷字段必须登记在 `event-shapes.js`(静态扫描全部写入点 + `unknownEventKeys` 判定 + bridge disposition 覆盖) |
 | `tests/format-admissions.test.js` | P12/P13 纯函数:补什么/幂等/救援补丁识别/产物 `node --check`/锚点缺失只告警 |
 | `tests/readme-sync.test.js` | 单一真相:包内 README == 根 README 生成快照(防漂移) |
+| `tests/gen-project-ai.test.js` | PROJECT.AI.md 生成视图:标记块拼装、`--check` 与真实仓库同步、缺标记/多块报错 |
 | `tests/compat-sync.test.js` | compat 同步闸:无漂移通过 / 漂移报错 / 锚点失配报错(退出码 2) + 包清单与 package.json 双向一致 |
 | `tests/compat-delta.test.js` | 宿主包锚点位移判定:无源码变更(0)/ 有源码变更(1)/ 映射过期与用法错误(2),fixture 用临时 git 仓 |
 | `tests/compat-evidence.test.js` | 证据块:无部署根报错(2) + 证据块点名 compat.json 声明版本 |
