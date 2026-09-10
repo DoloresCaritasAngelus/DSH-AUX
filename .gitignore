@@ -42,3 +42,7 @@ scripts/*
 !scripts/ci-pack-check.mjs
 !scripts/ci-commit-lint.mjs
 !scripts/ci-docs-index.mjs
+!scripts/dsh-packages.mjs
+!scripts/sync-compat.mjs
+!scripts/compat-delta.mjs
+!scripts/compat-evidence.mjs

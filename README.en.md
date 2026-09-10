@@ -8,10 +8,10 @@
 > The main model stays focused on the chat; I take care of images, web pages, and compressing long text!
 > Whenever you need me, just call me directly～
 
-![Version](https://img.shields.io/badge/version-0.4.5-blue)
-![Tests](https://img.shields.io/badge/tests-576-brightgreen)
+![Version](https://img.shields.io/badge/version-0.4.6-blue)
+![Tests](https://img.shields.io/badge/tests-594-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Platform](https://img.shields.io/badge/DSH-0.1.5--alpha.1-0078D4)
+![Platform](https://img.shields.io/badge/DSH-0.1.5--rc.2-0078D4)
 
 </div>
 
@@ -371,11 +371,11 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 
 ## Compatibility & Dependencies
 
-- **Platform**: DSH 0.1.5-alpha.1 (single supported line on the main branch); Node ≥ 20.
+- **Platform**: DSH 0.1.5-rc.2 (single supported line on the main branch); Node ≥ 20.
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are official DSH packages plus the platform-provided `react`/`zod`; no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (581 tests); file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (594 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 

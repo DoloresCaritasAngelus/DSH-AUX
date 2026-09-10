@@ -10,7 +10,7 @@
  *   5. P7 session ignorable 是否已打;
  *   6. P8 aux/llm-call 白名单是否在;
  *   7. start-dsh.sh 自愈 hook 是否在;
- *   8. DSH 版本是否在支持范围(0.1.2-alpha.2 ~ 0.1.2-rc.1)。
+ *   8. DSH 版本是否与 compat.json 声明的主支支持线一致。
  *
  * 用法:
  *   node scripts/doctor.mjs
@@ -24,6 +24,9 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
+
+/** 主支支持线以 compat.json 为单一真相源(与 CI 矩阵、README、TESTING 同源)。 */
+const COMPAT = JSON.parse(readFileSync(join(REPO, "compat.json"), "utf8"));
 const DRY_RUN = process.argv.includes("--dry-run"); // alias for no mutation
 const JSON_OUT = process.argv.includes("--json");
 
@@ -177,12 +180,10 @@ function main() {
     const dshVersion = readVersion(join(root, "node_modules/@deepseek-ai/dsh/package.json"));
     if (!dshVersion) {
       record("WARN", "version", "无法读取 @deepseek-ai/dsh 版本");
-    } else if (
-      ["0.1.2-alpha.2", "0.1.2-alpha.3", "0.1.2-alpha.4", "0.1.2-alpha.5", "0.1.2-rc.1"].includes(dshVersion)
-    ) {
-      record("OK", "version", `DSH ${dshVersion} 在支持范围(0.1.2-alpha.2 ~ 0.1.2-rc.1)`);
+    } else if (dshVersion === COMPAT.dsh) {
+      record("OK", "version", `DSH ${dshVersion} 与 compat.json 声明的主支支持线一致`);
     } else {
-      record("WARN", "version", `DSH ${dshVersion} 不在主支支持范围;旧版请使用 legacy 分支`);
+      record("WARN", "version", `DSH ${dshVersion} 与 compat.json 声明的 ${COMPAT.dsh} 不一致;旧版请使用 legacy 分支`);
     }
   }
 

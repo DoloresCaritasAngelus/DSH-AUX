@@ -9,7 +9,7 @@
 - **dsh-aux 是双端插件**:host 端提供 `ctx.auxLlm` 路由服务 + 四个工具
   (`vision_analyze` / `web_extract` / `web_crawl` / `compress_text`)与 `/aux` 命令;
   client 端提供 Web 设置页与 composer 状态 chip。
-- **支持线**:DSH `0.1.5-alpha.1`(主支单版本);`0.1.2-alpha.2 ~ 0.1.2-rc.1` 请用
+- **支持线**:DSH `0.1.5-rc.2`(主支单版本);`0.1.2-alpha.2 ~ 0.1.2-rc.1` 请用
   `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 分支或 `v0.4.4-legacy` Release。
 - **安装 = 三步**:① 把包放进 DSH 能解析的 node_modules;② 在 profile 补丁层
   注册一行;③ 重启 DSH。
@@ -114,7 +114,7 @@ dsh --profile web --dump-config 2>/dev/null | grep -A1 "id: aux" | head -4
 | `--dump-config` 无 aux 行 | insert 未生效 / YAML 语法错 / id 冲突 | 检查 cordis.patch.yml 缩进与 `name` 完全一致;确保插在顶层数组 |
 | 工具未注册、/aux 无响应 | 补丁层改了但未重启 | 重启 DSH(host 插件改动必须重启) |
 | client 设置页不显示 | client bundle 未加载 | 确认 package.json 的 `dsh.client` 声明存在且 platform 为 web |
-| 重启后报插件加载错误 | 版本不匹配 | 检查 DSH 版本 = `0.1.5-alpha.1`(主支单版本);`0.1.2-alpha.2 ~ 0.1.2-rc.1` 用 legacy 分支;查看启动日志(`~/dsh/dsh-web.log`) |
+| 重启后报插件加载错误 | 版本不匹配 | 检查 DSH 版本 = `0.1.5-rc.2`(主支单版本);`0.1.2-alpha.2 ~ 0.1.2-rc.1` 用 legacy 分支;查看启动日志(`~/dsh/dsh-web.log`) |
 | 发图报 MODEL_DOES_NOT_SUPPORT_IMAGES | 纯文本主模型 + 未装 bridge 补丁 | 可选:安装 `bridge/` 补丁(见 §6),或换多模态主模型 |
 
 ## 5. 卸载
