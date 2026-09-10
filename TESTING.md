@@ -11,7 +11,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **594**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **597**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 - `tests/bridge.test.js` 的部署包探测是**显式 opt-in**(`BRIDGE_DEPLOYED_SRC=1` 或 `DSH_AGENT_LOOP`);默认不探测 ⇒ 本机与 CI 的 `# tests` 计数一致。
@@ -71,6 +71,8 @@ node scripts/compat-evidence.mjs --dsh-root <root> [--with-tests]      # 生成�
 | `tests/readme-sync.test.js` | 单一真相:包内 README == 根 README 生成快照(防漂移) |
 | `tests/gen-project-ai.test.js` | PROJECT.AI.md 生成视图:标记块拼装、`--check` 与真实仓库同步、缺标记/多块报错 |
 | `tests/compat-sync.test.js` | compat 同步闸:无漂移通过 / 漂移报错 / 锚点失配报错(退出码 2) + 包清单与 package.json 双向一致 |
+| `tests/doctor-version.test.js` | doctor 版本判定跟随 compat.json:一致 = OK、不一致 = WARN(不误报 ERROR) |
+| `tests/scripts-tracked.test.js` | 仓库脚本可达性:CI/测试引用的 `scripts/*.mjs` 必须已被 git 跟踪(`.gitignore` 白名单漏登记 = 静默失效) |
 | `tests/compat-delta.test.js` | 宿主包锚点位移判定:无源码变更(0)/ 有源码变更(1)/ 映射过期与用法错误(2),fixture 用临时 git 仓 |
 | `tests/compat-evidence.test.js` | 证据块:无部署根报错(2) + 证据块点名 compat.json 声明版本 |
 | `tests/ci-doc-hygiene.test.js` | 文档脱密闸变异测试:段数不足 / 发布段空正文 / 哨兵缺失 / Unreleased 缺失必须非零退出 |

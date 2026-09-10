@@ -13,7 +13,7 @@
   源码变化:`dsh-api-session-controller`(新增 `reveal` 文件管理器动作与 `workspaceDesktop()`,与
   图片能力门控无关)与 `dsh-session`(新增官方事件类型 `deliverables/presented`、`subagent/catalog`,
   与 `aux/*` 词条不冲突)。rc.1 用户可与 rc.2 共用同一 AUX 版本。
-- **测试基线**:581 → **594**(新增三个脚本的回归闸)。
+- **测试基线**:581 → **597**(新增五个闸:三个脚本的回归测试 + doctor 版本判定 + 仓库脚本可达性)。
 
 ### 工程
 
