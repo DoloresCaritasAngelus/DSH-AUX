@@ -2,10 +2,10 @@
  * ci-doc-hygiene CHANGELOG 结构闸回归。
  *
  * 背景(评审 #45):旧门禁只数 `## 0.x` 段数 + 两个哨兵节,变异测试 B
- * ——把 CHANGELOG 整文件替换成 24 个假 `## 0.x` 标题 + 哨兵、零正文
+ * ——把 CHANGELOG 整文件替换成 25 个假 `## 0.x` 标题 + 哨兵、零正文
  * ——实测 exit 0 漏网。本测试用变异后的 CHANGELOG 驱动真实脚本,断言:
  *  - 当前仓库 CHANGELOG 通过(绿);
- *  - 段数不足 / 段空正文 / 0.4.4 哨兵缺失 / Unreleased 节缺失 → 非零退出(红)。
+ *  - 段数不足 / 段空正文 / 0.4.6 哨兵缺失 / Unreleased 节缺失 → 非零退出(红)。
  *
  * 每个用例在临时 git 仓库里跑 `scripts/ci-doc-hygiene.mjs`(脚本按 cwd 读
  * CHANGELOG.md 并 `git ls-files`),断言退出码与命中的规则名,避免"因脚本
@@ -48,16 +48,16 @@ const UNRELEASED = "## 未发布 (Unreleased)";
 
 /**
  * 构造假 CHANGELOG。
- * @param options.count `## 0.x` 段数(基线为 24)。
+ * @param options.count `## 0.x` 段数(基线为 25)。
  * @param options.withBody 段内是否带非空正文。
- * @param options.sentinel045 是否包含 v0.4.5 哨兵段。
+ * @param options.sentinel046 是否包含 v0.4.6 哨兵段。
  * @param options.unreleased 是否包含「未发布 (Unreleased)」节。
  */
-function fakeChangelog({ count = 24, withBody = true, sentinel045 = true, unreleased = true } = {}) {
+function fakeChangelog({ count = 25, withBody = true, sentinel046 = true, unreleased = true } = {}) {
   const parts = [];
   if (unreleased) parts.push(`${UNRELEASED}\n`);
   for (let i = 0; i < count; i++) {
-    const version = sentinel045 && i === 0 ? "0.4.5" : `0.9.${i}`;
+    const version = sentinel046 && i === 0 ? "0.4.6" : `0.9.${i}`;
     parts.push(`## ${version} (2026-01-01) — 假版本\n`);
     if (withBody) parts.push("- 假正文。\n");
   }
@@ -78,15 +78,15 @@ test("ci-doc-hygiene: 发布段数不足 → 非零退出", () => {
 
 test("ci-doc-hygiene: 发布段空正文(变异 B)→ 非零退出", () => {
   const result = runHygiene(fakeChangelog({ withBody: false }));
-  assert.notEqual(result.status, 0, "24 个空壳段 + 哨兵必须阻塞(变异 B 不得漏网)");
+  assert.notEqual(result.status, 0, "25 个空壳段 + 哨兵必须阻塞(变异 B 不得漏网)");
   assert.match(result.stderr, /\[发布段空正文\]/);
   // 隔离断言:此变异不触发段数/哨兵规则,命中的只能是"空正文"这条新闸。
   assert.doesNotMatch(result.stderr, /\[发布历史截断\]|\[发布历史缺失\]|\[结构缺失\]/);
 });
 
-test("ci-doc-hygiene: v0.4.5 哨兵缺失 → 非零退出", () => {
-  const result = runHygiene(fakeChangelog({ sentinel045: false }));
-  assert.notEqual(result.status, 0, "缺少 v0.4.5 段必须阻塞");
+test("ci-doc-hygiene: v0.4.6 哨兵缺失 → 非零退出", () => {
+  const result = runHygiene(fakeChangelog({ sentinel046: false }));
+  assert.notEqual(result.status, 0, "缺少 v0.4.6 段必须阻塞");
   assert.match(result.stderr, /\[发布历史缺失\]/);
 });
 
