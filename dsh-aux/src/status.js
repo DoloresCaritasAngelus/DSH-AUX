@@ -699,6 +699,17 @@ export async function collectPlatformStatus(service) {
 }
 
 /**
+ * Report why a hidden status publish did not land. Both the skip branch and the
+ * failure branch were silent, which left "the settings page cannot read platform
+ * status" without a diagnosable cause anywhere. Off by default so production
+ * stays quiet; `DSH_AUX_DEBUG_PUBLISH=1` prints the reason to stderr.
+ */
+function publishDiag(reason) {
+  if (process.env.DSH_AUX_DEBUG_PUBLISH !== "1") return;
+  process.stderr.write(`[dsh-aux] ${reason}\n`);
+}
+
+/**
  * Collect one status snapshot, stamp it with a monotonic sequence, and record
  * it to the given sessions. All errors are swallowed: status publishing must
  * never break session lifecycle.
@@ -706,13 +717,16 @@ export async function collectPlatformStatus(service) {
 async function publishStatusSnapshot(service, sessions) {
   // 同进程内刚打过补丁时,当前 dsh-session 仍是旧代码,不能写需要 ignorable
   // 标记的新事件;等重启后由启动发布再写入。
-  if (service._patchAppliedThisSession === true) return;
+  if (service._patchAppliedThisSession === true) {
+    publishDiag("platform status publish skipped — patches were applied in this process");
+    return;
+  }
   try {
     const status = await collectPlatformStatus(service);
     status.publishSeq = nextPlatformPublishSeq(service);
     await Promise.all(sessions.map((session) => recordPlatformEvent(service, session, status).catch(() => {})));
-  } catch {
-    /* status publishing must never break session lifecycle */
+  } catch (error) {
+    publishDiag(`platform status publish failed — ${error?.message ?? String(error)}`);
   }
 }
 

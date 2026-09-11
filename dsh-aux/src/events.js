@@ -203,8 +203,9 @@ export async function recordDebugEvent(service, session, data) {
     for (const [key, value] of Object.entries(redacted)) {
       if (value !== void 0) clean[key] = value;
     }
-    warnUnknownEventKeys(service, AUX_DEBUG_EVENT, clean);
-    session.append(AUX_DEBUG_EVENT, clean, void 0, { ignorable: true });
+    const safe = withoutUndefined(clean);
+    warnUnknownEventKeys(service, AUX_DEBUG_EVENT, safe);
+    session.append(AUX_DEBUG_EVENT, safe, void 0, { ignorable: true });
   } catch {
     /* debug logging must never fail the call */
   }
@@ -216,18 +217,57 @@ export async function recordDebugEvent(service, session, data) {
  * so it never needs to execute a slash command (which would pollute the
  * conversation with command cards).
  */
+/**
+ * Deep-copy `value` with every `undefined` dropped from objects and arrays.
+ * Session-event payloads must be JSON-serializable: DSH rejects an append whose
+ * data carries `undefined` (`session event "…" carries non-JSON-serializable
+ * data`), and the previous top-level-only filter missed nested ones — a status
+ * snapshot with `imageLifecycle.blockedReason: undefined` (the healthy case,
+ * where nothing blocks deletion) silently failed to publish, so the settings
+ * page could never read platform status.
+ * @param value - any JSON-ish value.
+ * @returns an equivalent value with no `undefined` anywhere.
+ */
+export function withoutUndefined(value) {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => entry !== void 0).map((entry) => withoutUndefined(entry));
+  }
+  if (value !== null && typeof value === "object") {
+    const out = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (entry === void 0) continue;
+      out[key] = withoutUndefined(entry);
+    }
+    return out;
+  }
+  return value;
+}
+
 export async function recordPlatformEvent(service, session, data) {
   if (session === void 0) return;
-  if (!(await sessionEventsSupported(service))) return;
+  // Both early exits below are silent by design (status publishing must never
+  // break the session), which is why "the settings page cannot read platform
+  // status" used to have no diagnosable cause. DSH_AUX_DEBUG_PUBLISH=1 prints it.
+  if (!(await sessionEventsSupported(service))) {
+    if (process.env.DSH_AUX_DEBUG_PUBLISH === "1") {
+      process.stderr.write(
+        "[dsh-aux] platform event skipped — session events unsupported (ignorable patch missing?)\n",
+      );
+    }
+    return;
+  }
   try {
     const clean = {};
     for (const [key, value] of Object.entries(data)) {
       if (value !== void 0) clean[key] = value;
     }
-    warnUnknownEventKeys(service, AUX_PLATFORM_EVENT, clean);
-    session.append(AUX_PLATFORM_EVENT, clean, void 0, { ignorable: true });
-  } catch {
-    /* platform status logging must never fail */
+    const safe = withoutUndefined(clean);
+    warnUnknownEventKeys(service, AUX_PLATFORM_EVENT, safe);
+    session.append(AUX_PLATFORM_EVENT, safe, void 0, { ignorable: true });
+  } catch (error) {
+    if (process.env.DSH_AUX_DEBUG_PUBLISH === "1") {
+      process.stderr.write(`[dsh-aux] platform event append failed — ${error?.message ?? String(error)}\n`);
+    }
   }
 }
 
@@ -244,8 +284,9 @@ export async function recordImageLibraryEvent(service, session, data) {
     for (const [key, value] of Object.entries(data)) {
       if (value !== void 0) clean[key] = value;
     }
-    warnUnknownEventKeys(service, AUX_IMAGE_LIBRARY_EVENT, clean);
-    session.append(AUX_IMAGE_LIBRARY_EVENT, clean, void 0, { ignorable: true });
+    const safe = withoutUndefined(clean);
+    warnUnknownEventKeys(service, AUX_IMAGE_LIBRARY_EVENT, safe);
+    session.append(AUX_IMAGE_LIBRARY_EVENT, safe, void 0, { ignorable: true });
   } catch {
     /* image-library logging must never fail */
   }
