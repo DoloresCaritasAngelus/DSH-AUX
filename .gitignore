@@ -1,5 +1,8 @@
 # 依赖与构建产物
 node_modules/
+# CI 一律 npm install --no-package-lock(见 .github/workflows/ci.yml),
+# 因此本仓库不维护锁文件;本地 npm install 生成的产物不要提交。
+package-lock.json
 *.tgz
 *.log
 *.tmp

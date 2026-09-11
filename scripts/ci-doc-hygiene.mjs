@@ -19,24 +19,34 @@
  * 退出码:发现命中 = 1(阻塞 CI);干净 = 0。
  */
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { FILE_RULES, MESSAGE_RULES, scanText } from "./hygiene-rules.mjs";
 
-const TEXT_EXT = /\.(md|mjs|js|yml|yaml|json|sh|txt)$/;
 const SKIP = [
   /^scripts\/ci-doc-hygiene\.mjs$/, // 本脚本自身包含模式字面量
   /^scripts\/hygiene-rules\.mjs$/, // 规则表必须写出被拦截的字面量才能自解释
 ];
 
+// 扫**全部被跟踪文件**,不再按扩展名挑选。
+// 起因:一条 node_modules 符号链接被误提交,内容是本机绝对路径 —— 它没有扩展名,
+// 按扩展名过滤的名单直接把它跳过,而它恰恰是最该拦的一类(符号链接的本机路径)。
+// 现在的判据是内容而不是文件名:符号链接读**链接目标字符串**;普通文件按 UTF-8 读,
+// 含 NUL 字节的判为二进制跳过(PNG 之类既不误报,也不会被解码坏)。
 const files = execSync("git ls-files", { encoding: "utf8" })
   .split("\n")
-  .filter((f) => TEXT_EXT.test(f) && !SKIP.some((re) => re.test(f)));
+  .filter((f) => f !== "" && !SKIP.some((re) => re.test(f)));
 
 let hits = 0;
 for (const file of files) {
   let text;
   try {
-    text = readFileSync(file, "utf8");
+    if (lstatSync(file).isSymbolicLink()) {
+      text = readlinkSync(file); // 符号链接的目标本身就是可能泄漏的字符串
+    } else {
+      const raw = readFileSync(file);
+      if (raw.includes(0)) continue; // 二进制(NUL 字节)—— 跳过
+      text = raw.toString("utf8");
+    }
   } catch {
     continue;
   }

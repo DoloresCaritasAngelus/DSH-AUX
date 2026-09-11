@@ -75,7 +75,7 @@ npm run format:check          # Prettier 格式检查
 - 改完根 README / CREDITS 后运行 `cd dsh-aux && npm run gen-package-readme`；
 - 行为/命令/设置变化同步 `CHANGELOG.md` 与 `TESTING.md`；
 - 专项设计文档放 `docs/design/`,v0.1 时代过程文档在 `docs/archive/`(勿再往根目录堆文档)；
-- 补丁类改动同步补丁台账 `aux-notes/02-patch-ledger.md`(维护者私有台账:随仓库存在但已 gitignore,不随仓库分发;外部贡献者可跳过此项)。
+- 补丁类改动同步**补丁台账**(维护者私有,不随仓库分发;外部贡献者可跳过此项)。台账在维护者的本地笔记库里,路径随其结构变动 —— 这里刻意不写死,以免文档腐坏。
 
 ## Pull Request 流程
 
