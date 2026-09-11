@@ -127,6 +127,18 @@ const TARGETS = [
       //
       // 方法块的 v3 → v4 升级必须排在 v3-0.1.5(skip)之前:旧部署的锚点会无条件
       // 点名 vision_analyze,不升级就永远停在「声称工具可用」的文本上。
+      // v4 的锚点文案在 v4 内部改过一次:早期 v4 的回退串写着「当前没有可用的视觉工具」,
+      // 那同样是提示词污染。该行不含版本标记,靠 skip 态判据(它只认方法块标记)永远
+      // 不会被更新,所以必须单列一个行级升级态,且排在 v3-0.1.5 之前。
+      {
+        name: "anchor-factual",
+        detect: (d) => d.includes("当前没有可用的视觉工具,无法查看此图"),
+        block:
+          'const imageAnchor = (index, total, attachmentId) => `[本条消息第${index}张/共${total}张, attachmentId=<${attachmentId}>${visionExposed ? "。可用 vision_analyze 的 attachmentId 参数查看" : "（当前没有可用的视觉工具,无法查看此图）"}]`;',
+        replacement:
+          'const imageAnchor = (index, total, attachmentId) => `[本条消息第${index}张/共${total}张, attachmentId=<${attachmentId}>${visionExposed ? "。可用 vision_analyze 的 attachmentId 参数查看" : ""}]`;',
+        action: "replace",
+      },
       {
         name: "method-v3-upgrade",
         detect: (d) => blockPattern(METHOD_V3_BLOCK).test(d),

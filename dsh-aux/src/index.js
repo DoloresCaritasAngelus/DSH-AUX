@@ -69,6 +69,7 @@ import {
 import { publishPlatformStatus, publishPlatformStatusToSession } from "./status.js";
 import { collectImageLibrary } from "./images/image-library.js";
 import {
+  auxGuideExposure,
   auxPreStepReminderText,
   auxToolsGuide,
   isAuxGuidePromoted,
@@ -426,9 +427,11 @@ export class AuxLlmService extends Service {
       if (decision.kind === "reject" || !Array.isArray(decision.messages)) return decision;
       const sessionId = agent?.session?.id;
       if (sessionId === void 0 || this._auxGuideInjectedSessions.has(sessionId)) return decision;
+      const reminderText = auxPreStepReminderText(agent, auxGuideExposure(this));
+      if (reminderText === "") return decision;
       this._auxGuideInjectedSessions.add(sessionId);
       const reminder = createUserMessage({
-        content: [{ type: "text", text: auxPreStepReminderText(agent) }],
+        content: [{ type: "text", text: reminderText }],
         source: { kind: "aux-guide" },
       });
       return { ...decision, messages: [...decision.messages, reminder] };

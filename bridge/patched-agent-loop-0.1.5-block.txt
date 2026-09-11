@@ -42,7 +42,7 @@
 			const visionExposed = (() => {
 				try { return aux?.visionToolAvailable?.() ?? true; } catch { return true; }
 			})();
-			const imageAnchor = (index, total, attachmentId) => `[本条消息第${index}张/共${total}张, attachmentId=<${attachmentId}>${visionExposed ? "。可用 vision_analyze 的 attachmentId 参数查看" : "（当前没有可用的视觉工具,无法查看此图）"}]`;
+			const imageAnchor = (index, total, attachmentId) => `[本条消息第${index}张/共${total}张, attachmentId=<${attachmentId}>${visionExposed ? "。可用 vision_analyze 的 attachmentId 参数查看" : ""}]`;
 			let imageIndex = 0;
 			const content = [];
 			for (const block of message.content) {

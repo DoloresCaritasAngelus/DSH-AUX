@@ -7,17 +7,45 @@
 import { randomBytes } from "node:crypto";
 
 /**
- * The main-agent guidance section (injected via systemPrompt.section).
- * Tells the chat model that auxiliary tools exist, are executed by a
- * separate auxiliary LLM (no main-context cost), and that image analysis
- * should use vision_analyze directly — NOT a sub-agent.
+ * Tools named by the main-agent guidance, in display order. Each entry is
+ * dropped when its platform switch has retired the tool: naming a tool the
+ * model cannot call sends it looking for something that does not exist.
  */
-export const AUX_TOOLS_GUIDE = [
-  "## 辅助模型工具(dsh-aux)",
-  "本环境挂载了辅助模型系统:vision_analyze(图像/GIF 分析)、web_extract(网页提取与摘要)、compress_text(长文本压缩)由独立的辅助 LLM 执行,不消耗主模型上下文。",
-  "- 需要查看/分析图片或 GIF 时,直接用 vision_analyze 工具(imagePath / attachmentId / imageUrl / images 参数),不要为此创建子代理。",
-  "- 需要网页内容时用 web_extract;超长文本先用 compress_text 压缩再讨论。",
-].join("\n");
+const GUIDE_TOOLS = [
+  {
+    name: "vision_analyze",
+    label: "图像/GIF 分析",
+    line: "- 需要查看/分析图片或 GIF 时,直接用 vision_analyze 工具(imagePath / attachmentId / imageUrl / images 参数),不要为此创建子代理。",
+  },
+  { name: "web_extract", label: "网页提取与摘要", line: "- 需要网页内容时用 web_extract。" },
+  { name: "compress_text", label: "长文本压缩", line: "- 超长文本先用 compress_text 压缩再讨论。" },
+];
+
+/** Tool names the guide can mention; callers resolve each one's exposure. */
+export const AUX_GUIDE_TOOL_NAMES = GUIDE_TOOLS.map((tool) => tool.name);
+
+/**
+ * The main-agent guidance section (injected via systemPrompt.section).
+ * Tells the chat model which auxiliary tools exist, that they run on a
+ * separate auxiliary LLM (no main-context cost), and how to reach image
+ * analysis directly instead of through a sub-agent.
+ * @param exposed - per-tool exposure; an absent entry counts as exposed.
+ * @returns the section text, or an empty string when no tool is exposed
+ *   (the caller then suppresses the section entirely).
+ */
+export function buildAuxToolsGuide(exposed = {}) {
+  const shown = GUIDE_TOOLS.filter((tool) => exposed[tool.name] !== false);
+  if (shown.length === 0) return "";
+  const inline = shown.map((tool) => `${tool.name}(${tool.label})`).join("、");
+  return [
+    "## 辅助模型工具(dsh-aux)",
+    `本环境挂载了辅助模型系统:${inline}由独立的辅助 LLM 执行,不消耗主模型上下文。`,
+    ...shown.map((tool) => tool.line),
+  ].join("\n");
+}
+
+/** The guide with every listed tool exposed (full text). */
+export const AUX_TOOLS_GUIDE = buildAuxToolsGuide({});
 
 /** Compress target ratio bounds. */
 export const MIN_TARGET_RATIO = 0.05;
