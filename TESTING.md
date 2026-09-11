@@ -11,7 +11,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **602**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **613**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 - `tests/bridge.test.js` 的部署包探测是**显式 opt-in**(`BRIDGE_DEPLOYED_SRC=1` 或 `DSH_AGENT_LOOP`);默认不探测 ⇒ 本机与 CI 的 `# tests` 计数一致。
@@ -48,6 +48,8 @@ node scripts/compat-evidence.mjs --dsh-root <root> [--with-tests]      # 生成�
 | `tests/bridge-dry-run.test.js` | `apply-patch --dry-run` 结论保真:块不匹配零写盘、与真实应用结论/退出码一致、块匹配时 dry-run 零写盘 |
 | `tests/bridge-block-match.test.js` | 步骤块匹配忽略行首缩进(0.1.5 `using` 多包一层 try):漂移下仍落盘、首行沿用目标缩进、无漂移行为不变 |
 | `tests/bridge-native-gate.test.js` | session-controller 图片门控的平台开关正确性:闸保留且绑定开关、升级态排在 skip 之前、v3 部署可升级到 v4、v4 幂等跳过 |
+| `tests/bridge-switch-constraints.test.js` | 补丁的平台开关约束闸:每个补丁必须让路(读开关短路 / 委托会读开关的服务 / 纯增量 schema),新增补丁必须登记让路方式 |
+| `tests/bridge-anchor-exposure.test.js` | 图片锚点不得声称不可用的工具:按 `visionToolAvailable()` 分支、v3 块留档与升级态排序、v3→v4 端到端 |
 | `tests/agent-loop-anchor.test.js` | agent-loop 锚点重切:0.1.5 三步链路(桥接方法/async 化/A3 改写/调用点 await)、A3 冻结形状、幂等、0.1.2 旧链路、旧文本原地升级 |
 | `tests/compression.test.js` | `compress_text` 压缩逻辑与 schema |
 | `tests/core-review.test.js` | 核心链路评审回归(路由/降级/能力门) |

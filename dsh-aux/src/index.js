@@ -496,6 +496,17 @@ export class AuxLlmService extends Service {
     return this.toolBridgeMode(name) === "aux";
   }
 
+  /**
+   * Whether `vision_analyze` is callable by the model right now. The
+   * agent-loop image bridge names that tool in its text anchor, so it must not
+   * claim the tool when the platform switch has retired it: the model would go
+   * looking for a tool that does not exist.
+   * @returns true when the tool is exposed to the model catalog.
+   */
+  visionToolAvailable() {
+    return this.isToolExposed("vision_analyze");
+  }
+
   /** Re-mount AUX tools according to the current enabled switches (hot update). */
   syncTools() {
     registerAuxTools(this);

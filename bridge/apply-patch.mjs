@@ -54,6 +54,8 @@ const ANCHOR_TEXT_ORIG_BLOCK = await readFile(join(HERE, "orig-agent-loop-anchor
 const ANCHOR_TEXT_PATCHED_BLOCK = await readFile(join(HERE, "patched-agent-loop-anchor-text-block.txt"), "utf8");
 // v3 注释式门控块:已装旧补丁的部署要靠它原地升级(见 SESSION_CONTROLLER 目标的 states 顺序)。
 const SESSION_GATE_V3_BLOCK = await readFile(join(HERE, "patched-session-controller-prompt-v3-block.txt"), "utf8");
+// agent-loop 桥接方法的 v3 形态:锚点无条件点名 vision_analyze,已部署的旧补丁靠它升级。
+const METHOD_V3_BLOCK = await readFile(join(HERE, "patched-agent-loop-0.1.5-v3-block.txt"), "utf8");
 
 // 本工具专属备份 tag:--rollback 只认自己写下的备份,避免弹出 self-heal 的
 // .bak-selfheal-*(字典序 "s" 排最前,回滚会变成静默 no-op)。
@@ -122,6 +124,16 @@ const TARGETS = [
       // ── DSH 0.1.5-alpha.1 链路:同步 buildRequest + 新注释 + 五参签名 ──
       // 桥接发生在冻结循环之后(A3):原消息冻结语义不变,只有真的改写时才冻结
       // 桥接产物,且不把副本塞进 this.frozenMessages。
+      //
+      // 方法块的 v3 → v4 升级必须排在 v3-0.1.5(skip)之前:旧部署的锚点会无条件
+      // 点名 vision_analyze,不升级就永远停在「声称工具可用」的文本上。
+      {
+        name: "method-v3-upgrade",
+        detect: (d) => blockPattern(METHOD_V3_BLOCK).test(d),
+        block: METHOD_V3_BLOCK,
+        replacement: await readFile(join(HERE, "patched-agent-loop-0.1.5-block.txt"), "utf8"),
+        action: "replace",
+      },
       {
         name: "v3-0.1.5",
         detect: (d) =>

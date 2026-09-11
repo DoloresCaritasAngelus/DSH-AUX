@@ -35,14 +35,7 @@
 		for (const message of messages) {
 			if (!Array.isArray(message?.content) || !message.content.some((b) => b?.type === "image")) { rewritten.push(message); continue; }
 			const imageTotal = message.content.filter((b) => b?.type === "image").length;
-			// Naming a tool the model cannot call sends it looking for something that does
-			// not exist (the platform switch can retire `vision_analyze`). Ask AUX for the
-			// tool's real exposure instead of asserting it; an AUX too old to answer is
-			// treated as exposing it, which preserves the previous text.
-			const visionExposed = (() => {
-				try { return aux?.visionToolAvailable?.() ?? true; } catch { return true; }
-			})();
-			const imageAnchor = (index, total, attachmentId) => `[本条消息第${index}张/共${total}张, attachmentId=<${attachmentId}>${visionExposed ? "。可用 vision_analyze 的 attachmentId 参数查看" : "（当前没有可用的视觉工具,无法查看此图）"}]`;
+			const imageAnchor = (index, total, attachmentId) => `[本条消息第${index}张/共${total}张, attachmentId=<${attachmentId}>。可用 vision_analyze 的 attachmentId 参数查看]`;
 			let imageIndex = 0;
 			const content = [];
 			for (const block of message.content) {
