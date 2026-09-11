@@ -11,7 +11,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **616**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **620**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 - `tests/bridge.test.js` 的部署包探测是**显式 opt-in**(`BRIDGE_DEPLOYED_SRC=1` 或 `DSH_AGENT_LOOP`);默认不探测 ⇒ 本机与 CI 的 `# tests` 计数一致。
@@ -51,6 +51,7 @@ node scripts/compat-evidence.mjs --dsh-root <root> [--with-tests]      # 生成�
 | `tests/bridge-switch-constraints.test.js` | 补丁的平台开关约束闸:每个补丁必须让路(读开关短路 / 委托会读开关的服务 / 纯增量 schema),新增补丁必须登记让路方式 |
 | `tests/bridge-anchor-exposure.test.js` | 图片锚点不得声称不可用的工具:按 `visionToolAvailable()` 分支、v3 块留档与升级态排序、v3→v4 端到端 |
 | `tests/event-payload-json.test.js` | 会话事件载荷必须 JSON 可序列化:嵌套 undefined 清理 + 平台状态快照可序列化(回归:状态面板曾一直读不到) |
+| `tests/status-panel.test.js` | 设置页诊断面板:i18n 覆盖率(reason/action/state 字面量都有文案 + 中英键集一致)、严重度分级(note 不计入「需处理」) |
 | `tests/agent-loop-anchor.test.js` | agent-loop 锚点重切:0.1.5 三步链路(桥接方法/async 化/A3 改写/调用点 await)、A3 冻结形状、幂等、0.1.2 旧链路、旧文本原地升级 |
 | `tests/compression.test.js` | `compress_text` 压缩逻辑与 schema |
 | `tests/core-review.test.js` | 核心链路评审回归(路由/降级/能力门) |

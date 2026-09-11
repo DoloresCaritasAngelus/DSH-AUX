@@ -655,11 +655,16 @@ export async function collectPlatformStatus(service) {
   const warnings = [];
   const enabled = service._enabled ?? {};
   if ((service.forceAuxVision ?? false) === true && (service.visionRoute ?? "aux") !== "aux") {
-    // forceAuxVision wins at delivery time; the configured route is dead.
+    // forceAuxVision wins at delivery time; the configured route is dead. This is
+    // a consequence of a deliberate configuration pair, not a defect, so it is a
+    // note: counting it as "needs attention" trains the reader to ignore the
+    // panel. (The wording still matters — a native-route expectation really is
+    // dead — so it stays visible, just not as an action item.)
     warnings.push({
       code: "force-aux-vision-overrides-route",
       keys: ["forceAuxVision", "visionRoute"],
       reason: "force-aux-vision-overrides-route",
+      severity: "note",
     });
   }
   if (enabled.vision_analyze === "native" && enabled.imageBridge !== "native") {

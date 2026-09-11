@@ -4,6 +4,10 @@
 
 ### 修复
 
+- **设置页诊断面板:漏译文案与提示误报**:面板用拼键查表渲染,缺键时会把键名原样显示 —— 实测看到 `status.reason.force-aux-vision-overrides-route` 这类字符串;补齐 5 个缺失键(3 个 reason + 2 个 action)并新增覆盖率闸,防止再次漂移。另外把「forceAuxVision 覆盖 visionRoute」这类**配置后果说明**从「需处理」里分出来:它是用户有意选择的一组配置,不是缺陷;计入待办会训练读者忽略面板。现以 note 呈现并单独计数。
+
+### 修复
+
 - **设置页「平台状态」面板恢复可用**:`aux/platform-status` 事件的载荷里,`imageLifecycle.blockedReason` 在**删除就绪**(即一切正常)时是`undefined`,而 DSH 拒绝写入含 `undefined` 的会话事件(`carries non-JSON-serializable data`);写入路径又把该异常静默吞掉,于是事件一条也写不出去、设置页始终显示「无法获取平台状态」。原先的过滤只清**顶层** undefined,嵌套的照样进载荷 —— 现改为深度清理,并给写入路径补上可诊断输出(`DSH_AUX_DEBUG_PUBLISH=1` 时打印跳过或失败原因)。该缺陷自 0.4.5 起存在,影响所有部署。
 
 ### 修复
