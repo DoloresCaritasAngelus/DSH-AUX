@@ -11,7 +11,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **624**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **632**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 - `tests/bridge.test.js` 的部署包探测是**显式 opt-in**(`BRIDGE_DEPLOYED_SRC=1` 或 `DSH_AGENT_LOOP`);默认不探测 ⇒ 本机与 CI 的 `# tests` 计数一致。
@@ -26,6 +26,7 @@ node scripts/ci-fake-dsh.mjs --apply                          # fake DSH 根 + �
 node scripts/sync-compat.mjs --check                          # DSH 版本/基线/徽章单一真相源闸(compat.json)
 node scripts/compat-delta.mjs --from <tagA> --to <tagB> --src <clone>  # 宿主包锚点位移判定(0 无位移 / 1 需复核 / 2 映射过期)
 node scripts/compat-evidence.mjs --dsh-root <root> [--with-tests]      # 生成可粘贴的兼容性证据块
+node scripts/pr-body-hygiene.mjs [--pr <n>] [--stdin < draft.md]      # PR 标题/描述脱密闸(与提交信息同一套规则)+ 规模数字基准提示
 ```
 
 - 当前 DSH 兼容矩阵:`0.1.5-rc.2`(主支单版本)。
@@ -84,6 +85,7 @@ node scripts/compat-evidence.mjs --dsh-root <root> [--with-tests]      # 生成�
 | `tests/scripts-tracked.test.js` | 仓库脚本可达性:CI/测试引用的 `scripts/*.mjs` 必须已被 git 跟踪(`.gitignore` 白名单漏登记 = 静默失效) |
 | `tests/compat-delta.test.js` | 宿主包锚点位移判定:无源码变更(0)/ 有源码变更(1)/ 映射过期与用法错误(2),fixture 用临时 git 仓 |
 | `tests/compat-evidence.test.js` | 证据块:无部署根报错(2) + 证据块点名 compat.json 声明版本 |
+| `tests/pr-body-hygiene.test.js` | PR 描述脱密闸:规则表单一真相(模式不得在扫描器里复制)+ 泄漏样本命中 + 正当路径不误报 + `--stdin` 退出码 + 提交信息扫描回归 |
 | `tests/ci-doc-hygiene.test.js` | 文档脱密闸变异测试:段数不足 / 发布段空正文 / 哨兵缺失 / Unreleased 缺失必须非零退出 |
 | `tests/ci-docs-index.test.js` | 文档树索引闸变异测试:索引缺行 / 状态词非法 / archive 缺退役头 / 状态头与索引不一致 / 索引指向不存在文件 |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |

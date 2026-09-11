@@ -2,6 +2,13 @@
 
 ## 未发布 (Unreleased)
 
+### 工程
+
+- **PR 描述纳入脱密闸**:脱密规则此前覆盖被跟踪文件与提交信息,而 **PR 标题与描述既不在工作树里、也不在提交历史里** —— 它同样进入公网,却是唯一没有闸的公开信道(规则齐备,信道没接上)。新增 `scripts/pr-body-hygiene.mjs`:扫当前分支的 PR(`--pr <n>` 指定编号或 URL,`--stdin` 用于开 PR 前预检草稿),命中即非零退出。
+- **脱密规则收敛为单一真相源**:新增 `scripts/hygiene-rules.mjs`,文件扫描与 PR 描述扫描共用同一张规则表(`ci-doc-hygiene` 改为从该模块导入,不再自带一份)。另新增两条**消息类**规则——内部环境名与评审过程叙述:它们既不是路径也不是凭据,却能原样进入公开面,靠肉眼最容易放过。
+- **规则校准(首轮自证发现)**:原「私有工作区引用」规则把任意 `.local/` 前缀判为私有,但 `~/.local/share/dsh` 是 DSH 自身的安装位置候选(见 `dsh-aux/src/bridge-locate.js`),`$HOME/.local/bin` 是通用 CLI 安装位置 —— 二者都是正当的公开路径。该前缀已移除(绝对家目录路径仍由「本机绝对路径」规则覆盖),并补一条回归用例钉住这两个路径不得误报。
+- **规模数字给出正确基准**:同一个脚本打印 `git diff --shortstat origin/main...HEAD`,并在本地 `main` 落后 `origin/main` 时告警 —— 本地 `main` 引用陈旧时,`main...HEAD` 会把**已经合并的提交**一起算进去,数字虚高。
+
 ### 修复
 
 - **桥接改为递归遍历嵌套图片**:原先只扫消息内容的顶层,于是 **tool-result 里嵌套的图片**(`read_image` 的结果就在那里)不被改道 —— 「forceAuxVision 成本路由」对它们失效(仍按原生视觉计费),纯文本主模型下它们也拿不到 `vision_analyze` 指引。官方把这种递归明确写成共享不变量(`contentHasImage` 的注释:"a consumer cannot silently diverge on nesting depth"),AUX 与之一致后「本条消息第 N 张/共 M 张」的 M 也改为递归计数。已装旧「仅顶层」版的部署由新增升级态 `nesting-upgrade` 原地更新。

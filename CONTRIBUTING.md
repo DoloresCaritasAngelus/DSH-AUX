@@ -86,6 +86,7 @@ npm run format:check          # Prettier 格式检查
    - [ ] diff 只包含本 PR 意图内的文件
    - [ ] 本地全量测试通过;`npm run lint` 与 `npm run format:check` 通过
    - [ ] 无本地绝对路径(`/home/...`)
+   - [ ] PR 标题与描述同样受脱密约束(私有台账引用 / 本机路径 / 内部环境 / 评审过程叙述):`node scripts/pr-body-hygiene.mjs`;开 PR 前可用 `--stdin < 草稿.md` 预检
    - [ ] README / README.en / CHANGELOG / TESTING 已同步
    - [ ] `git status` 干净
 5. CI 全绿后 Squash and merge;

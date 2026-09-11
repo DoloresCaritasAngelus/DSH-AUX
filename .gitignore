@@ -38,6 +38,8 @@ scripts/*
 !scripts/ci-fake-dsh.mjs
 !scripts/ci-syntax-check.mjs
 !scripts/ci-doc-hygiene.mjs
+!scripts/hygiene-rules.mjs
+!scripts/pr-body-hygiene.mjs
 !scripts/ci-install-smoke.mjs
 !scripts/ci-pack-check.mjs
 !scripts/ci-commit-lint.mjs
