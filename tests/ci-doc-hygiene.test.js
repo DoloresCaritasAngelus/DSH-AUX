@@ -16,7 +16,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -94,4 +94,63 @@ test("ci-doc-hygiene: 「未发布 (Unreleased)」节缺失 → 非零退出", (
   const result = runHygiene(fakeChangelog({ unreleased: false }));
   assert.notEqual(result.status, 0, "缺少未发布节必须阻塞");
   assert.match(result.stderr, /\[结构缺失\]/);
+});
+
+/**
+ * 在临时仓库里放一个**符号链接**,断言门禁读到的是链接目标字符串。
+ * 回归对象:一条 `node_modules` 符号链接曾被误提交,内容是本机绝对路径;
+ * 当时门禁按扩展名挑选文件,它没有扩展名,直接被跳过。
+ * @param {string} target 链接目标(写进 blob 的字符串)。
+ * @returns {{status: number|null, stdout: string, stderr: string}}
+ */
+function runSymlinkScan(target) {
+  const dir = mkdtempSync(join(tmpdir(), "dsh-aux-symlink-"));
+  try {
+    writeFileSync(join(dir, "CHANGELOG.md"), REAL_CHANGELOG);
+    symlinkSync(target, join(dir, "some-link"));
+    execFileSync("git", ["init", "-q"], { cwd: dir, stdio: "ignore" });
+    execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "ignore" });
+    const result = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: "utf8" });
+    return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("无扩展名文件不被跳过:符号链接指向本机绝对路径 → 非零退出", () => {
+  const result = runSymlinkScan("/ho" + "me/someone/checkout/node_modules");
+  assert.notEqual(result.status, 0, "符号链接里的本机路径必须阻塞(旧版按扩展名过滤会漏掉它)");
+  assert.match(result.stderr, /\[本机绝对路径 \/home\/<user>\]/);
+});
+
+test("无扩展名文件不被跳过:符号链接指向相对路径 → 通过", () => {
+  const result = runSymlinkScan("node_modules");
+  assert.equal(result.status, 0, `相对链接目标不应命中,stderr:\n${result.stderr}`);
+});
+
+/**
+ * 二进制文件必须被跳过(NUL 字节判据),否则解码噪声会变成假阳性。
+ * @returns {{status: number|null, stdout: string, stderr: string}}
+ */
+function runBinaryScan() {
+  const dir = mkdtempSync(join(tmpdir(), "dsh-aux-binary-"));
+  try {
+    writeFileSync(join(dir, "CHANGELOG.md"), REAL_CHANGELOG);
+    // 内含 NUL 的假 PNG:同时还含一个绝对路径字符串,若被当文本读就会命中
+    writeFileSync(
+      join(dir, "blob.png"),
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x2f, 0x68, 0x6f, 0x6d, 0x65, 0x2f, 0x78, 0x00]),
+    );
+    execFileSync("git", ["init", "-q"], { cwd: dir, stdio: "ignore" });
+    execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "ignore" });
+    const result = spawnSync(process.execPath, [SCRIPT], { cwd: dir, encoding: "utf8" });
+    return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("二进制文件(含 NUL)被跳过,不产生假阳性", () => {
+  const result = runBinaryScan();
+  assert.equal(result.status, 0, `二进制不应命中,stderr:\n${result.stderr}`);
 });

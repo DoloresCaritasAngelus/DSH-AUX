@@ -7,7 +7,7 @@ user-invocable: false
 # aux-dsh-follow(跟随 DSH / 维护债)
 
 > 🔻**易腐烂标注**:**立场/判据/流程步骤**是稳定规则;**补丁编号、测试数、bridge
-> 清单、版本号**是快照,引用前以补丁台账（`aux-notes/02-patch-ledger.md`，维护者本地 gitignore 文件，不随仓库分发）与 `/aux status` 实测为准。
+> 清单、版本号**是快照,引用前以补丁台账（维护者本地笔记库，不随仓库分发）与 `/aux status` 实测为准。
 
 ## 立场
 - DSH 官方**开源**(MIT,仓库 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)),但**不开放 Issues/PR**,无社区反馈渠道 → 所有补丁(🔻**易腐烂·编号清单** *P1-P11*,数量随台账增减;

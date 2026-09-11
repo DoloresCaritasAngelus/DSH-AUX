@@ -35,7 +35,7 @@ PR 标题 = Conventional Commits 摘要,如 feat(skill): 增加 report 模式。
 
 ## 影响面
 
-- [ ] 补丁(bridge)——维护者已同步补丁台账 aux-notes/02-patch-ledger.md(本地 gitignore,不随仓库分发;外部贡献者跳过)
+- [ ] 补丁(bridge)——维护者已同步补丁台账(私有,不随仓库分发;外部贡献者跳过)
 - [ ] 设置页 / 配置
 - [ ] README / README.en / CHANGELOG / TESTING
 - [ ] 测试基线(TESTING.md)
