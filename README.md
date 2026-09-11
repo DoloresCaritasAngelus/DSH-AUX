@@ -8,7 +8,7 @@
 > 主模型专心聊天，我负责看图、读网页、压长文！
 > 需要我的时候，直接叫我就好～
 
-![Version](https://img.shields.io/badge/version-0.4.6-blue)
+![Version](https://img.shields.io/badge/version-0.4.6-fix.1-blue)
 ![Tests](https://img.shields.io/badge/tests-635-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.5--rc.2-0078D4)
