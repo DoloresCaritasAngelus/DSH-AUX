@@ -2,6 +2,35 @@
 
 ## 未发布 (Unreleased)
 
+### 修复
+
+- **桥接改为递归遍历嵌套图片**:原先只扫消息内容的顶层,于是 **tool-result 里嵌套的图片**(`read_image` 的结果就在那里)不被改道 —— 「forceAuxVision 成本路由」对它们失效(仍按原生视觉计费),纯文本主模型下它们也拿不到 `vision_analyze` 指引。官方把这种递归明确写成共享不变量(`contentHasImage` 的注释:"a consumer cannot silently diverge on nesting depth"),AUX 与之一致后「本条消息第 N 张/共 M 张」的 M 也改为递归计数。已装旧「仅顶层」版的部署由新增升级态 `nesting-upgrade` 原地更新。
+- **代理回退只接受 HTTP(S) 端点**:DSH 拒绝 SOCKS 时会删掉 `HTTP(S)_PROXY` 且不重写 `ALL_PROXY`,而 AUX 的代理回退读 `ALL_PROXY` 且不校验 scheme,会对 SOCKS 端点发 CONNECT。现加 scheme 白名单,非 `http:`/`https:` 一律视为无代理。
+
+### 修复
+
+- **设置页诊断面板:漏译文案与提示误报**:面板用拼键查表渲染,缺键时会把键名原样显示 —— 实测看到 `status.reason.force-aux-vision-overrides-route` 这类字符串;补齐 5 个缺失键(3 个 reason + 2 个 action)并新增覆盖率闸,防止再次漂移。另外把「forceAuxVision 覆盖 visionRoute」这类**配置后果说明**从「需处理」里分出来:它是用户有意选择的一组配置,不是缺陷;计入待办会训练读者忽略面板。现以 note 呈现并单独计数。
+
+### 修复
+
+- **设置页「平台状态」面板恢复可用**:`aux/platform-status` 事件的载荷里,`imageLifecycle.blockedReason` 在**删除就绪**(即一切正常)时是`undefined`,而 DSH 拒绝写入含 `undefined` 的会话事件(`carries non-JSON-serializable data`);写入路径又把该异常静默吞掉,于是事件一条也写不出去、设置页始终显示「无法获取平台状态」。原先的过滤只清**顶层** undefined,嵌套的照样进载荷 —— 现改为深度清理,并给写入路径补上可诊断输出(`DSH_AUX_DEBUG_PUBLISH=1` 时打印跳过或失败原因)。该缺陷自 0.4.5 起存在,影响所有部署。
+
+### 修复
+
+- **系统提示词不再宣传被开关关掉的工具**:`## 辅助模型工具(dsh-aux)` 一节与 Bootstrap 预步骤提醒原先无条件列出 `vision_analyze` /`web_extract` / `compress_text`。把某个工具的平台开关切成 `native` 后它已从模型目录消失,提示词却照旧宣传 —— 模型会去找不存在的工具。现按各工具的真实暴露度逐条生成:全部关掉时整节不注入,预步骤提醒为空时不发消息。
+
+- **锚点回退文案改为纯事实**:早期 v4 在视觉工具不可用时写「（当前没有可用的视觉工具,无法查看此图）」——这同样是把一个此刻不存在的工具概念塞进上下文。现回退为空串,只保留「第 N/共 M 张 + attachmentId」的事实。已装早期 v4 的部署由新增的行级升级态 `anchor-factual` 原地更新(该行不含版本标记,skip 态认不出它,因此必须单列且排在 skip 之前)。
+
+### 修复
+
+- **图片锚点不再声称不可用的视觉工具**:桥接写入的锚点文本原先无条件写着「可用 `vision_analyze` 的 attachmentId 参数查看」;平台开关把该工具切成 `native` 后工具从模型目录消失,文案却照旧声称可用,模型会去找一个不存在的工具。现改为向 AUX 询问工具的真实暴露度(`auxLlm.visionToolAvailable()`,委托既有的 `isToolExposed`),不可用时给出「当前没有可用的视觉工具」的实话文案;旧 AUX 或取值失败一律按可用处理(保持既有文本)。已装旧补丁的部署由新增的 `method-v3-upgrade` 升级态原地更新,且排在 skip 之前。
+
+- **新增补丁的平台开关约束闸**:`tests/bridge-switch-constraints.test.js` 为每个补丁钉住「切回 `native` 时如何让路」(读开关短路 / 委托会读开关的 AUX 服务 / 纯增量 schema),新增补丁必须在此登记其让路方式。
+
+### 修复
+
+- **平台开关切 `native` 后,图片准入闸不再残留失效**:`dsh-api-session-controller` 的图片能力门控补丁此前**无条件删除**官方准入闸(不看平台开关),于是 `imageBridge` 切成 `native` 后 agent-loop 的改写停止、闸却仍处移除态 —— 纯文本主模型不再收到原生的明确拒绝,图片会直接流向 provider。现改为**条件生效**:桥接开启时让行,关闭(或插件未挂载)时官方闸重新生效。已装旧补丁的部署由新增的升级态原地更新;`image-bridge` 的补丁检测改为版本容忍,避免旧标记被误报为未打补丁。
+
 ## 0.4.6 (2026-09-11) — DSH 0.1.5-rc.2 兼容
 
 ### 兼容性

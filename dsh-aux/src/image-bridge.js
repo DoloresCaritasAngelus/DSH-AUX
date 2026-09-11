@@ -14,6 +14,13 @@
 import { readPackageFile } from "./bridge-locate.js";
 
 /**
+ * session-controller 门控补丁的标记。带版本号,检测必须容忍任意版本:
+ * 否则尚未升级的旧部署(仍带 v3 标记)会被误报为「未打补丁」。
+ * 旧标记的原文在 `bridge/patched-session-controller-prompt-v3-block.txt`(升级态用)。
+ */
+const IMAGE_BRIDGE_MARK_RE = /dsh-aux image bridge v[0-9]+ \(local patch\)/;
+
+/**
  * Detect whether the image-bridge patches are applied to the alpha DSH
  * packages that live NEXT to this plugin in the deployment node_modules.
  * @returns "v3" | "v2" | "partial" | "missing" | "unknown" (not in a
@@ -28,7 +35,7 @@ export async function imageBridgeStatus() {
 
   const agentPatched = agent.includes("image-bridge v2 (local patch)");
   const forceAuxVision = agent.includes("forceAuxVision");
-  const controllerPatched = controller.includes("dsh-aux image bridge v3 (local patch)");
+  const controllerPatched = IMAGE_BRIDGE_MARK_RE.test(controller);
 
   if (agentPatched && controllerPatched && forceAuxVision) return "v3";
   if (agentPatched && controllerPatched && !forceAuxVision) return "v2";

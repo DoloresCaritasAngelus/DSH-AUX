@@ -5,7 +5,7 @@
  * session-controller 准入闸的每一行因此多一个前导 tab),精确缩进匹配会在上游
  * 升级后静默退化为"步骤块未命中"。本测试用最小 fake DSH 根驱动真实
  * `bridge/apply-patch.mjs`,锁定:
- *  - 每行多一个前导 tab 时步骤块仍命中,补丁落盘、门控字符串消失、`node --check` 通过;
+ *  - 每行多一个前导 tab 时步骤块仍命中,补丁落盘、门控改为条件生效、`node --check` 通过;
  *  - 替换文本首行沿用目标文件原有的缩进(与旧的 `block.trim()` 契约一致);
  *  - 无缩进漂移时行为不变;
  *  - dry-run 与实际应用在漂移场景下结论一致。
@@ -25,10 +25,12 @@ const REPO = resolve(HERE, "..");
 const APPLY = join(REPO, "bridge/apply-patch.mjs");
 const ORIG_BLOCK = readFileSync(join(REPO, "bridge/orig-session-controller-prompt-block.txt"), "utf8").trimEnd();
 
-/** 补丁写入后应出现的标记(dsh-aux/src/image-bridge.js 的 v3 判据)。 */
-const PATCH_MARK = "dsh-aux image bridge v3 (local patch)";
-/** 被移除的准入闸特征串。 */
+/** 补丁写入后应出现的标记(image-bridge 以版本容忍正则识别,见 dsh-aux/src/image-bridge.js)。 */
+const PATCH_MARK = "dsh-aux image bridge v4 (local patch)";
+/** 官方准入闸的特征串:补丁必须**保留**它,只在桥接开启时让行。 */
 const GATE_MARK = "MODEL_DOES_NOT_SUPPORT_IMAGES";
+/** 闸的生效条件:开关切到 native 时闸必须重新生效。 */
+const GATE_CONDITION = 'imageBridge !== "native"';
 
 /** 建一个只含 session-controller 目标的 fake DSH 根。 */
 function fakeRoot(indentShift) {
@@ -39,7 +41,9 @@ function fakeRoot(indentShift) {
     .map((line) => "\t".repeat(indentShift) + line)
     .join("\n");
   const file = join(dir, "index.js");
-  writeFileSync(file, `function outer() {\n${block}\n}\n`);
+  // 真实上下文是 async 闭包(`const admit = async () => {…}`),补丁块内含 await;
+  // 用非 async 包装会让 node --check 失败 —— 这是 fixture 的形状要求,不是产品约束。
+  writeFileSync(file, `async function outer() {\n${block}\n}\n`);
   return { root, file };
 }
 
@@ -67,7 +71,8 @@ test("缩进漂移(每行多一个前导 tab)时步骤块仍命中,门控被移�
     assert.match(out.stdout, /已打补丁/, "缩进漂移下应仍能落盘");
     const patched = readFileSync(file, "utf8");
     assert.ok(patched.includes(PATCH_MARK), "应含补丁标记");
-    assert.ok(!patched.includes(GATE_MARK), "准入闸应被移除");
+    assert.ok(patched.includes(GATE_MARK), "官方准入闸必须保留(切 native 时靠它挡住纯文本模型)");
+    assert.ok(patched.includes(GATE_CONDITION), "闸的生效条件应绑定平台开关");
     assert.ok(markLine(patched).startsWith("\t".repeat(5)), "替换首行应沿用目标文件缩进(5 tab)");
     execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
   } finally {
@@ -82,7 +87,8 @@ test("无缩进漂移时行为不变(4 tab 落盘)", () => {
     assert.match(out.stdout, /已打补丁/);
     const patched = readFileSync(file, "utf8");
     assert.ok(patched.includes(PATCH_MARK));
-    assert.ok(!patched.includes(GATE_MARK));
+    assert.ok(patched.includes(GATE_MARK), "官方准入闸必须保留");
+    assert.ok(patched.includes(GATE_CONDITION), "闸的生效条件应绑定平台开关");
     assert.ok(markLine(patched).startsWith("\t".repeat(4)), "替换首行应沿用目标文件缩进(4 tab)");
     execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
   } finally {

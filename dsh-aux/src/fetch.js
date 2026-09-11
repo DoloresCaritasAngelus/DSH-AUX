@@ -305,6 +305,12 @@ export function proxyForUrl(url) {
   if (!raw) return null;
   try {
     const parsed = new URL(raw);
+    // Only an HTTP(S) proxy can carry the CONNECT tunnel this path opens. Other
+    // schemes would be dialed as if they were one — reachable here because
+    // `ALL_PROXY` is a common home for a `socks5://` URL, and DSH deletes
+    // `HTTP(S)_PROXY` when it rejects a SOCKS value without rewriting
+    // `ALL_PROXY`, so this fallback can surface one.
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
     return {
       host: parsed.hostname,
       port: Number(parsed.port) || (parsed.protocol === "https:" ? 443 : 80),

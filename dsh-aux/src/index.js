@@ -69,6 +69,7 @@ import {
 import { publishPlatformStatus, publishPlatformStatusToSession } from "./status.js";
 import { collectImageLibrary } from "./images/image-library.js";
 import {
+  auxGuideExposure,
   auxPreStepReminderText,
   auxToolsGuide,
   isAuxGuidePromoted,
@@ -426,9 +427,11 @@ export class AuxLlmService extends Service {
       if (decision.kind === "reject" || !Array.isArray(decision.messages)) return decision;
       const sessionId = agent?.session?.id;
       if (sessionId === void 0 || this._auxGuideInjectedSessions.has(sessionId)) return decision;
+      const reminderText = auxPreStepReminderText(agent, auxGuideExposure(this));
+      if (reminderText === "") return decision;
       this._auxGuideInjectedSessions.add(sessionId);
       const reminder = createUserMessage({
-        content: [{ type: "text", text: auxPreStepReminderText(agent) }],
+        content: [{ type: "text", text: reminderText }],
         source: { kind: "aux-guide" },
       });
       return { ...decision, messages: [...decision.messages, reminder] };
@@ -494,6 +497,17 @@ export class AuxLlmService extends Service {
   /** Whether a tool should be exposed to the model catalog (only aux exposes). */
   isToolExposed(name) {
     return this.toolBridgeMode(name) === "aux";
+  }
+
+  /**
+   * Whether `vision_analyze` is callable by the model right now. The
+   * agent-loop image bridge names that tool in its text anchor, so it must not
+   * claim the tool when the platform switch has retired it: the model would go
+   * looking for a tool that does not exist.
+   * @returns true when the tool is exposed to the model catalog.
+   */
+  visionToolAvailable() {
+    return this.isToolExposed("vision_analyze");
   }
 
   /** Re-mount AUX tools according to the current enabled switches (hot update). */

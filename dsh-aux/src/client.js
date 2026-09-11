@@ -72,6 +72,7 @@ window.__ModuleLoader__.load({
       ".ax-dot-disabled{background:var(--dsw-alias-label-tertiary)}",
       ".ax-dot-unavailable{background:var(--dsw-alias-state-error-primary)}",
       ".ax-dot-fixing{background:var(--dsw-alias-state-warn-primary)}",
+      ".ax-dot-note{background:var(--dsw-alias-label-tertiary)}",
       ".ax-dot-unknown{background:var(--dsw-alias-label-caption)}",
       ".ax-status-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}",
       ".ax-status-badge{font-size:11px;line-height:16px;border-radius:999px;padding:0 6px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-1)}",
@@ -85,6 +86,7 @@ window.__ModuleLoader__.load({
       ".ax-status-issue{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;font-size:12px;line-height:18px}",
       ".ax-status-issue-active{border-color:var(--dsw-alias-state-warn-primary);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 8%,transparent)}",
       ".ax-status-issue-text{flex:1;min-width:0;white-space:pre-line;overflow-wrap:anywhere}",
+      ".ax-status-note{border:1px dashed var(--dsw-alias-border-l2);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}",
       ".ax-status-summary{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}",
       ".ax-patch-ledger{margin-top:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;overflow:hidden}",
       ".ax-patch-ledger-title{padding:8px 12px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2)}",
@@ -297,6 +299,7 @@ window.__ModuleLoader__.load({
       "status.coreDetail": "图片生命周期 / 会话图片安全 / 失败冷却 / 事件审计(不可关闭)",
       "status.coreCount": "🔒 核心保护 · {count} 项已生效",
       "status.overview": "已启用 {enabled} 项 · 需处理 {issues} 项",
+      "status.notesCount": "提示 {count} 项",
       "status.diagnostics": "诊断与修复",
       "status.diagnostics.desc": "补丁、依赖或配置缺失时,在这里一键修复。",
       "status.noIssues": "所有可选能力状态正常。",
@@ -328,6 +331,12 @@ window.__ModuleLoader__.load({
       "status.reason.dependency-missing": "缺少 dsh-compaction-basic 依赖",
       "status.reason.skill-mode-native": "SKILL 模式为 native,未审计",
       "status.reason.vision-disabled-image-bridge-enabled": "vision_analyze 已关闭,但 imageBridge 仍开启",
+      "status.reason.force-aux-vision-overrides-route":
+        "forceAuxVision 已开启,图片一律走辅助视觉模型,visionRoute 的设置不再生效",
+      "status.reason.ownership-complete": "图片归属记录完整",
+      "status.reason.ownership-unknown": "图片归属记录不可用,无法确认",
+      "status.action.none": "无需处理",
+      "status.action.wait": "稍后重试",
       "status.patch.installed": "已装",
       "status.patch.missing": "未装",
       "status.patch.partial": "部分",
@@ -540,6 +549,7 @@ window.__ModuleLoader__.load({
         "Image lifecycle / session image safety / failure cooldown / event audit (cannot be disabled)",
       "status.coreCount": "🔒 Core protections · {count} active",
       "status.overview": "{enabled} enabled · {issues} need attention",
+      "status.notesCount": "{count} note(s)",
       "status.diagnostics": "Diagnostics & Repair",
       "status.diagnostics.desc": "Fix missing patches, dependencies, or configuration here.",
       "status.noIssues": "All optional capabilities are healthy.",
@@ -572,6 +582,12 @@ window.__ModuleLoader__.load({
       "status.reason.skill-mode-native": "SKILL mode is native; no audit",
       "status.reason.vision-disabled-image-bridge-enabled":
         "vision_analyze is disabled but imageBridge is still enabled",
+      "status.reason.force-aux-vision-overrides-route":
+        "forceAuxVision is on, so every image goes to the auxiliary vision model and the visionRoute setting has no effect",
+      "status.reason.ownership-complete": "Image ownership records are complete",
+      "status.reason.ownership-unknown": "Image ownership records are unavailable",
+      "status.action.none": "No action needed",
+      "status.action.wait": "Retry later",
       "status.patch.installed": "Installed",
       "status.patch.missing": "Missing",
       "status.patch.partial": "Partial",
@@ -1634,10 +1650,14 @@ window.__ModuleLoader__.load({
         const enabledCount = items.filter((entry) => entry.state === "enabled").length;
         const issues = Array.isArray(status.issues) ? status.issues : [];
         const warnings = Array.isArray(status.warnings) ? status.warnings : [];
-        const attentionCount = issues.length + warnings.length;
-        const summary = t("status.overview")
-          .replace("{enabled}", String(enabledCount))
-          .replace("{issues}", String(attentionCount));
+        // 分级:severity === "note" 的是「配置后果说明」,不是待办。把它们算进
+        // 「需处理」会让读者学会忽略这块面板 —— 真有缺陷时就看不见了。
+        const notes = warnings.filter((entry) => entry?.severity === "note");
+        const actionable = warnings.filter((entry) => entry?.severity !== "note");
+        const attentionCount = issues.length + actionable.length;
+        const summary =
+          t("status.overview").replace("{enabled}", String(enabledCount)).replace("{issues}", String(attentionCount)) +
+          (notes.length > 0 ? " · " + t("status.notesCount").replace("{count}", String(notes.length)) : "");
         const patchLedger = Array.isArray(status.patchLedger) ? status.patchLedger : [];
         const patchLedgerBlock =
           patchLedger.length > 0
@@ -1784,7 +1804,7 @@ window.__ModuleLoader__.load({
                         : null,
                   );
                 }),
-                ...warnings.map((warning) => {
+                ...actionable.map((warning) => {
                   return react.createElement(
                     "div",
                     { key: warning.code, className: "ax-status-issue" },
@@ -1793,6 +1813,18 @@ window.__ModuleLoader__.load({
                       "span",
                       { className: "ax-status-issue-text" },
                       t("status.reason." + warning.reason),
+                    ),
+                  );
+                }),
+                ...notes.map((note) => {
+                  return react.createElement(
+                    "div",
+                    { key: note.code, className: "ax-status-note" },
+                    react.createElement("span", { className: "ax-dot ax-dot-note", "aria-hidden": "true" }),
+                    react.createElement(
+                      "span",
+                      { className: "ax-status-issue-text" },
+                      t("status.reason." + note.reason),
                     ),
                   );
                 }),

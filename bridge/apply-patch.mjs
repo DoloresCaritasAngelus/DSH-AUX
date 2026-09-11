@@ -52,6 +52,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // 一行注释击穿,令旧路径文本永久留存。
 const ANCHOR_TEXT_ORIG_BLOCK = await readFile(join(HERE, "orig-agent-loop-anchor-text-block.txt"), "utf8");
 const ANCHOR_TEXT_PATCHED_BLOCK = await readFile(join(HERE, "patched-agent-loop-anchor-text-block.txt"), "utf8");
+// v3 注释式门控块:已装旧补丁的部署要靠它原地升级(见 SESSION_CONTROLLER 目标的 states 顺序)。
+const SESSION_GATE_V3_BLOCK = await readFile(join(HERE, "patched-session-controller-prompt-v3-block.txt"), "utf8");
+// agent-loop 桥接方法的 v3 形态:锚点无条件点名 vision_analyze,已部署的旧补丁靠它升级。
+const METHOD_V3_BLOCK = await readFile(join(HERE, "patched-agent-loop-0.1.5-v3-block.txt"), "utf8");
+// agent-loop 桥接方法的「仅顶层」版:它已带方法标记,只靠 v3-0.1.5 的 skip 判据认不出
+// 自己缺了递归,必须单列升级态,否则嵌套图片永远不被改道。
+const TOP_ONLY_BLOCK = await readFile(join(HERE, "patched-agent-loop-0.1.5-top-only-block.txt"), "utf8");
 
 // 本工具专属备份 tag:--rollback 只认自己写下的备份,避免弹出 self-heal 的
 // .bak-selfheal-*(字典序 "s" 排最前,回滚会变成静默 no-op)。
@@ -120,6 +127,38 @@ const TARGETS = [
       // ── DSH 0.1.5-alpha.1 链路:同步 buildRequest + 新注释 + 五参签名 ──
       // 桥接发生在冻结循环之后(A3):原消息冻结语义不变,只有真的改写时才冻结
       // 桥接产物,且不把副本塞进 this.frozenMessages。
+      //
+      // 方法块的 v3 → v4 升级必须排在 v3-0.1.5(skip)之前:旧部署的锚点会无条件
+      // 点名 vision_analyze,不升级就永远停在「声称工具可用」的文本上。
+      // v4 的锚点文案在 v4 内部改过一次:早期 v4 的回退串写着「当前没有可用的视觉工具」,
+      // 那同样是提示词污染。该行不含版本标记,靠 skip 态判据(它只认方法块标记)永远
+      // 不会被更新,所以必须单列一个行级升级态,且排在 v3-0.1.5 之前。
+      {
+        name: "anchor-factual",
+        detect: (d) => d.includes("当前没有可用的视觉工具,无法查看此图"),
+        block:
+          'const imageAnchor = (index, total, attachmentId) => `[本条消息第${index}张/共${total}张, attachmentId=<${attachmentId}>${visionExposed ? "。可用 vision_analyze 的 attachmentId 参数查看" : "（当前没有可用的视觉工具,无法查看此图）"}]`;',
+        replacement:
+          'const imageAnchor = (index, total, attachmentId) => `[本条消息第${index}张/共${total}张, attachmentId=<${attachmentId}>${visionExposed ? "。可用 vision_analyze 的 attachmentId 参数查看" : ""}]`;',
+        action: "replace",
+      },
+      // 「仅顶层」→「递归」:只扫 message.content 顶层会漏掉 tool-result 里嵌套的
+      // 图片(read_image 的结果就在那里),而官方把递归明确定为共享不变量。
+      // 必须排在 v3-0.1.5(skip)之前:旧 v4 带方法标记,skip 判据认不出它缺递归。
+      {
+        name: "nesting-upgrade",
+        detect: (d) => blockPattern(TOP_ONLY_BLOCK).test(d),
+        block: TOP_ONLY_BLOCK,
+        replacement: await readFile(join(HERE, "patched-agent-loop-0.1.5-block.txt"), "utf8"),
+        action: "replace",
+      },
+      {
+        name: "method-v3-upgrade",
+        detect: (d) => blockPattern(METHOD_V3_BLOCK).test(d),
+        block: METHOD_V3_BLOCK,
+        replacement: await readFile(join(HERE, "patched-agent-loop-0.1.5-block.txt"), "utf8"),
+        action: "replace",
+      },
       {
         name: "v3-0.1.5",
         detect: (d) =>
@@ -206,9 +245,18 @@ const TARGETS = [
   {
     label: "dsh-api-session-controller (prompt)",
     file: SESSION_CONTROLLER_FILE,
-    mark: "dsh-aux image bridge v3 (local patch)",
+    mark: "dsh-aux image bridge v4 (local patch)",
     states: [
-      { name: "patched", detect: (d) => d.includes("dsh-aux image bridge v3 (local patch)"), action: "skip" },
+      // 旧 v3 门控块必须排在 skip 之前:否则已装旧补丁的部署会被判为「已打补丁」
+      // 而永不更新,门控就永远停在「无条件移除」那个错误状态。
+      {
+        name: "gate-v3-upgrade",
+        detect: (d) => blockPattern(SESSION_GATE_V3_BLOCK).test(d),
+        block: SESSION_GATE_V3_BLOCK,
+        replacement: await readFile(join(HERE, "patched-session-controller-prompt-block.txt"), "utf8"),
+        action: "replace",
+      },
+      { name: "patched", detect: (d) => d.includes("dsh-aux image bridge v4 (local patch)"), action: "skip" },
       {
         name: "original-alpha2",
         detect: (d) => d.includes('Model "${current.model}" does not support image input.'),

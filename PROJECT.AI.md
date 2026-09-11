@@ -105,7 +105,7 @@
 
 ## Tests / quality gates
 
-- 全量测试：`node --test tests/*.test.js`；🔻 基线 **597**（2026-09-11 快照，以实跑 `# pass/# fail` 为准，文件清单见 `TESTING.md`）。
+- 全量测试：`node --test tests/*.test.js`；🔻 基线 **624**（2026-09-11 快照，以实跑 `# pass/# fail` 为准，文件清单见 `TESTING.md`）。
 - 本机验证清代理环境：`env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy -u NODE_USE_ENV_PROXY NO_PROXY='*' no_proxy='*' node --test tests/*.test.js`。
 - CI 门禁（`.github/workflows/ci.yml` test job）：提交信息规范、ESLint（0 error）、Prettier、全量测试、`ci-doc-hygiene`、`ci-docs-index`、`gen-package-readme --check`、`gen-project-ai --check`、`ci-syntax-check`、`ci-pack-check`、`bash -n`、`ci-fake-dsh`。
 - compat job：DSH 矩阵 `[0.1.5-rc.2]`；`0.1.2-alpha.2` ~ `0.1.2-rc.1` 冻结在 legacy 分支 / `v0.4.4-legacy` Release。
