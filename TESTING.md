@@ -115,10 +115,14 @@ node scripts/compat-evidence.mjs --dsh-root <root> [--with-tests]      # 生成�
 
 ```bash
 cd <仓库路径>
-node bridge/self-heal.mjs --dry-run            # 应全部"已打/跳过",无"可从…升级"
+node bridge/self-heal.mjs --dry-run            # 应全部"已打/跳过",无"可从…升级"(能自行解析部署根)
 node bridge/install-start-hook.mjs <start-dsh.sh> <repo> --dry-run
-node bridge/apply-patch.mjs --dry-run
-node bridge/patch-session-ignorable.mjs --dry-run
+DSH_ROOT=<部署根> node bridge/apply-patch.mjs --dry-run
+DSH_ROOT=<部署根> node bridge/patch-session-ignorable.mjs --dry-run
+# ⚠️ 上面两条**必须**带 DSH_ROOT:不带时相对路径会落到仓库的上一级
+# (`unsafe patch target: resolved path is not inside node_modules/@deepseek-ai`),
+# 而它**同样返回退出码 0** —— 看起来像"通过",实际什么都没验。self-heal 能自行
+# 解析部署根,所以只有这两条需要显式给。
 # apply-patch 在"版本不匹配(未找到已知代码块)"时**按设计返回退出码 0**:
 # install.sh 用 `set -e`,非零会直接中断安装;该信号由输出文本承载 ——
 # ci-fake-dsh.mjs 与 self-heal.mjs 都以正则门禁匹配"版本不匹配/步骤块未命中"。
