@@ -9,7 +9,7 @@
 > Whenever you need me, just call me directly～
 
 ![Version](https://img.shields.io/badge/version-0.4.6-blue)
-![Tests](https://img.shields.io/badge/tests-624-brightgreen)
+![Tests](https://img.shields.io/badge/tests-632-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.5--rc.2-0078D4)
 
@@ -376,7 +376,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are official DSH packages plus the platform-provided `react`/`zod`; no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (624 tests); file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (632 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 

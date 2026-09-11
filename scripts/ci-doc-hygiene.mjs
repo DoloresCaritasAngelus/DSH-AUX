@@ -13,34 +13,19 @@
  *   —— 这些文件已注明"本地 gitignore,不随仓库分发"。
  * 另有 CHANGELOG.md 结构闸(见文件末尾):发布段只增不减、每段必须有非空正文、
  * 两个哨兵节必须在位 —— 整段发布历史被截断或替换成空壳标题时同样退出 1。
+ *
+ * 规则表在 `scripts/hygiene-rules.mjs`(单一真相源):除本脚本外,
+ * `scripts/pr-body-hygiene.mjs` 也用它扫 PR 描述与标题 —— 三条公开信道共用一张表。
  * 退出码:发现命中 = 1(阻塞 CI);干净 = 0。
  */
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { FILE_RULES, MESSAGE_RULES, scanText } from "./hygiene-rules.mjs";
 
 const TEXT_EXT = /\.(md|mjs|js|yml|yaml|json|sh|txt)$/;
 const SKIP = [
   /^scripts\/ci-doc-hygiene\.mjs$/, // 本脚本自身包含模式字面量
-];
-
-const RULES = [
-  {
-    name: "aux-notes 私有工作区引用",
-    re: /aux-notes\//,
-    allow: [/^\.gitignore$/, /^CONTRIBUTING\.md$/, /^\.github\//, /^\.agents\//],
-  },
-  {
-    name: "私有台账文件名",
-    re: /02-patch-ledger/,
-    allow: [/^\.gitignore$/, /^CONTRIBUTING\.md$/, /^\.github\//, /^\.agents\//],
-  },
-  {
-    name: "私有交接/计划文档名",
-    re: /HANDOFF|EXECUTION-PLAN|maintenance-debt|version-support-plan|04-glossary|u1-readme/,
-  },
-  { name: "内部蓝图章节引用", re: /蓝图 §/ },
-  { name: "本机绝对路径 /home/<user>", re: /\/home\/(?!user\b|\.\.\/?\.?)/ },
-  { name: "Windows 盘符路径", re: /[A-Z]:\\(?![ntr0])/ },
+  /^scripts\/hygiene-rules\.mjs$/, // 规则表必须写出被拦截的字面量才能自解释
 ];
 
 const files = execSync("git ls-files", { encoding: "utf8" })
@@ -49,48 +34,31 @@ const files = execSync("git ls-files", { encoding: "utf8" })
 
 let hits = 0;
 for (const file of files) {
-  let lines;
+  let text;
   try {
-    lines = readFileSync(file, "utf8").split("\n");
+    text = readFileSync(file, "utf8");
   } catch {
     continue;
   }
-  for (let i = 0; i < lines.length; i++) {
-    for (const rule of RULES) {
-      if (rule.allow?.some((re) => re.test(file))) continue;
-      if (rule.re.test(lines[i])) {
-        console.error(`DOC-HYGIENE ${file}:${i + 1} [${rule.name}] ${lines[i].trim().slice(0, 100)}`);
-        hits += 1;
-      }
-    }
+  for (const hit of scanText(text, FILE_RULES, file)) {
+    console.error(`DOC-HYGIENE ${file}:${hit.line} [${hit.rule}] ${hit.text}`);
+    hits += 1;
   }
 }
 
 // 提交信息扫描(本地/PR 场景:origin/main..HEAD 可解析时生效;CI 浅克隆自动跳过)。
-// 规则比文件扫描更严:提交信息只允许描述 diff 可见的变更,因此 aux-notes 等即使
-// 与 diff 相关也统一不豁免——涉及私有路径的描述留在 aux-notes,不进提交信息。
-const MSG_RULES = [
-  { name: "私有工作区引用", re: /aux-notes\/|\.local\/|HANDOFF|EXECUTION-PLAN/ },
-  { name: "内部蓝图编号引用", re: /蓝图 §|04-glossary|A1[6-9] §/ },
-  { name: "本机绝对路径 /home/<user>", re: /\/home\/(?!user\b|\.\.\/?\.?)/ },
-  { name: "Windows 盘符路径", re: /[A-Z]:\\(?![ntr0])/ },
-  { name: "会话归属式提法", re: /等用户指示|用户确认[后了对]?再|本地未推送/ },
-  { name: "会话叙事/事故叙述", re: /事故|AI (起草|未与维护者)|对齐意图|已决定接受/ },
-];
-
+// 规则比文件扫描更严(见 hygiene-rules.mjs):提交信息只允许描述 diff 可见的变更,
+// 涉及私有路径的描述留在私有笔记里,不进提交信息。PR 描述走同一张表,
+// 由 scripts/pr-body-hygiene.mjs 执行。
 let msgHits = 0;
 try {
   const msgs = execSync("git log --format=%B origin/main..HEAD", {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  for (const line of msgs.split("\n")) {
-    for (const rule of MSG_RULES) {
-      if (rule.re.test(line)) {
-        console.error(`DOC-HYGIENE (commit message) [${rule.name}] ${line.trim().slice(0, 100)}`);
-        msgHits += 1;
-      }
-    }
+  for (const hit of scanText(msgs, MESSAGE_RULES)) {
+    console.error(`DOC-HYGIENE (commit message) [${hit.rule}] ${hit.text}`);
+    msgHits += 1;
   }
 } catch {
   console.log("提示:无法解析 origin/main..HEAD(浅克隆或首次推送前),本次跳过提交信息扫描。");
