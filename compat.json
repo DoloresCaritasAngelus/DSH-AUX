@@ -2,6 +2,6 @@
   "$comment": "DSH 兼容性与发布数字的单一真相源。改这里,跑 node scripts/sync-compat.mjs 同步到各处;--check 是闸。生成物勿手改。",
   "dsh": "0.1.5-rc.2",
   "package": "0.4.6",
-  "tests": 620,
+  "tests": 624,
   "snapshotDate": "2026-09-11"
 }

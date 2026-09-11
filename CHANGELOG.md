@@ -4,6 +4,11 @@
 
 ### 修复
 
+- **桥接改为递归遍历嵌套图片**:原先只扫消息内容的顶层,于是 **tool-result 里嵌套的图片**(`read_image` 的结果就在那里)不被改道 —— 「forceAuxVision 成本路由」对它们失效(仍按原生视觉计费),纯文本主模型下它们也拿不到 `vision_analyze` 指引。官方把这种递归明确写成共享不变量(`contentHasImage` 的注释:"a consumer cannot silently diverge on nesting depth"),AUX 与之一致后「本条消息第 N 张/共 M 张」的 M 也改为递归计数。已装旧「仅顶层」版的部署由新增升级态 `nesting-upgrade` 原地更新。
+- **代理回退只接受 HTTP(S) 端点**:DSH 拒绝 SOCKS 时会删掉 `HTTP(S)_PROXY` 且不重写 `ALL_PROXY`,而 AUX 的代理回退读 `ALL_PROXY` 且不校验 scheme,会对 SOCKS 端点发 CONNECT。现加 scheme 白名单,非 `http:`/`https:` 一律视为无代理。
+
+### 修复
+
 - **设置页诊断面板:漏译文案与提示误报**:面板用拼键查表渲染,缺键时会把键名原样显示 —— 实测看到 `status.reason.force-aux-vision-overrides-route` 这类字符串;补齐 5 个缺失键(3 个 reason + 2 个 action)并新增覆盖率闸,防止再次漂移。另外把「forceAuxVision 覆盖 visionRoute」这类**配置后果说明**从「需处理」里分出来:它是用户有意选择的一组配置,不是缺陷;计入待办会训练读者忽略面板。现以 note 呈现并单独计数。
 
 ### 修复

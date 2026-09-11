@@ -10,15 +10,7 @@
 	* See aux/bridge README for the design.
 	*/
 	async bridgeImagesForModel(messages, provider, model, llm, signal) {
-		// Walk the same nesting the official contentHasImage/contentHasFile helpers walk.
-		// The product documents that recursion as a shared invariant (a consumer must
-		// not silently diverge on nesting depth); a top-level scan misses read_image
-		// results, which ride inside a tool-result block.
-		const contentHasImage = (content) => Array.isArray(content) && content.some((b) =>
-			b?.type === "image" || (b?.type === "tool-result" && contentHasImage(b.content)));
-		const countImages = (content) => !Array.isArray(content) ? 0 : content.reduce((n, b) =>
-			n + (b?.type === "image" ? 1 : 0) + (b?.type === "tool-result" ? countImages(b.content) : 0), 0);
-		const hasImage = Array.isArray(messages) && messages.some((m) => contentHasImage(m?.content));
+		const hasImage = Array.isArray(messages) && messages.some((m) => Array.isArray(m?.content) && m.content.some((b) => b?.type === "image"));
 		if (!hasImage) return messages;
 		let aux;
 		try {
@@ -41,8 +33,8 @@
 		const extOf = (mediaType) => mediaType === "image/jpeg" ? "jpg" : mediaType === "image/png" ? "png" : mediaType === "image/webp" ? "webp" : mediaType === "image/gif" ? "gif" : "png";
 		const rewritten = [];
 		for (const message of messages) {
-			if (!Array.isArray(message?.content) || !contentHasImage(message.content)) { rewritten.push(message); continue; }
-			const imageTotal = countImages(message.content);
+			if (!Array.isArray(message?.content) || !message.content.some((b) => b?.type === "image")) { rewritten.push(message); continue; }
+			const imageTotal = message.content.filter((b) => b?.type === "image").length;
 			// Naming a tool the model cannot call sends it looking for something that does
 			// not exist (the platform switch can retire `vision_analyze`). Ask AUX for the
 			// tool's real exposure instead of asserting it; an AUX too old to answer is
@@ -52,38 +44,28 @@
 			})();
 			const imageAnchor = (index, total, attachmentId) => `[本条消息第${index}张/共${total}张, attachmentId=<${attachmentId}>${visionExposed ? "。可用 vision_analyze 的 attachmentId 参数查看" : ""}]`;
 			let imageIndex = 0;
-			const rewriteBlocks = async (blocks) => {
-				const out = [];
-				for (const block of blocks) {
-					if (block?.type === "tool-result") {
-						const inner = Array.isArray(block.content) ? block.content : [];
-						const next = await rewriteBlocks(inner);
-						out.push(next === inner ? block : { ...block, content: next });
-						continue;
-					}
-					if (block?.type !== "image") { out.push(block); continue; }
-					imageIndex += 1;
-					if (block.attachment === void 0) { out.push(block); continue; }
-					const id = String(block.attachment.attachmentId ?? "");
-					const match = /^sha256:([a-f0-9]{64})$/.exec(id);
-					const hash = match?.[1];
-					if (hash !== void 0 && home !== void 0) {
-						const real = `${home}/attachments/v1/objects/${hash.slice(0, 2)}/${hash}`;
-						const ext = extOf(block.attachment.mediaType);
-						const linkPath = `${real}.${ext}`;
-						try {
-							// Ensure the extension hard link exists (the admit bridge
-							// creates it for fresh uploads; older logs may lack it).
-							await link(real, linkPath).catch((e) => { if (e?.code !== "EEXIST") throw e; });
-						} catch { /* keep the real path when linking fails */ }
-						out.push({ type: "text", text: imageAnchor(imageIndex, imageTotal, id) });
-						continue;
-					}
-					out.push(block);
+			const content = [];
+			for (const block of message.content) {
+				if (block?.type !== "image") { content.push(block); continue; }
+				imageIndex += 1;
+				if (block.attachment === void 0) { content.push(block); continue; }
+				const id = String(block.attachment.attachmentId ?? "");
+				const match = /^sha256:([a-f0-9]{64})$/.exec(id);
+				const hash = match?.[1];
+				if (hash !== void 0 && home !== void 0) {
+					const real = `${home}/attachments/v1/objects/${hash.slice(0, 2)}/${hash}`;
+					const ext = extOf(block.attachment.mediaType);
+					const linkPath = `${real}.${ext}`;
+					try {
+						// Ensure the extension hard link exists (the admit bridge
+						// creates it for fresh uploads; older logs may lack it).
+						await link(real, linkPath).catch((e) => { if (e?.code !== "EEXIST") throw e; });
+					} catch { /* keep the real path when linking fails */ }
+					content.push({ type: "text", text: imageAnchor(imageIndex, imageTotal, id) });
+					continue;
 				}
-				return out;
-			};
-			const content = await rewriteBlocks(message.content);
+				content.push(block);
+			}
 			rewritten.push({ ...message, content });
 		}
 		return rewritten;
