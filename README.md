@@ -9,7 +9,7 @@
 > 需要我的时候，直接叫我就好～
 
 ![Version](https://img.shields.io/badge/version-0.4.6-fix.1-blue)
-![Tests](https://img.shields.io/badge/tests-611-brightgreen)
+![Tests](https://img.shields.io/badge/tests-600-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.5--rc.2-0078D4)
 
@@ -206,7 +206,7 @@ node scripts/doctor.mjs    # 更新后健康检查（不修改任何文件）
 | `/aux debug <目标> [N]` | 跨会话查看（@this / session id / 前缀 / cwd） |
 | `/aux patch` | 一键安装当前 DSH 所需全部补丁并自愈 |
 | `/aux patch --json` | 同上，返回结构化步骤结果 |
-| `/aux model <task> [provider/model]` | 查看 / 设置某任务的辅助模型（设置时写成单元素降级链；多级链用设置页"降级链"字段） |
+| `/aux model <task> [provider/model]` | 查看 / 设置某任务的辅助模型 |
 | `/aux vision <path> <question...>` | 命令行直接看图 |
 | `/aux test <task>` | 自检某任务路由 |
 | `/aux memory [n]` | 查看最近图片分析记忆 |
@@ -345,7 +345,7 @@ const result = await ctx.auxLlm.call("compress", {
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 用户**：请使用永久分支 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 或 Release `v0.4.4-legacy`。
 - **旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）用户**：请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。主支不再支持这些版本。
 - **运行时零第三方依赖**：peerDependencies 为 DSH 官方包 + 平台自带的 `react`/`zod`（环境提供），无 `dependencies`。
-- **测试零依赖**：`node --test tests/*.test.js`（611 项；文件清单与基线见 `TESTING.md`）。
+- **测试零依赖**：`node --test tests/*.test.js`（600 项；文件清单与基线见 `TESTING.md`）。
 
 ### 集成组件
 
@@ -356,8 +356,8 @@ const result = await ctx.auxLlm.call("compress", {
 - **图片归属与误删防护**：`session/event` 归属钩子 + `session/created` 恢复屏障（内存日志扫描）；屏障未完成/失败时全局拒绝删除（fail-closed，`/aux status` 可观测）；回收进 `objects/.trash/`（7 天恢复窗口）。
 - **GC 债**：旁挂 `attachment-refs.json` + 官方 `imageHostPath` 回收 + `.ext` 硬链接全量清理；派生 `request-images/` 按总量上限（默认 256 MiB，`requestImagesMaxMiB` 可配）做 mtime LRU 回收。
 - **vision 交付路由**：`aux.visionRoute` 可选 aux（默认）/ native-when-capable / auto；native 只对 `aux.nativeRoutes` 白名单内的路由生效，且 `forceAuxVision` 优先。**失败兜底**（`visionFallbackToMain`）只回退到**显式声明支持图片**的主路由；主路由能力未知或声明为纯文本时，视觉调用直接失败，而不是把图交给一个看不了图的模型。
-- **多级降级链**：`aux.tasks.<task>.models` 是有序的 "provider/model" 数组（主选 → 备1 → 备2 …）；非空时单数 `provider/model` 被忽略（`/aux status` 会给出警告）。`/aux model <task> <provider/model>` 写入的是**单元素链**，多级链请在设置页"降级链"字段（每行一条）或 `settings.yaml` 中填写；链尾仍按 `fallbackToMain` / `visionFallbackToMain` 规则考虑主模型。
-- **vision 打磨(Phase 3)**：失败条目给出原因与可否重试（限流/连接/服务端错误在工具内自动重试一次；**超时不重试** —— 路由已用光整个 `timeoutMs`，慢路由请调高该任务的超时）；`imagePath` 无扩展名按魔数嗅探（与 `read_image` 对齐）；动图只分析首帧；直连请求把校验通过的 IP 钉到连接（关闭 DNS rebinding）；`aux.tasks.<task>.models` 多级降级链；`vision_analyze` 会话卡片显示 `【图N/共M】` 角标 + 缩略图 + 结论。
+- **辅助路由与降级**：每个任务一条辅助路由（单数 `provider` / `model`，未配则回落到任务默认）。辅助路由失败后按 `fallbackToMain` / `visionFallbackToMain` 规则**回退到主模型**（视觉另需主模型显式声明支持图片，见下）。**不再有多级链**：需要跨多个模型备用时请自行改配置。
+- **vision 打磨(Phase 3)**：失败条目给出原因与可否重试（限流/连接/服务端错误在工具内自动重试一次；**超时不重试** —— 路由已用光整个 `timeoutMs`，慢路由请调高该任务的超时）；`imagePath` 无扩展名按魔数嗅探（与 `read_image` 对齐）；动图只分析首帧；直连请求把校验通过的 IP 钉到连接（关闭 DNS rebinding）；`vision_analyze` 会话卡片显示 `【图N/共M】` 角标 + 缩略图 + 结论。
 
 ### 极简 / Anchored Standard 兼容
 
@@ -391,7 +391,7 @@ const result = await ctx.auxLlm.call("compress", {
 
 **Q3：dsh-aux 需要配置模型才能用吗？**
 
-不需要。dsh-aux 是**零配置**的：不配任何模型也能跑，辅助任务会自动回退到会话主模型。你可以随时通过设置页或 `/aux model <task> <provider/model>` 为某个任务指定专用模型；需要多级兜底时，在设置页"降级链"字段或 `aux.tasks.<task>.models` 里按序填写多个 "provider/model"。
+不需要。dsh-aux 是**零配置**的：不配任何模型也能跑，辅助任务会自动回退到会话主模型。你可以随时通过设置页或 `/aux model <task> <provider/model>` 为某个任务指定专用模型
 
 ## 相关项目
 

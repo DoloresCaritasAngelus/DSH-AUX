@@ -223,8 +223,6 @@ window.__ModuleLoader__.load({
       "field.concurrency": "并发上限",
       "field.maxChars": "maxChars (页面字符上限)",
       "field.reasoningEffort": "思考档位",
-      "field.models": "降级链 (provider/model,每行一条,按序尝试)",
-      "field.models.placeholder": "例如 volcengine-ark/minimax-m3\nopencode-go/kimi-k2.7-code",
       "toolview.title": "图像分析",
       "toolview.running": "分析中…",
       "toolview.failed": "分析失败",
@@ -456,8 +454,6 @@ window.__ModuleLoader__.load({
       "field.concurrency": "Max concurrency",
       "field.maxChars": "maxChars (page char limit)",
       "field.reasoningEffort": "Reasoning effort",
-      "field.models": "Fallback chain (provider/model, one per line, tried in order)",
-      "field.models.placeholder": "e.g. volcengine-ark/minimax-m3\nopencode-go/kimi-k2.7-code",
       "toolview.title": "Image analysis",
       "toolview.running": "Analyzing…",
       "toolview.failed": "Analysis failed",
@@ -896,23 +892,6 @@ window.__ModuleLoader__.load({
           return next;
         });
       };
-      /** Multi-line "provider/model" text -> ordered chain array (empty clears). */
-      const setTaskModels = (task, text) => {
-        const routes = String(text ?? "")
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0);
-        setSaved(false);
-        setSaveError(null);
-        setDraft((d) => {
-          const next = structuredClone(d ?? {});
-          next.tasks = next.tasks ?? {};
-          next.tasks[task] = next.tasks[task] ?? {};
-          if (routes.length === 0) delete next.tasks[task].models;
-          else next.tasks[task].models = routes;
-          return next;
-        });
-      };
       const save = () => {
         setSaving(true);
         setSaveError(null);
@@ -941,12 +920,6 @@ window.__ModuleLoader__.load({
             if (val !== void 0 && val !== "") ops.push({ op: "set", path, value: Number(val) });
             else ops.push({ op: "unset", path });
           }
-          // Ordered fallback chain: written as-is; the server ignores the
-          // singular provider/model whenever the chain is non-empty.
-          const modelsPath = [...base, "models"];
-          if (Array.isArray(entry.models) && entry.models.length > 0)
-            ops.push({ op: "set", path: modelsPath, value: entry.models });
-          else ops.push({ op: "unset", path: modelsPath });
           const effort = entry.reasoningEffort;
           const effortPath = [...base, "reasoningEffort"];
           // 任务级 reasoningEffort 可以独立于 provider/model 存在
@@ -1171,18 +1144,6 @@ window.__ModuleLoader__.load({
                 modelOptionsFor(task).map((id) => ({ value: id, label: id })),
                 t("placeholder.inheritModel"),
               ),
-            ),
-            fieldRow(
-              task,
-              "models",
-              t("field.models"),
-              react.createElement("textarea", {
-                rows: 2,
-                value: Array.isArray(field(task, "models")) ? field(task, "models").join("\n") : "",
-                placeholder: t("field.models.placeholder"),
-                disabled: false,
-                onChange: (e) => setTaskModels(task, e.target.value),
-              }),
             ),
             fieldRow(
               task,

@@ -15,3 +15,4 @@
 | 目录 | 功能 | 退役于 |
 |---|---|---|
 | `subagent-bridge/` | 子代理桥接:原生 subagent 路由 + workflow `agent()` 路由 | 2026-09-17 |
+| `multi-level-chain/` | 多级辅助模型降级链(`tasks.<task>.models` 有序回退 + 设置页那个多行输入控件) | 2026-09-17 |
