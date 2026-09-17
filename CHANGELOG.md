@@ -2,6 +2,16 @@
 
 ## 未发布 (Unreleased)
 
+### 修复 — 客户端图片槽与 DSH 0.1.6 官方槽撞名,导致整站无法进入
+
+- **症状**:在 0.1.6-alpha.2 上,web 界面停在 `Failed to load plugins` / `web boot: 1 entry did not activate` / `@dolorescaritasangelus/dsh-aux: failed`,**主应用永不挂载** —— 也就是整个界面进不去。服务层完全正常(进程、3080 鉴权、host 日志都干净):失败只存在于浏览器端的 `client-modules` 状态里,不写 host 日志。
+- **根因**:0.1.6 的官方 `dsh-client-ui-tool` 新增 `read-image-toolview`,同样声明子槽 `tool.call.images`;同版本的 `dsh-client-ui-slots` 又新增了「同一槽名只能被声明一次」校验(`slot "tool.call.images" is already declared`)。AUX 的 `vision_analyze` 行自 2026-09-09 起也声明该槽 —— 两边都变,于是注册被拒、客户端 fiber `failed`,启动审计在**应用挂载之前**抛出。
+- **修复**:AUX 的图片槽私有化为 `aux.tool.call.images`,并自带画廊组件注册进该槽。这不只是「让出官方名字」:官方画廊**不可复用** —— `dsh-client-ui-attachment` 只把它注册在 `tool.call.images` 这一个固定槽名上,且明确不导出 React 组件作为包值,所以私有槽必须自建组件,否则这一行会永久缺画廊。
+- **行为**:`vision_analyze` 行恢复完整渲染(角标 + 画廊 + 结论)。画廊点缩略图开原图(react-dom 可用时 portal 到 body,避免被变换过的祖先裁切;否则就地渲染),Esc / 点遮罩 / 关闭键都可关,加载失败可点击重试;`loadImage.peek` 缓存命中时首帧即出图,不再闪占位符。
+- **为什么用私有前缀而不是去探测冲突**:DSH 官方持续新增槽声明(0.1.6 一次就加了两处),而 `aux.` 前缀让这类撞名**在构造上不可能发生** —— 比任何检测都便宜,也不用维护一份官方槽名清单。
+- **兼容性**:对 0.1.5-rc.2 同样成立 —— 私有槽名在那个版本没有唯一性校验,只是无人争用,渲染路径不变。主支仍以 **0.1.5-rc.2** 为支持线。
+- **测试基线** 600 → 603。
+
 ### 破坏性变更 — 多级降级链退役
 
 - **移除能力**:`aux.tasks.<task>.models`(按序尝试多个辅助模型)整体退役。降级只保留一条路径 —— 辅助路由失败后**回退到主模型**,不再逐级尝试备用辅助模型。

@@ -9,13 +9,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-/** Minimal React: createElement returns a plain tree node. */
+/** Minimal React: createElement returns a plain tree node. There is no
+ * reconciler, so a function element is rendered in place and only host
+ * elements (string types) survive into the tree. */
 const fakeReact = {
   createElement(type, props, ...children) {
+    const flat = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
+    if (typeof type === "function") return type({ ...(props ?? {}), children: flat });
     return {
       type,
       props: props ?? {},
-      children: children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false),
+      children: flat,
     };
   },
   useState(value) {
@@ -34,6 +38,11 @@ const fakeReact = {
 };
 
 let bundle = null;
+/** Minimal react-dom: the lightbox portals through it when it is available. */
+const fakeReactDom = {
+  createPortal: (node) => node,
+};
+
 function loadBundle() {
   if (bundle !== null) return bundle;
   globalThis.window = {
@@ -41,6 +50,7 @@ function loadBundle() {
       load(definition) {
         bundle = definition.factory((name) => {
           if (name === "react") return fakeReact;
+          if (name === "react-dom") return fakeReactDom;
           throw new Error("unexpected require: " + name);
         });
       },
@@ -57,7 +67,7 @@ const DICT = {
 const t = (key) => DICT[key] ?? key;
 
 /** Apply the bundle to a stub context and return the captured registrations. */
-async function registerToolview() {
+async function applyBundle() {
   const exports = await loadBundle();
   const registrations = [];
   const ctx = {
@@ -76,8 +86,17 @@ async function registerToolview() {
     },
   };
   exports.apply(ctx);
-  const entry = registrations.find((r) => r.options.name === "tool.call.toolview");
-  return entry;
+  return registrations;
+}
+
+async function registerToolview() {
+  const registrations = await applyBundle();
+  return registrations.find((r) => r.options.name === "tool.call.toolview");
+}
+
+async function registerGallery() {
+  const registrations = await applyBundle();
+  return registrations.find((r) => r.options.name === "aux.tool.call.images");
 }
 
 const REF_A = { attachmentId: "sha256:" + "11".repeat(32), mediaType: "image/png", bytes: 8, width: 2, height: 2 };
@@ -116,12 +135,50 @@ function render(entry, block, renderSlotCalls = []) {
   return tree;
 }
 
-test("注册: 键为 vision_analyze,并声明 tool.call.images 子槽", async () => {
+test("注册: 键为 vision_analyze,子槽是包私有的 aux.tool.call.images", async () => {
   const entry = await registerToolview();
   assert.ok(entry, "应注册 tool.call.toolview 条目");
   assert.equal(entry.options.key, "vision_analyze");
-  assert.deepEqual(entry.options.children, { "tool.call.images": { kind: "single", scope: "session" } });
+  assert.deepEqual(entry.options.children, { "aux.tool.call.images": { kind: "single", scope: "session" } });
   assert.equal(typeof entry.component, "function");
+});
+
+test("注册: 画廊组件注册进同一个私有槽,不占用官方 tool.call.images", async () => {
+  const gallery = await registerGallery();
+  assert.ok(gallery, "应注册 aux.tool.call.images 画廊条目");
+  assert.equal(typeof gallery.component, "function");
+  const registrations = await applyBundle();
+  const declaredByOthers = registrations
+    .flatMap((r) => Object.keys(r.options.children ?? {}))
+    .filter((name) => !name.startsWith("aux."));
+  assert.deepEqual(declaredByOthers, [], "AUX 不得声明任何官方槽名");
+});
+
+test("画廊: 有 peek 缓存时同步出图,点击上抛打开请求", async () => {
+  const gallery = await registerGallery();
+  const loads = [];
+  const loadImage = (attachment) => {
+    loads.push(attachment.attachmentId);
+    return Promise.resolve("blob:" + attachment.attachmentId);
+  };
+  loadImage.peek = (attachment) => "cached:" + attachment.attachmentId;
+  const tree = gallery.component({
+    t,
+    images: [{ attachment: REF_A }, { attachment: REF_B }],
+    loadImage,
+    align: "start",
+  });
+  const thumbs = findClass(tree, "ax-tv-image");
+  assert.equal(thumbs.length, 2, "每张图一个缩略图");
+  const srcs = thumbs.map((node) => node.children.find((c) => c.type === "img")?.props?.src);
+  assert.deepEqual(srcs, ["cached:" + REF_A.attachmentId, "cached:" + REF_B.attachmentId], "peek 命中时首帧就有图");
+  assert.equal(typeof thumbs[0].props.onClick, "function", "缩略图应可点开");
+});
+
+test("画廊: 无图或缺少 loadImage 时不渲染", async () => {
+  const gallery = await registerGallery();
+  assert.equal(gallery.component({ t, images: [], loadImage: () => {} }), null);
+  assert.equal(gallery.component({ t, images: [{ attachment: REF_A }] }), null);
 });
 
 test("渲染: 消息图片角标【图N/共M】+ 缩略图槽 + 结论", async () => {
@@ -149,7 +206,7 @@ test("渲染: 消息图片角标【图N/共M】+ 缩略图槽 + 结论", async (
   const badges = findClass(tree, "ax-tv-badge").map((node) => texts(node).join(""));
   assert.deepEqual(badges, ["【图2/共4】", "【图3】"], "消息级带总数,调用级不带");
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].name, "tool.call.images");
+  assert.equal(calls[0].name, "aux.tool.call.images");
   assert.equal(calls[0].props.align, "start");
   assert.deepEqual(calls[0].props.images, [{ attachment: REF_A }, { attachment: REF_B }]);
   assert.ok(
