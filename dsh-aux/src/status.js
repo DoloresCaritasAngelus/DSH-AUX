@@ -14,7 +14,6 @@ import { performance } from "node:perf_hooks";
 import { resolvePackageFile, readPackageFile } from "./bridge-locate.js";
 import { imageBridgeStatus } from "./image-bridge.js";
 import { deletionBlockReason } from "./images/ownership.js";
-import { subagentBridgeStatus, workflowBridgeStatus } from "./subagent-bridge.js";
 import { isCompactionBridgeInstalled, isCompactionTaskConfigured } from "./compaction-bridge.js";
 import { isSkillTaskConfigured, skillBridgeStatus } from "./skill-bridge.js";
 import { recordPlatformEvent, sessionEventsSupported } from "./events.js";
@@ -26,8 +25,6 @@ const TOOL_KEYS = ["vision_analyze", "web_extract", "web_crawl", "compress_text"
 const PATCH_PACKAGES = [
   "dsh-agent-loop",
   "dsh-api-session-controller",
-  "dsh-tool-subagent",
-  "dsh-workflow-worker-thread",
   "dsh-tool-skill",
   "dsh-session",
   "dsh-session-format-v0-to-v1",
@@ -61,27 +58,6 @@ const PATCH_LEDGER = [
     pkg: "dsh-api-session-controller",
     mark: "dsh-aux image bridge v4 (local patch)",
     description: "alpha.x session-controller 图片门控移除",
-  },
-  {
-    id: "bridge-subagent-schema",
-    group: "P1-P6",
-    pkg: "dsh-tool-subagent",
-    mark: "requires_vision:",
-    description: "subagent 工具增加 requires_vision 可选参数",
-  },
-  {
-    id: "bridge-subagent-request",
-    group: "P1-P6",
-    pkg: "dsh-tool-subagent",
-    mark: 'ctx.get("auxLlm")',
-    description: "subagent execute 读取 auxLlm.subagentRoute 注入路由",
-  },
-  {
-    id: "bridge-workflow",
-    group: "P1-P6",
-    pkg: "dsh-workflow-worker-thread",
-    mark: "subagentIncludeWorkflow",
-    description: "workflow agent() 子代理也走 AUX 路由",
   },
   {
     id: "bridge-skill",
@@ -395,67 +371,6 @@ function imageBridgeStatusItem(service, status) {
 }
 
 /**
- * Status for a simple file-patch bridge (subagent / workflow / skill).
- */
-function filePatchBridgeStatusItem(service, key, status) {
-  const mode = service.toolBridgeMode(key);
-  if (mode === "native") {
-    return item({
-      key,
-      kind: "bridge",
-      mode,
-      state: "disabled",
-      reason: "mode-native",
-      action: "none",
-      patch: "not-applicable",
-    });
-  }
-  if (mode === "compat") {
-    return item({
-      key,
-      kind: "bridge",
-      mode,
-      state: "unavailable",
-      reason: "mode-compat",
-      action: "none",
-      patch: status,
-    });
-  }
-  switch (status) {
-    case "installed":
-      return item({
-        key,
-        kind: "bridge",
-        mode,
-        state: "enabled",
-        reason: "patch-ok",
-        action: "none",
-        patch: "installed",
-      });
-    case "missing":
-      return item({
-        key,
-        kind: "bridge",
-        mode,
-        state: "unavailable",
-        reason: "patch-missing",
-        action: "patch",
-        patch: "missing",
-      });
-    default:
-      return item({
-        key,
-        kind: "bridge",
-        mode,
-        state: "unknown",
-        reason: "patch-unknown",
-        action: "none",
-        patch: "unknown",
-      });
-  }
-}
-
-/**
  * Status for the compaction bridge. It is an in-process patch installed only
  * when `dsh-compaction-basic` is present, and it only routes when a
  * dedicated `compaction` task is configured.
@@ -606,10 +521,8 @@ function skillBridgeStatusItem(service, status) {
  * @returns {Promise<object>} JSON-safe status object.
  */
 export async function collectPlatformStatus(service) {
-  const [image, sub, workflow, skill, events, fileRestartRequired, patchLedger] = await Promise.all([
+  const [image, skill, events, fileRestartRequired, patchLedger] = await Promise.all([
     imageBridgeStatus(),
-    subagentBridgeStatus(),
-    workflowBridgeStatus(),
     skillBridgeStatus(),
     sessionEventsSupported(service),
     anyPatchFileNewerThanProcessStart(),
@@ -628,21 +541,9 @@ export async function collectPlatformStatus(service) {
   for (const key of TOOL_KEYS) items.push(toolStatus(service, key));
   items.push(imageBridgeStatusItem(service, image));
   items.push(imageLifecycleStatusItem(service));
-  items.push(filePatchBridgeStatusItem(service, "subagentBridge", sub));
-  items.push(filePatchBridgeStatusItem(service, "workflowBridge", workflow));
   items.push(compactionBridgeStatusItem(service));
   items.push(skillBridgeStatusItem(service, skill));
 
-  // 保留人类可读的桥接配置细节,避免统一到 status 后丢掉 subagent 模式、
-  // workflow includeWorkflow、compaction/skill 是否已配置等信息。
-  const subItem = items.find((entry) => entry.key === "subagentBridge");
-  if (subItem !== void 0) {
-    subItem.detail = `mode=${service.subagentMode ?? "native"}${service.subagentPrepareTools ? ", prepareTools" : ""}`;
-  }
-  const wfItem = items.find((entry) => entry.key === "workflowBridge");
-  if (wfItem !== void 0) {
-    wfItem.detail = `includeWorkflow=${service.subagentIncludeWorkflow ? "on" : "off"}`;
-  }
   const compactionItem = items.find((entry) => entry.key === "compactionBridge");
   if (compactionItem !== void 0) {
     compactionItem.detail = `installed=${isCompactionBridgeInstalled() ? "yes" : "no"}, configured=${isCompactionTaskConfigured(service) ? "yes" : "no"}`;

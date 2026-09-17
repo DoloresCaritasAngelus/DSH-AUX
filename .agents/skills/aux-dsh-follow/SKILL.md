@@ -31,8 +31,8 @@ user-invocable: false
    (官方 `KNOWN_SESSION_EVENT_TYPES` 是生成式打包产物,每次升级都丢 aux/llm-call)。
 6. 跑全量测试(`aux-test-baseline`,🔻易腐烂·快照*319*,以跑出 #pass 为准)与
    `npm run gen-package-readme -- --check`。
-7. `/aux status` 逐项确认:(🔻易腐烂·枚举清单 *image-bridge / subagent-bridge /
-   workflow-bridge / compaction-bridge / skill-audit / 会话事件记录* —— bridge 种类会增长,
+7. `/aux status` 逐项确认:(🔻易腐烂·枚举清单 *image-bridge /
+   compaction-bridge / skill-audit / 会话事件记录* —— bridge 种类会增长,
    **以 `/aux status` 当前输出清单为准**)各状态。
 8. **向后兼容检查**:对仍需支持的旧版 DSH 验证"缺补丁也能降级不爆炸"
    (ignorable 缺失 → 不写事件;detect 不中 → 跳过;能力不确定 → 兜底/放行)。

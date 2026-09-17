@@ -105,8 +105,6 @@ export const EXTRA_DEV_PACKAGES = {
 export const HOST_PACKAGE_PATHS = {
   "dsh-agent-loop": "packages/core/agent-loop",
   "dsh-api-session-controller": "packages/api/session-controller",
-  "dsh-tool-subagent": "packages/subagent/tool-subagent",
-  "dsh-workflow-worker-thread": "packages/workflow/workflow-worker-thread",
   "dsh-tool-skill": "packages/skill/tool-skill",
   "dsh-session": "packages/core/session",
   "dsh-session-format-v0-to-v1": "packages/session/session-format-v0-to-v1",

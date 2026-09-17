@@ -9,7 +9,7 @@
 > 需要我的时候，直接叫我就好～
 
 ![Version](https://img.shields.io/badge/version-0.4.6-fix.1-blue)
-![Tests](https://img.shields.io/badge/tests-635-brightgreen)
+![Tests](https://img.shields.io/badge/tests-605-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.5--rc.2-0078D4)
 
@@ -18,7 +18,6 @@
 # dsh-aux — DSH 辅助模型系统
 
 > 给主 agent 配一个「副手」：**视觉分析、网页提取、长文本压缩**这些旁路任务，由独立辅助 LLM 完成，主模型专注对话。
-> 也可以透明接管你已有的 `subagent` / `workflow`——**不会额外创建子代理**，也不会抢走主模型的对话。
 
 > 💬 「这些杂活交给我，主人专心聊天就好啦～」
 
@@ -62,7 +61,6 @@
 | **统一路由与降级** | 每任务独立模型/超时/并发；失败自动降级主模型，连续失败进入冷却 |
 | **平台化开关** | 每个工具/桥接可选 `native` / `aux`；`compat` 为未来预留 |
 | **SKILL 审计** | 四级模式：`native` / `audit` / `report` / `report-ondemand` |
-| **子代理 / 工作流桥接** | 原生 `subagent` 与 `workflow` 并行 `agent()` 透明走 AUX |
 | **技能预审桥接** | 先由辅助模型精读 SKILL.md + 当前任务，返回预审报告 |
 | **会话压缩桥接** | 配置 `compaction` 后，原生自动/手动压缩改走 AUX |
 | **设置页 + 状态面板** | 分组可折叠，中英双语；完整平台状态、补丁可诊断、一键修复、重启检测 |
@@ -144,7 +142,7 @@
 | `aux` | 打开 AUX，使用我们的实现 / 桥接 |
 | `compat` | **未来预留**，当前不可用，UI 上显示为 disabled |
 
-适用于：`vision_analyze`、`web_extract`、`web_crawl`、`compress_text`、`imageBridge`、`subagentBridge`、`workflowBridge`、`compactionBridge`、`skillAudit`。
+适用于：`vision_analyze`、`web_extract`、`web_crawl`、`compress_text`、`imageBridge`、`compactionBridge`、`skillAudit`。
 
 > 💬 「不想让我插手？一键切回原生就好～」
 
@@ -244,7 +242,7 @@ node scripts/doctor.mjs    # 更新后健康检查（不修改任何文件）
 
 ### 为什么要先看这里？
 
-AUX 的一些桥接需要平台补丁才能完整工作（`image-bridge`、`subagent` / `workflow`、`compaction`、`skill` 等）。旧体验容易让用户踩两个坑：
+AUX 的一些桥接需要平台补丁才能完整工作（`image-bridge`、`compaction`、`skill` 等）。旧体验容易让用户踩两个坑：
 
 - 不知道“这个补丁是不是必需的”；
 - 不知道“我的补丁到底装好没有”。
@@ -270,7 +268,7 @@ AUX 的一些桥接需要平台补丁才能完整工作（`image-bridge`、`suba
 
 ### 设置页还能做什么
 
-Web → 设置 → 辅助模型，可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型、超时、并发、`maxChars` 与**思考档位**。设置页按「工具任务 / 桥接任务 / 子代理 / 全局 / 平台开关」分组折叠，中英双语跟随 DSH 语言。
+Web → 设置 → 辅助模型，可为 `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill` 分别配置模型、超时、并发、`maxChars` 与**思考档位**。设置页按「工具任务 / 桥接任务 / 全局 / 平台开关」分组折叠，中英双语跟随 DSH 语言。
 
 - **状态 chip**：composer 实时显示最近一次辅助调用（任务、耗时、是否降级）。
 - **诊断与修复**：每个工具/桥接显示状态点、补丁徽标、不可用原因；补丁缺失可一键重打，写入后检测并提示重启。
@@ -279,35 +277,6 @@ Web → 设置 → 辅助模型，可为 `vision` / `web_extract` / `web_crawl` 
 - **隐私**：可关闭「在对话界面显示辅助模型状态芯片」；关闭后不再向 Web/第三方暴露 `aux-status` 投影，`/aux status` 不受影响。
 
 ## 桥接与高级能力
-
-### subagent / workflow 桥接
-
-DSH 原生的 `subagent` 工具，以及 `workflow` 批量并发扇出的 `agent()` 子代理，都被**透明桥接**到 AUX——对话里照常用 `subagent` / `workflow`，真正干活的是 AUX 辅助模型。**零新工具、零系统提示词改动。**
-
-| 模式 | 子代理用什么模型 |
-|---|---|
-| `native`（默认） | 不拦截，完全原生 / 主模型行为 |
-| `manual` | 所有子代理统一走 `subagent.general` 指定模型 |
-| `vision-aware` | 需要视觉时走 `subagent.vision`，否则 `general` |
-
-> 💬 「你的子代理也可以交给我照看，不抢话、只帮忙～」
-
-<details>
-<summary><b>子代理配置示例（点开查看）</b></summary>
-
-```yaml
-aux:
-  subagent:
-    mode: vision-aware        # native | manual | vision-aware
-    general: { provider: opencode-go, model: glm-5.2, reasoningEffort: high }
-    vision:  { provider: opencode-go, model: kimi-k2.7-code, reasoningEffort: high }
-    includeWorkflow: true      # workflow 的并行 agent() 子代理也走 AUX
-    prepareTools: true         # 给子代理注入 vision_analyze 等 AUX 工具作兜底
-    visionKeywords: [ "图片", "图像", "截图" ]
-    retryVisionWithAux: false  # 实验性保留配置，当前未实现
-```
-
-</details>
 
 ### 技能预审桥接（skill-audit）
 
@@ -376,7 +345,7 @@ const result = await ctx.auxLlm.call("compress", {
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 用户**：请使用永久分支 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 或 Release `v0.4.4-legacy`。
 - **旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）用户**：请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。主支不再支持这些版本。
 - **运行时零第三方依赖**：peerDependencies 为 DSH 官方包 + 平台自带的 `react`/`zod`（环境提供），无 `dependencies`。
-- **测试零依赖**：`node --test tests/*.test.js`（635 项；文件清单与基线见 `TESTING.md`）。
+- **测试零依赖**：`node --test tests/*.test.js`（605 项；文件清单与基线见 `TESTING.md`）。
 
 ### 集成组件
 
@@ -389,7 +358,6 @@ const result = await ctx.auxLlm.call("compress", {
 - **vision 交付路由**：`aux.visionRoute` 可选 aux（默认）/ native-when-capable / auto；native 只对 `aux.nativeRoutes` 白名单内的路由生效，且 `forceAuxVision` 优先。
 - **多级降级链**：`aux.tasks.<task>.models` 是有序的 "provider/model" 数组（主选 → 备1 → 备2 …）；非空时单数 `provider/model` 被忽略（`/aux status` 会给出警告）。`/aux model <task> <provider/model>` 写入的是**单元素链**，多级链请在设置页"降级链"字段（每行一条）或 `settings.yaml` 中填写；链尾仍按 `fallbackToMain` / `visionFallbackToMain` 规则考虑主模型。
 - **vision 打磨(Phase 3)**：失败条目给出原因与可否重试（限流/超时/连接在工具内自动重试一次）；`imagePath` 无扩展名按魔数嗅探（与 `read_image` 对齐）；动图只分析首帧；直连请求把校验通过的 IP 钉到连接（关闭 DNS rebinding）；`aux.tasks.<task>.models` 多级降级链；`vision_analyze` 会话卡片显示 `【图N/共M】` 角标 + 缩略图 + 结论。
-- **subagent-bridge**：透明接管原生 `subagent` 与 `workflow` 并行 `agent()` 子代理。
 
 ### 极简 / Anchored Standard 兼容
 

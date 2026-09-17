@@ -32,8 +32,8 @@
 | [docs/archive/IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md](./archive/IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md) | 🔵 已实现(保留作回执) | 图库实施计划(Phase / 并行任务 / 审核关卡);0.4.2 已执行完毕 | — |
 | [docs/archive/SESSION-ATTACHMENT-GC.md](./archive/SESSION-ATTACHMENT-GC.md) | 🔵 已实现(保留作回执) | 会话删除时清理附件图片的设计与实现记录 | — |
 | [docs/archive/VISION-AGENT.md](./archive/VISION-AGENT.md) | 🔵 已实现(保留作回执) | 视觉子代理"一次性 vs 长期"实测结论与记忆架构 | — |
-| [docs/archive/SUBAGENT-BRIDGE.md](./archive/SUBAGENT-BRIDGE.md) | 🔵 已实现(保留作回执) | subagent 工具透明接管 AUX 路由的设计(0.3.0 上线) | — |
-| [docs/archive/WORKFLOW-BRIDGE.md](./archive/WORKFLOW-BRIDGE.md) | 🔵 已实现(保留作回执) | workflow `agent()` 子代理同样走 AUX 路由的设计(已上线) | — |
+| [docs/archive/SUBAGENT-BRIDGE.md](./archive/SUBAGENT-BRIDGE.md) | 🗄 已归档 | subagent 工具透明接管 AUX 路由的设计(0.3.0 上线;**2026-09-17 功能已退役**) | — |
+| [docs/archive/WORKFLOW-BRIDGE.md](./archive/WORKFLOW-BRIDGE.md) | 🗄 已归档 | workflow `agent()` 子代理同样走 AUX 路由的设计(已上线;**2026-09-17 功能已退役**) | — |
 | [docs/archive/PRD.md](./archive/PRD.md) | ⬜ 历史 | v1 需求规格(三任务时代),已被 PROJECT 与 docs/design/ 取代 | 🔻 测试数、里程碑 |
 | [docs/archive/UPSTREAM-PR.md](./archive/UPSTREAM-PR.md) | 🗄 已归档 | 两个上游 PR 提案;上游无反馈渠道,该路径已放弃 | 🔻 上游行为 |
 | [docs/archive/COMPARISON.md](./archive/COMPARISON.md) | ⬜ 历史 | 与同类视觉插件的对比结论(2026-08-17 快照) | 🔻 对比对象快照 |

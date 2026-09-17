@@ -3,7 +3,7 @@
  * status chip.
  *
  * Settings page (settings.section "aux"): grouped collapsible cards for
- * tool/bridge/subagent/global settings, per-task provider/model/timeout/
+ * tool/bridge/global settings, per-task provider/model/timeout/
  * concurrency/maxChars/reasoningEffort, global save, and per-field reset.
  * The page is bilingual (zh/en) and follows the DSH locale service when
  * present.
@@ -209,8 +209,6 @@ window.__ModuleLoader__.load({
       "group.tools.desc": "图像、网页提取、长文本压缩等辅助工具。",
       "group.bridges": "桥接任务",
       "group.bridges.desc": "会话压缩与技能预审。",
-      "group.subagent": "子代理",
-      "group.subagent.desc": "子代理辅助模型路由与工具注入。",
       "group.global": "全局",
       "group.global.desc": "降级策略与界面显示。",
       "task.vision": "图像分析 (vision_analyze)",
@@ -233,20 +231,6 @@ window.__ModuleLoader__.load({
       "toolview.image": "图",
       "placeholder.inheritModel": "(继承主模型)",
       "placeholder.inheritDefault": "(继承默认)",
-      "subagent.mode": "模式",
-      "subagent.general": "通用子代理",
-      "subagent.vision": "视觉子代理",
-      "subagent.reasoningEffort": "思考强度",
-      "subagent.native": "native (原生,不拦截)",
-      "subagent.manual": "manual (统一用 general)",
-      "subagent.visionAware": "vision-aware (按需 vision / general)",
-      "subagent.generalProvider": "general provider",
-      "subagent.generalModel": "general model",
-      "subagent.visionProvider": "vision provider",
-      "subagent.visionModel": "vision model",
-      "subagent.visionKeywords": "视觉关键词 (逗号分隔)",
-      "subagent.includeWorkflow": "workflow 并行子代理也走此路由 (includeWorkflow)",
-      "subagent.prepareTools": "给子代理注入 AUX 工具作兜底 (prepareTools)",
       "global.fallbackToMain": "失败时降级到主模型 (fallbackToMain)",
       "global.forceAuxVision": "强制原生图片也走 AUX 视觉 (forceAuxVision)",
       "global.visionFallbackToMain": "视觉辅助失败时降级到主模型 (visionFallbackToMain)",
@@ -458,8 +442,6 @@ window.__ModuleLoader__.load({
       "group.tools.desc": "Vision, web extraction, long-text compression, and other auxiliary tools.",
       "group.bridges": "Bridge Tasks",
       "group.bridges.desc": "Session compaction and skill pre-audit.",
-      "group.subagent": "Subagents",
-      "group.subagent.desc": "Subagent auxiliary model routing and tool injection.",
       "group.global": "Global",
       "group.global.desc": "Fallback policy and interface display.",
       "task.vision": "Vision (vision_analyze)",
@@ -482,20 +464,6 @@ window.__ModuleLoader__.load({
       "toolview.image": "Image",
       "placeholder.inheritModel": "(Inherit main model)",
       "placeholder.inheritDefault": "(Inherit default)",
-      "subagent.mode": "Mode",
-      "subagent.general": "General subagent",
-      "subagent.vision": "Vision subagent",
-      "subagent.reasoningEffort": "Reasoning effort",
-      "subagent.native": "native (no interception)",
-      "subagent.manual": "manual (always use general)",
-      "subagent.visionAware": "vision-aware (vision/general on demand)",
-      "subagent.generalProvider": "general provider",
-      "subagent.generalModel": "general model",
-      "subagent.visionProvider": "vision provider",
-      "subagent.visionModel": "vision model",
-      "subagent.visionKeywords": "Vision keywords (comma separated)",
-      "subagent.includeWorkflow": "Route workflow parallel subagents through this too (includeWorkflow)",
-      "subagent.prepareTools": "Inject AUX tools into subagents as fallback (prepareTools)",
       "global.fallbackToMain": "Fall back to main model on failure (fallbackToMain)",
       "global.forceAuxVision": "Force native images through AUX vision (forceAuxVision)",
       "global.visionFallbackToMain": "Fall back to main model when vision fails (visionFallbackToMain)",
@@ -756,7 +724,6 @@ window.__ModuleLoader__.load({
         diagnostics: true,
         tools: true,
         bridges: false,
-        subagent: false,
         global: false,
       });
       const load = react.useCallback(() => {
@@ -986,35 +953,6 @@ window.__ModuleLoader__.load({
           if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
           else ops.push({ op: "unset", path: effortPath });
         }
-        const sub = draft?.subagent ?? {};
-        if (sub.mode !== void 0 && sub.mode !== "native")
-          ops.push({ op: "set", path: ["subagent", "mode"], value: sub.mode });
-        else ops.push({ op: "unset", path: ["subagent", "mode"] });
-        if (sub.includeWorkflow === false) ops.push({ op: "set", path: ["subagent", "includeWorkflow"], value: false });
-        else ops.push({ op: "unset", path: ["subagent", "includeWorkflow"] });
-        for (const group of ["general", "vision"]) {
-          const g = sub?.[group] ?? {};
-          const gbase = ["subagent", group];
-          const gp = typeof g.provider === "string" && g.provider !== "";
-          const gm = typeof g.model === "string" && g.model !== "";
-          const effort = g.reasoningEffort;
-          const effortPath = [...gbase, "reasoningEffort"];
-          if (gp && gm) {
-            ops.push({ op: "set", path: [...gbase, "provider"], value: g.provider });
-            ops.push({ op: "set", path: [...gbase, "model"], value: g.model });
-            if (typeof effort === "string" && effort !== "") ops.push({ op: "set", path: effortPath, value: effort });
-            else ops.push({ op: "unset", path: effortPath });
-          } else {
-            ops.push({ op: "unset", path: [...gbase, "provider"] });
-            ops.push({ op: "unset", path: [...gbase, "model"] });
-            ops.push({ op: "unset", path: effortPath });
-          }
-        }
-        if (sub.prepareTools === false) ops.push({ op: "set", path: ["subagent", "prepareTools"], value: false });
-        else ops.push({ op: "unset", path: ["subagent", "prepareTools"] });
-        if (Array.isArray(sub.visionKeywords) && sub.visionKeywords.length > 0)
-          ops.push({ op: "set", path: ["subagent", "visionKeywords"], value: sub.visionKeywords });
-        else ops.push({ op: "unset", path: ["subagent", "visionKeywords"] });
         if (draft?.fallbackToMain !== void 0) {
           if (draft.fallbackToMain === false) ops.push({ op: "set", path: ["fallbackToMain"], value: false });
           else ops.push({ op: "unset", path: ["fallbackToMain"] });
@@ -1052,8 +990,6 @@ window.__ModuleLoader__.load({
           "web_crawl",
           "compress_text",
           "imageBridge",
-          "subagentBridge",
-          "workflowBridge",
           "compactionBridge",
           "skillAudit",
         ];
@@ -1335,81 +1271,6 @@ window.__ModuleLoader__.load({
           ),
         );
       };
-      const sub = draft?.subagent ?? {};
-      const subField = (group, key) => sub?.[group]?.[key];
-      const setSub = (patch) => {
-        setSaved(false);
-        setSaveError(null);
-        setDraft((d) => {
-          const next = structuredClone(d ?? {});
-          next.subagent = { ...(next.subagent ?? {}), ...patch };
-          return next;
-        });
-      };
-      const setSubGroup = (group, key, value) => {
-        setSaved(false);
-        setSaveError(null);
-        setDraft((d) => {
-          const next = structuredClone(d ?? {});
-          next.subagent = next.subagent ?? {};
-          next.subagent[group] = next.subagent[group] ?? {};
-          if (value === "") delete next.subagent[group][key];
-          else next.subagent[group][key] = value;
-          return next;
-        });
-      };
-      const subGroupSelect = (group, key, options, placeholder) =>
-        react.createElement(
-          "select",
-          {
-            id: "ax-sub-" + group + "-" + key,
-            value: subField(group, key) ?? "",
-            disabled: options.length === 0,
-            onChange: (e) => {
-              const value = e.target.value;
-              setSubGroup(group, key, value);
-              if (key === "provider") {
-                setSubGroup(group, "model", "");
-                setSubGroup(group, "reasoningEffort", "");
-              }
-            },
-          },
-          react.createElement("option", { value: "" }, placeholder),
-          options.map((o) => react.createElement("option", { key: o.value, value: o.value }, o.label)),
-        );
-      const subModelOptionsFor = (group) => {
-        const pid = subField(group, "provider") ?? "";
-        if (pid === "") return [];
-        const models = catalog.models ?? [];
-        const ids = models.filter((m) => m.provider === pid).map((m) => m.id);
-        return [...new Set(ids)];
-      };
-      const subReasoningOptionsFor = (group) => {
-        const pid = subField(group, "provider") ?? "";
-        const mid = subField(group, "model") ?? "";
-        if (!pid || !mid) return [];
-        const reasoning = catalog?.reasoning ?? {};
-        return reasoning[pid + "\u0000" + mid] ?? [];
-      };
-      const subReasoningSelect = (group) => {
-        let options = [];
-        try {
-          options = subReasoningOptionsFor(group);
-        } catch {
-          options = [];
-        }
-        return react.createElement(
-          "select",
-          {
-            id: "ax-sub-" + group + "-reasoningEffort",
-            value: subField(group, "reasoningEffort") ?? "",
-            disabled: options.length === 0,
-            onChange: (e) => setSubGroup(group, "reasoningEffort", e.target.value),
-          },
-          react.createElement("option", { value: "" }, t("placeholder.inheritDefault")),
-          options.map((o) => react.createElement("option", { key: o.id, value: o.id }, o.name ?? o.id)),
-        );
-      };
       const switchRow = (label, checked, disabled, onChange) =>
         react.createElement(
           "label",
@@ -1518,8 +1379,6 @@ window.__ModuleLoader__.load({
           compactionBridge: "bridges",
           skillAudit: "bridges",
           imageBridge: "platform",
-          subagentBridge: "platform",
-          workflowBridge: "platform",
         };
         const target = groupMap[key] ?? "platform";
         setOpenGroups((s) => ({ ...s, [target]: true }));
@@ -1856,128 +1715,6 @@ window.__ModuleLoader__.load({
           tasks.filter((x) => ["compaction", "skill"].includes(x)).map(taskCard),
         ),
         group(
-          "subagent",
-          t("group.subagent"),
-          t("group.subagent.desc"),
-          react.createElement(
-            "div",
-            { className: "ax-row" },
-            react.createElement("label", { htmlFor: "ax-sub-mode" }, t("subagent.mode")),
-            react.createElement(
-              "select",
-              {
-                id: "ax-sub-mode",
-                value: sub.mode ?? "native",
-                disabled: false,
-                onChange: (e) => setSub({ mode: e.target.value }),
-              },
-              react.createElement("option", { value: "native" }, t("subagent.native")),
-              react.createElement("option", { value: "manual" }, t("subagent.manual")),
-              react.createElement("option", { value: "vision-aware" }, t("subagent.visionAware")),
-            ),
-          ),
-          react.createElement(
-            "div",
-            { className: "ax-task" },
-            react.createElement("h3", null, t("subagent.general")),
-            react.createElement(
-              "div",
-              { className: "ax-grid" },
-              react.createElement(
-                "div",
-                { className: "ax-row" },
-                react.createElement("label", { htmlFor: "ax-sub-general-provider" }, t("subagent.generalProvider")),
-                subGroupSelect("general", "provider", providerOptions, t("placeholder.inheritModel")),
-              ),
-              react.createElement(
-                "div",
-                { className: "ax-row" },
-                react.createElement("label", { htmlFor: "ax-sub-general-model" }, t("subagent.generalModel")),
-                subGroupSelect(
-                  "general",
-                  "model",
-                  subModelOptionsFor("general").map((id) => ({ value: id, label: id })),
-                  t("placeholder.inheritModel"),
-                ),
-              ),
-              react.createElement(
-                "div",
-                { className: "ax-row" },
-                react.createElement(
-                  "label",
-                  { htmlFor: "ax-sub-general-reasoningEffort" },
-                  t("subagent.reasoningEffort"),
-                ),
-                subReasoningSelect("general"),
-              ),
-            ),
-          ),
-          react.createElement(
-            "div",
-            { className: "ax-task" },
-            react.createElement("h3", null, t("subagent.vision")),
-            react.createElement(
-              "div",
-              { className: "ax-grid" },
-              react.createElement(
-                "div",
-                { className: "ax-row" },
-                react.createElement("label", { htmlFor: "ax-sub-vision-provider" }, t("subagent.visionProvider")),
-                subGroupSelect("vision", "provider", providerOptions, t("placeholder.inheritModel")),
-              ),
-              react.createElement(
-                "div",
-                { className: "ax-row" },
-                react.createElement("label", { htmlFor: "ax-sub-vision-model" }, t("subagent.visionModel")),
-                subGroupSelect(
-                  "vision",
-                  "model",
-                  subModelOptionsFor("vision").map((id) => ({ value: id, label: id })),
-                  t("placeholder.inheritModel"),
-                ),
-              ),
-              react.createElement(
-                "div",
-                { className: "ax-row" },
-                react.createElement(
-                  "label",
-                  { htmlFor: "ax-sub-vision-reasoningEffort" },
-                  t("subagent.reasoningEffort"),
-                ),
-                subReasoningSelect("vision"),
-              ),
-              react.createElement(
-                "div",
-                { className: "ax-row" },
-                react.createElement("label", { htmlFor: "ax-sub-vision-keywords" }, t("subagent.visionKeywords")),
-                react.createElement("input", {
-                  id: "ax-sub-vision-keywords",
-                  type: "text",
-                  value: Array.isArray(sub.visionKeywords) ? sub.visionKeywords.join(",") : "",
-                  placeholder: "图片,image,截图",
-                  disabled: false,
-                  onChange: (e) =>
-                    setSub({
-                      visionKeywords:
-                        e.target.value === ""
-                          ? []
-                          : e.target.value
-                              .split(",")
-                              .map((s) => s.trim())
-                              .filter(Boolean),
-                    }),
-                }),
-              ),
-            ),
-          ),
-          switchRow(t("subagent.includeWorkflow"), sub.includeWorkflow !== false, false, (e) =>
-            setSub({ includeWorkflow: e.target.checked }),
-          ),
-          switchRow(t("subagent.prepareTools"), sub.prepareTools !== false, false, (e) =>
-            setSub({ prepareTools: e.target.checked }),
-          ),
-        ),
-        group(
           "global",
           t("group.global"),
           t("group.global.desc"),
@@ -2076,8 +1813,6 @@ window.__ModuleLoader__.load({
             platformSelect("web_crawl", "web_crawl"),
             platformSelect("compress_text", "compress_text"),
             platformSelect("imageBridge", "imageBridge"),
-            platformSelect("subagentBridge", "subagentBridge"),
-            platformSelect("workflowBridge", "workflowBridge"),
             platformSelect("compactionBridge", "compactionBridge"),
             platformSelect("skillAudit", "skillAudit"),
             react.createElement(

@@ -10,7 +10,7 @@ import globals from "globals";
 
 export default [
   {
-    ignores: ["node_modules/", "bridge/retired/", "**/*.txt", "assets/"],
+    ignores: ["node_modules/", "bridge/retired/", "retired/", "**/*.txt", "assets/"],
   },
   {
     files: ["**/*.js", "**/*.mjs"],

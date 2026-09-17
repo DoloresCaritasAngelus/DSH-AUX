@@ -41,39 +41,6 @@ test("session-controller(图片准入闸):条件生效,native 时官方闸重新
   assert.match(b, /MODEL_DOES_NOT_SUPPORT_IMAGES/, "官方拒绝必须保留");
 });
 
-test("subagent request(注入路由):委托给会读开关的 subagentRoute", () => {
-  const b = block("patched-subagent-request-alpha2-block.txt");
-  assert.match(b, /subagentRoute/, "必须经 AUX 服务判定,而不是自行决定是否注入");
-  const aux = source("dsh-aux/src/index.js");
-  assert.match(
-    aux,
-    /subagentBridge === "native"\)\s*\{\s*\n\s*return \{ settled: false \};/,
-    "AUX 侧 native 必须短路为 settled:false(补丁安全的根据)",
-  );
-});
-
-test("workflow startChild:受 includeWorkflow/workflowBridge 门控", () => {
-  const b = block("patched-workflow-startchild-block.txt");
-  assert.match(b, /includeWorkflow/, "必须读门控");
-  assert.match(b, /auxRoute = \(!explicit && includeWorkflow\)/, "门控关闭时不得注入路由");
-});
-
-test("schema 补丁(subagent):纯增量 —— 原有行一行未少", () => {
-  const orig = block("orig-subagent-schema-alpha2-block.txt")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-  const patched = new Set(
-    block("patched-subagent-schema-alpha2-block.txt")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean),
-  );
-  const missing = orig.filter((l) => !patched.has(l));
-  assert.deepEqual(missing, [], "纯增量补丁不得删除原有行(否则就不再是「无条件也安全」)");
-  assert.ok(patched.has("requires_vision: {"), "应含新增的可选参数");
-});
-
 test("schema 补丁(skill):只增可选参数,既有参数与必填约束不受影响", () => {
   const b = block("patched-skill-tool-block.txt");
   assert.match(b, /name: \{/, "既有 name 参数必须保留");

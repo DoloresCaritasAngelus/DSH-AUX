@@ -122,31 +122,12 @@ export const AUX_SETTINGS_SCHEMA = z.object({
       reasoningEffort: z.string().min(1),
     }),
   }),
-  subagent: z.object({
-    mode: z.union([z.const("native"), z.const("manual"), z.const("vision-aware")]).default("native"),
-    includeWorkflow: z.boolean().default(true),
-    general: z.object({
-      provider: z.string().min(1),
-      model: z.string().min(1),
-      reasoningEffort: z.string().min(1),
-    }),
-    vision: z.object({
-      provider: z.string().min(1),
-      model: z.string().min(1),
-      reasoningEffort: z.string().min(1),
-    }),
-    prepareTools: z.boolean().default(true),
-    retryVisionWithAux: z.boolean().default(false),
-    visionKeywords: z.array(z.string()).default([]),
-  }),
   enabled: z.object({
     vision_analyze: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
     web_extract: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
     web_crawl: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
     compress_text: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
     imageBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
-    subagentBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
-    workflowBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
     compactionBridge: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
     skillAudit: z.union([z.const("native"), z.const("aux"), z.const("compat")]).default("aux"),
   }),
@@ -190,28 +171,12 @@ export function projectSettings(settings) {
         : {}),
     };
   }
-  const rawSub = settings?.subagent ?? {};
-  const subagent = {
-    mode: rawSub.mode ?? "native",
-    includeWorkflow: rawSub.includeWorkflow !== false,
-    prepareTools: rawSub.prepareTools !== false,
-    retryVisionWithAux: rawSub.retryVisionWithAux === true,
-    visionKeywords: Array.isArray(rawSub.visionKeywords) ? [...rawSub.visionKeywords] : [],
-    ...(rawSub.general !== void 0 && (rawSub.general.provider !== void 0 || rawSub.general.model !== void 0)
-      ? { general: { ...rawSub.general } }
-      : {}),
-    ...(rawSub.vision !== void 0 && (rawSub.vision.provider !== void 0 || rawSub.vision.model !== void 0)
-      ? { vision: { ...rawSub.vision } }
-      : {}),
-  };
   const defaultEnabled = {
     vision_analyze: "aux",
     web_extract: "aux",
     web_crawl: "aux",
     compress_text: "aux",
     imageBridge: "aux",
-    subagentBridge: "aux",
-    workflowBridge: "aux",
     compactionBridge: "aux",
     skillAudit: "aux",
   };
@@ -236,7 +201,6 @@ export function projectSettings(settings) {
     visionFallbackToMain,
     showStatusChip,
     tasks,
-    subagent,
     enabled,
     skill,
     debug,
@@ -269,17 +233,6 @@ export function validateAuxSettings(value) {
           throw new Error(`aux settings: tasks.${task}.models entry "${spec}" must be "provider/model"`);
         }
       }
-    }
-  }
-  for (const group of ["general", "vision"]) {
-    const entry = value?.subagent?.[group];
-    const hasProvider = entry?.provider !== void 0;
-    const hasModel = entry?.model !== void 0;
-    if (hasProvider !== hasModel) {
-      throw new Error(`aux settings: subagent.${group} provider and model must be supplied together`);
-    }
-    if (!hasProvider && entry?.reasoningEffort !== void 0) {
-      throw new Error(`aux settings: subagent.${group} reasoningEffort requires provider and model`);
     }
   }
 }

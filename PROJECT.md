@@ -4,7 +4,7 @@
 > AI/自动化代理请读 [PROJECT.AI.md](./PROJECT.AI.md) —— 它由本文件生成
 > （`node scripts/gen-project-ai.mjs`），**不要手改**；事实只在本文件维护一份。
 
-> 🔻 快照（2026-09-11）：包版本 `0.4.6-fix.1` · 主支 DSH `0.1.5-rc.2` · 测试基线 635。
+> 🔻 快照（2026-09-11）：包版本 `0.4.6-fix.1` · 主支 DSH `0.1.5-rc.2` · 测试基线 605。
 > 版本号、测试数与外部快照易腐烂，以代码、`CHANGELOG.md` 与实跑为准。
 
 ## 项目是什么
@@ -51,7 +51,7 @@ DSH 迭代很快，尤其是 0.1.2-alpha.x 之后：
 
 <!-- ai:section id="what-it-does" title="What it does" -->
 - 任务（task）：`vision_analyze`、`web_extract`、`web_crawl`、`compress_text`，以及桥接任务 `compaction`、`skill`。
-- 桥接：原生 `subagent`、`workflow` 的并行 `agent()`、skill 审计、会话压缩、图片输入桥接都透明走 AUX。
+- 桥接：skill 审计、会话压缩、图片输入桥接透明走 AUX。
 - 路由解析：显式配置 > 任务默认 > 会话主模型；每任务可配 provider/model/超时/并发/思考档位。
 - 多级降级链：`aux.tasks.<task>.models` 为有序数组（主选 → 备1 → …），失败自动降级主模型，连续失败进入冷却。
 - 平台开关：每个工具/桥接可在 `native` / `aux` 间切换，`compat` 预留。
@@ -101,7 +101,7 @@ DSH 迭代很快，尤其是 0.1.2-alpha.x 之后：
 <!-- ai:section id="bridge-patch" title="Bridge / patch system" -->
 | 补丁族 | 作用 | 当前线 |
 |---|---|---|
-| P1-P6 / P11 | agent-loop / api-session-controller / subagent schema+request / workflow / skill schema | 必需 |
+| P1-P6 / P11 | agent-loop / api-session-controller / skill schema | 必需 |
 | P7 | session append 支持 ignorable 自定义事件 | 必需 |
 | P8 | `aux/llm-call` 白名单 | 必需 |
 | P12 | v0→v1 会话迁移放行 AUX 自有 `aux/*` 事件（`dsh-session-format-v0-to-v1` 冻结词表） | 必需 |
@@ -130,7 +130,7 @@ DSH 迭代很快，尤其是 0.1.2-alpha.x 之后：
 ## 测试与质量门禁
 
 <!-- ai:section id="tests" title="Tests / quality gates" -->
-- 全量测试：`node --test tests/*.test.js`；🔻 基线 **635**（2026-09-11 快照，以实跑 `# pass/# fail` 为准，文件清单见 `TESTING.md`）。
+- 全量测试：`node --test tests/*.test.js`；🔻 基线 **605**（2026-09-11 快照，以实跑 `# pass/# fail` 为准，文件清单见 `TESTING.md`）。
 - 本机验证清代理环境：`env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy -u NODE_USE_ENV_PROXY NO_PROXY='*' no_proxy='*' node --test tests/*.test.js`。
 - CI 门禁（`.github/workflows/ci.yml` test job）：提交信息规范、ESLint（0 error）、Prettier、全量测试、`ci-doc-hygiene`、`ci-docs-index`、`gen-package-readme --check`、`gen-project-ai --check`、`ci-syntax-check`、`ci-pack-check`、`bash -n`、`ci-fake-dsh`。
 - compat job：DSH 矩阵 `[0.1.5-rc.2]`；`0.1.2-alpha.2` ~ `0.1.2-rc.1` 冻结在 legacy 分支 / `v0.4.4-legacy` Release。

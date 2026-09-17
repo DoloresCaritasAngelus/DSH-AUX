@@ -37,7 +37,6 @@ import {
   taskConcurrency,
   taskTimeoutMs,
 } from "./route.js";
-import { resolveSubagentRoute } from "./subagent-route.js";
 import { resolveVisionDelivery } from "./vision-route.js";
 import { stripThinkBlocks } from "./prompt.js";
 import {
@@ -205,8 +204,6 @@ export class AuxLlmService extends Service {
   _source;
   /** Per-task merged config, recomputed on settings change. */
   _merged;
-  /** `aux.subagent` routing settings section (bridge). */
-  _subagentSettings;
   /** Per-task semaphores keyed by task key. */
   _semaphores;
   /** Failure cooldown keyed by provider+model. */
@@ -446,14 +443,12 @@ export class AuxLlmService extends Service {
       visionFallbackToMain: true,
       showStatusChip: true,
       tasks: {},
-      subagent: {},
     };
     const merged = {};
     for (const task of AUX_TASKS) {
       merged[task] = mergeTaskConfig(this.pluginTasks[task] ?? {}, settings.tasks?.[task] ?? {});
     }
     this._merged = merged;
-    this._subagentSettings = settings.subagent ?? {};
     this.fallbackToMain = settings.fallbackToMain ?? true;
     this.forceAuxVision = settings.forceAuxVision ?? false;
     this.visionRoute = settings.visionRoute ?? "aux";
@@ -468,17 +463,10 @@ export class AuxLlmService extends Service {
       web_crawl: "aux",
       compress_text: "aux",
       imageBridge: "aux",
-      subagentBridge: "aux",
-      workflowBridge: "aux",
       compactionBridge: "aux",
       skillAudit: "aux",
     };
     this._enabled = { ...defaultEnabled, ...(settings.enabled ?? {}) };
-    this.subagentMode =
-      this._enabled.subagentBridge === "native" ? "native" : (this._subagentSettings.mode ?? "native");
-    this.subagentPrepareTools = this._subagentSettings.prepareTools !== false;
-    this.subagentIncludeWorkflow =
-      this._enabled.workflowBridge !== "native" && this._subagentSettings.includeWorkflow !== false;
     this.skillMode = settings.skill?.mode ?? "audit";
     this.debugConfig = {
       fullToolTrace: settings.debug?.fullToolTrace ?? false,
@@ -935,20 +923,6 @@ export class AuxLlmService extends Service {
       out.push(this._describeTask(key, { task: key, ...definition }, definition.label ?? key));
     }
     return out;
-  }
-
-  /**
-   * Resolve one native `subagent` call onto an AUX route. Called by the
-   * dsh-tool-subagent bridge patch (see bridge/). Returns
-   * `{ settled:false }` (run native) when subagent bridging is off or the
-   * mode's route is unconfigured.
-   * @param payload { prompt?, requiresVision?, existingAllow?, existingDeny? }
-   */
-  subagentRoute(payload) {
-    if (this._enabled?.subagentBridge === "native") {
-      return { settled: false };
-    }
-    return resolveSubagentRoute(this._subagentSettings, payload ?? {});
   }
 
   /**
