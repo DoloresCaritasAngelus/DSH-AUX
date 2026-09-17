@@ -28,11 +28,13 @@ find ~ -maxdepth 3 -type d -name "@deepseek-ai" -path "*/node_modules/*" 2>/dev/
 ls ~/.dsh/profiles/ 2>/dev/null
 # 是否已安装 / 已注册
 find <DSH_ROOT>/node_modules -maxdepth 2 -name "dsh-aux" 2>/dev/null
-grep -rn "dsh-aux" ~/.dsh/profiles/*/cordis.patch.yml 2>/dev/null
+grep -rn "dsh-aux" ~/.dsh/profiles/*/package.json 2>/dev/null   # bundle 接入(插件页可见)
+grep -rn "dsh-aux" ~/.dsh/profiles/*/cordis.patch.yml 2>/dev/null # 旧的补丁注入
 ```
 
-判定:若符号链接存在且 patch 有注册行 → 已安装,直接跳到 §3 验证;
-否则继续 §2。
+判定:若符号链接存在、且 profile 的 `dsh.profile.bundles` 已含本包 → 已安装,
+直接跳到 §3 验证;符号链接在但只有 patch 行 → 能加载但**插件页看不到**,重跑
+install.sh 即可迁移;两者都没有 → 继续 §2。
 
 ## 2. 安装
 
@@ -67,19 +69,18 @@ node apply-patch.mjs                 # image-bridge / skill 补丁(幂等)
 DSH_ROOT=<第 1 步找到的部署根,含 node_modules>
 mkdir -p "$DSH_ROOT/node_modules"
 ln -sfn /path/to/dsh-aux "$DSH_ROOT/node_modules/<NAME>"
-# 找到 profile(默认 web),在 cordis.patch.yml 末尾追加(不存在则创建):
+# 找到 profile(默认 web),把本包接成它的 bundle(有仓库时用脚本,幂等):
 PROFILE_DIR=~/.dsh/profiles/web
-mkdir -p "$PROFILE_DIR"
-cat >> "$PROFILE_DIR/cordis.patch.yml" <<'EOF'
-
-# dsh-aux: auxiliary model system (host plane row)
-- insert:
-    - id: aux
-      name: '<NAME>'
-EOF
+node <仓库>/bridge/profile-bundle.mjs --profile-dir "$PROFILE_DIR"
 ```
 
-> 注意:insert 的 `name` 必须与包名完全一致(含 scope);`id` 保持 `aux` 稳定。
+脚本会写两处 —— `dependencies[<NAME>] = "file:<仓库>/dsh-aux"` 与
+`dsh.profile.bundles += <NAME>` —— 并移除可能残留的旧 `cordis.patch.yml`
+insert 行(两层各插一行同 id 会重复)。若 profile 目录还不存在(DSH 从未跑过),
+脚本会退回写那条旧的 patch 行,等 DSH 建好 profile 后由启动自愈迁移。
+
+> 注意:手工写时 `name` 必须与包名完全一致(含 scope);`id` 保持 `aux` 稳定。
+> 只有 bundle 接入的插件才出现在 DSH 的插件页(Plugins),也只有它能在页面上启停。
 
 ## 3. 验证(必须全部通过)
 
@@ -96,6 +97,7 @@ dsh --profile web --dump-config 2>/dev/null | grep -A1 "id: aux" | head -4
 #   - 会话工具列表出现 vision_analyze / web_extract / web_crawl / compress_text
 #   - 输入 /aux status 有输出(路由与最近调用)
 #   - Web 设置页出现「辅助模型」区块
+#   - 侧栏「插件」页能看到 dsh-aux,并能开关 / 卸载它(只有 bundle 接入才会列出)
 #   - 发一张图片,模型能调用 vision_analyze 描述它(纯文本主模型经
 #     image-bridge 集成组件;多模态模型原生看图)
 #   - /aux status 显示 image-bridge 状态(已集成/缺失)
@@ -111,8 +113,9 @@ dsh --profile web --dump-config 2>/dev/null | grep -A1 "id: aux" | head -4
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | import 报 MODULE_NOT_FOUND | 符号链接未建/路径错 | 核对 `DSH_ROOT` 与 `<NAME>`,重建链接 |
-| `--dump-config` 无 aux 行 | insert 未生效 / YAML 语法错 / id 冲突 | 检查 cordis.patch.yml 缩进与 `name` 完全一致;确保插在顶层数组 |
-| 工具未注册、/aux 无响应 | 补丁层改了但未重启 | 重启 DSH(host 插件改动必须重启) |
+| `--dump-config` 无 aux 行 | bundle 未选中 / patch 行未生效 / YAML 语法错 | 核对 `dsh.profile.bundles` 含本包,或(旧式)patch 行 `name` 与包名完全一致 |
+| 插件页没有 dsh-aux | 只做了 patch 注入,没有 bundle 接入 | 重跑 `install.sh`,或 `node bridge/profile-bundle.mjs --profile-dir <profile>` |
+| 工具未注册、/aux 无响应 | 改动写在配置里但未重启 | 重启 DSH(host 插件改动必须重启) |
 | client 设置页不显示 | client bundle 未加载 | 确认 package.json 的 `dsh.client` 声明存在且 platform 为 web |
 | 重启后报插件加载错误 | 版本不匹配 | 检查 DSH 版本 = `0.1.5-rc.2`(主支单版本);`0.1.2-alpha.2 ~ 0.1.2-rc.1` 用 legacy 分支;查看启动日志(`~/dsh/dsh-web.log`) |
 | 发图报 MODEL_DOES_NOT_SUPPORT_IMAGES | 纯文本主模型 + 未装 bridge 补丁 | 可选:安装 `bridge/` 补丁(见 §6),或换多模态主模型 |
@@ -122,7 +125,9 @@ dsh --profile web --dump-config 2>/dev/null | grep -A1 "id: aux" | head -4
 ```sh
 # 1) 删符号链接
 rm "$DSH_ROOT/node_modules/<NAME>"
-# 2) 删 patch 行(删除 cordis.patch.yml 中 id: aux 的 insert 块)
+# 2) 从 profile 的 dsh.profile.bundles 移除本包(并删 dependencies 里那条
+#    file: 依赖);若当初是 patch 注入,则删 cordis.patch.yml 里 id: aux 的块。
+#    用插件页卸载同样可行(bundle 接入时)。
 # 3) 重启 DSH
 # 可选:清理图片归属记录文件 ~/.dsh/attachments/v1/session-images.json(不影响附件本体)
 ```

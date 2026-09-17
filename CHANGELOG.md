@@ -2,6 +2,22 @@
 
 ## 未发布 (Unreleased)
 
+### 变更 — AUX 改走官方 bundle 机制接入 profile(插件页可见 / 可管理)
+
+- **问题**:安装一直靠往 profile 的 `cordis.patch.yml` 追加一条 `- insert: - id: aux`。这能让插件**加载**,但 DSH 0.1.6 起的 **Plugins 页只枚举 bundle** —— 插件管理器收集的名字 = profile 选中的 bundle ∪ profile 依赖 ∪ 安装锚点依赖,patch 注入的行不在其中。于是 AUX 不出现在插件页,用户也无法在页面上启用 / 停用 / 卸载它。
+- **AUX 包本身早已合规**:它声明了 `dsh.bundle.patch`,所以不需要改包,只需要被**选进 profile**:
+  - `dependencies["@dolorescaritasangelus/dsh-aux"] = "file:<仓库>/dsh-aux"`
+  - `dsh.profile.bundles` 含该包名
+- **必须同时移除旧的 patch 注入**:bundle 层会插入 `id: aux` 那一行,补丁层再插一次就是**重复行**。迁移是精确的 —— 只摘掉本条目与它的注释,文件头注释和相邻条目(session-delete / search-tier / skill-filesystem)原样保留。
+- **新增 `bridge/profile-bundle.mjs`**:既是模块(可测的 `stripLegacyPatch` / `ensureBundleWiring` / `planProfileBundle` / `findWiredProfiles`)也是 CLI(`--profile-dir` / `--all` / `--dry-run` / `--legacy-fallback`)。幂等,重复运行不写第二份。
+- **启动自愈新增一步**:每次启动按 DSH_HOME 扫描提到本包的 profile,缺失的接线补上、残留的 patch 注入摘掉 —— 与 symlink 自愈同款,DSH 升级重写 profile 后不会再退回不可管理的状态。
+- **全新部署的兜底**:profile 目录还不存在时(DSH 从未跑过),install.sh 仍写旧式 patch 行以保证能加载;profile 一建好,下一次启动自愈就把它迁移成 bundle。
+- **一个会让 DSH 起不来的边角**:摘掉 patch 注入后,如果补丁文件里**再没有别的条目**,文件就只剩注释 —— YAML 会把它解析成 `null`,DSH 直接拒绝启动(`overlay … must be a top-level YAML array of loader patch entries`)。修法是归一:结果里没有顶层条目时补一个显式空数组 `[]`;对**上一轮已经留下的空文件**也会顺手修好。这个问题是在实验台上装完后 DSH 起不来才发现的 —— 只含 AUX 一条的补丁层(例如只挂 AUX 的干净部署)都会踩。
+- **写入前留备份**:profile 的 `package.json` / `cordis.patch.yml` 在被改写前各留一份 `*.bak-aux-<时间戳>`,安装永远可回退。
+- **可诊断**:`scripts/doctor.mjs` 现在把「已 bundle 接入」「仍走 patch 注入(插件页看不到)」「两层同时存在(会重复行)」分成三档报出,不再只看 patch 里有没有 `id: aux`。
+- **测试基线** 603 → 611。
+
+
 ### 修复 — 客户端图片槽与 DSH 0.1.6 官方槽撞名,导致整站无法进入
 
 - **症状**:在 0.1.6-alpha.2 上,web 界面停在 `Failed to load plugins` / `web boot: 1 entry did not activate` / `@dolorescaritasangelus/dsh-aux: failed`,**主应用永不挂载** —— 也就是整个界面进不去。服务层完全正常(进程、3080 鉴权、host 日志都干净):失败只存在于浏览器端的 `client-modules` 状态里,不写 host 日志。

@@ -52,8 +52,7 @@ case "$PACKAGE_NAME" in
   *) echo "错误: 包名格式不合法: $PACKAGE_NAME" >&2; exit 1 ;;
 esac
 NODE_MODULES="$DSH_ROOT/node_modules"
-PROFILE_DIR="$HOME/.dsh/profiles/$PROFILE"
-PATCH_FILE="$PROFILE_DIR/cordis.patch.yml"
+PROFILE_DIR="${DSH_HOME:-$HOME/.dsh}/profiles/$PROFILE"
 
 echo "== dsh-aux 一键安装 =="
 echo "  部署根: $DSH_ROOT"
@@ -66,6 +65,13 @@ run() {
   if [ "$DRY" = false ]; then "$@"; fi
 }
 
+# 会自报改动的步骤:dry-run 时把 --dry-run 透传给子命令,而不是整条跳过,
+# 这样预演也能看到"会改哪几处"。
+run_report() {
+  echo ">> $*"
+  if [ "$DRY" = true ]; then "$@" --dry-run; else "$@"; fi
+}
+
 # 2. 插件符号链接
 TARGET="$NODE_MODULES/$PACKAGE_NAME"
 if [ -L "$TARGET" ] || [ -d "$TARGET" ]; then
@@ -76,20 +82,13 @@ else
   run ln -s "$HERE/dsh-aux" "$TARGET"
 fi
 
-# 3. profile 补丁层注册
-mkdir -p "$PROFILE_DIR"
-if grep -q "id: aux" "$PATCH_FILE" 2>/dev/null; then
-  echo "  补丁层已注册 aux(跳过)"
-else
-  # 用位置参数传递 PATCH_FILE/PACKAGE_NAME,避免外层 shell 拼接注入。
-  run bash -c 'cat >> "$1" <<EOF
-
-# dsh-aux: auxiliary model system (host plane row)
-- insert:
-    - id: aux
-      name: "$2"
-EOF' _ "$PATCH_FILE" "$PACKAGE_NAME"
-fi
+# 3. profile bundle 接线(官方机制)
+#    AUX 的 package.json 已声明 dsh.bundle.patch;把它选成 profile 的 bundle 后,
+#    插件管理器才看得到 AUX(可在插件页启停 / 卸载)。旧安装写下的
+#    cordis.patch.yml insert 行会被移除 —— 否则 bundle 层与补丁层各插一行同
+#    id 的 aux,成为 loader 重复行。幂等:已接线时只报告。
+echo "  [profile] 以 bundle 方式接入 profile(幂等;会移除旧的 patch 注入)..."
+run_report node "$HERE/bridge/profile-bundle.mjs" --profile-dir "$PROFILE_DIR" --legacy-fallback
 
 # 4. image-bridge 补丁(集成组件,幂等,v1 自动升级 v2)
 echo "  [image-bridge] 应用核心包补丁(幂等)..."

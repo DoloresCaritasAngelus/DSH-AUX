@@ -9,13 +9,14 @@
  *   1. 复制 workspace 的 node_modules/@deepseek-ai 真实 DSH 包,构造临时 fake 部署根
  *      (用副本而非 symlink:补丁写入落在临时目录,不污染 workspace);
  *   2. 写最小 start-dsh.sh 桩(含 install-start-hook 可识别的启动行);
- *   3. HOME 指向临时 fake home(profile 补丁层写入被隔离),真跑 ./install.sh --dsh-root <fake>;
- *   4. 断言:symlink / profile 补丁层注册 / start-hook 标记 / doctor 全绿;
+ *   3. HOME 指向临时 fake home(profile 写入被隔离),真跑 ./install.sh --dsh-root <fake>;
+ *   4. 断言:symlink / profile 以 bundle 接入 aux 且无残留 patch 注入 / start-hook 标记 / doctor 全绿;
  *   5. 真跑 ./update.sh --no-pull --dsh-root <fake>,断言幂等(二次安装不破坏)。
  *
  * 零第三方依赖。仅在 CI/一次性临时目录运行;绝不针对真实 DSH 部署。
  */
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { stripLegacyPatch } from "../bridge/profile-bundle.mjs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -39,7 +40,10 @@ cpSync(join(REPO, "node_modules", "@deepseek-ai"), join(DSH_ROOT, "node_modules"
 });
 writeFileSync(join(DSH_ROOT, "start-dsh.sh"), '#!/bin/bash\ncd "$HOME/dsh"\nexec npx @deepseek-ai/dsh web\n');
 
+// DSH_HOME must not leak in: install.sh falls back to it before HOME, so an
+// exported DSH_HOME would point this smoke test at the real ~/.dsh profile.
 const env = { ...process.env, HOME: FAKE_HOME, DSH_ROOT };
+delete env.DSH_HOME;
 const run = (label, cmd, args) => {
   const r = spawnSync(cmd, args, { cwd: REPO, env, encoding: "utf8" });
   if (r.status !== 0) {
@@ -51,7 +55,25 @@ const run = (label, cmd, args) => {
   console.log(`✅ ${label}`);
 };
 
-// 2. 真跑用户安装路径(install.sh 内部会:建 symlink、注册 profile 补丁层、
+// 1.5 模拟「DSH 已经跑过一次」:web profile 的 package.json 由 DSH 建立,
+//     dsh-aux 的安装发生在它之后——这是用户真实旅程(全新部署时 install.sh
+//     会退回写 profile 补丁,等 profile 就绪后由启动自愈迁移成 bundle)。
+const PROFILE_DIR = join(FAKE_HOME, ".dsh", "profiles", "web");
+mkdirSync(PROFILE_DIR, { recursive: true });
+writeFileSync(
+  join(PROFILE_DIR, "package.json"),
+  JSON.stringify(
+    {
+      name: "dsh-profile-web",
+      private: true,
+      dsh: { profile: { bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"] } },
+    },
+    null,
+    2,
+  ) + "\n",
+);
+
+// 2. 真跑用户安装路径(install.sh 内部会:建 symlink、把 aux 接成 profile bundle、
 //    apply-patch + session-ignorable、写 start-hook)
 run("install.sh --dsh-root", "bash", ["./install.sh", "--dsh-root", DSH_ROOT]);
 
@@ -62,8 +84,16 @@ run("self-heal(模拟启动自愈)", process.execPath, ["bridge/self-heal.mjs"])
 // 3. 断言
 const AUX_TARGET = join(DSH_ROOT, "node_modules", "@dolorescaritasangelus", "dsh-aux");
 if (!existsSync(AUX_TARGET)) fail(`插件 symlink 未创建: ${AUX_TARGET}`);
-const profile = readFileSync(join(FAKE_HOME, ".dsh/profiles/web/cordis.patch.yml"), "utf8");
-if (!profile.includes("id: aux")) fail("profile 补丁层未注册 aux");
+const packageName = JSON.parse(readFileSync(join(REPO, "dsh-aux/package.json"), "utf8")).name;
+const manifest = JSON.parse(readFileSync(join(PROFILE_DIR, "package.json"), "utf8"));
+if (!Array.isArray(manifest?.dsh?.profile?.bundles) || !manifest.dsh.profile.bundles.includes(packageName)) {
+  fail("profile 未把 aux 选成 bundle(插件页会看不到它)");
+}
+if (typeof manifest?.dependencies?.[packageName] !== "string") fail("profile dependencies 缺少 aux 的 file: 依赖");
+const patchPath = join(PROFILE_DIR, "cordis.patch.yml");
+if (existsSync(patchPath) && stripLegacyPatch(readFileSync(patchPath, "utf8"), packageName).removed) {
+  fail("profile 仍保留 aux 的 patch 注入 —— 与 bundle 层会重复行");
+}
 const startSh = readFileSync(join(DSH_ROOT, "start-dsh.sh"), "utf8");
 if (!startSh.includes("dsh-aux self-heal")) fail("start-hook 未写入 start-dsh.sh");
 
