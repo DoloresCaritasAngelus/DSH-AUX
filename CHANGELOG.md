@@ -2,6 +2,8 @@
 
 ## 未发布 (Unreleased)
 
+## 0.4.6-fix.2 (2026-09-18) — 客户端图片槽撞名修复 + AUX 改走官方 bundle 接入
+
 ### 变更 — AUX 改走官方 bundle 机制接入 profile(插件页可见 / 可管理)
 
 - **问题**:安装一直靠往 profile 的 `cordis.patch.yml` 追加一条 `- insert: - id: aux`。这能让插件**加载**,但 DSH 0.1.6 起的 **Plugins 页只枚举 bundle** —— 插件管理器收集的名字 = profile 选中的 bundle ∪ profile 依赖 ∪ 安装锚点依赖,patch 注入的行不在其中。于是 AUX 不出现在插件页,用户也无法在页面上启用 / 停用 / 卸载它。
