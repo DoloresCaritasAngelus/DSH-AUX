@@ -18,7 +18,9 @@
  *      "aux/llm-call";
  *   5. P12/P13:v0 冻结词表(dsh-session-format-v0-to-v1)放行 aux/* 事件与官方
  *      历史写法,否则 0.1.5 打不开含这些事件的历史会话;
- *   6. 旧版 rc.6 settings 补丁(P9/P10)已退役,见 bridge/retired/,主支不再调用。
+ *   6. 旧版 rc.6 settings 补丁(P9/P10)已退役,见 bridge/retired/,主支不再调用;
+ *   7. profile bundle 接线:把 AUX 选进 profile 的 dsh.profile.bundles(插件页
+ *      才看得到、才能在页面上启停/卸载),并移除旧的 cordis.patch.yml insert 行。
  *
  * 用法:
  *   node bridge/self-heal.mjs            # 实际自愈(写盘)
@@ -36,10 +38,17 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deployedFile, guardPackageFile, guardTarget } from "./target.js";
 import { planFormatV0Patch } from "./format-admissions.mjs";
+import {
+  CALLER_DSH_ROOT,
+  describePlan,
+  findWiredProfiles,
+  planProfileBundle,
+  readPackageName,
+} from "./profile-bundle.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url)); // <repo>/bridge
 const REPO = resolve(HERE, "..");
@@ -274,6 +283,58 @@ function ensureFormatAdmissions(root) {
   log(`P12/P13 已应用: ${plan.applied.join(", ")}`);
 }
 
+/**
+ * Profile bundle 接线(幂等):让 AUX 被 profile 以**官方 bundle 机制**选中,
+ * 而不是只靠 cordis.patch.yml 的 insert 行 —— 后者能让插件加载,但插件管理器
+ * 枚举的是 bundle,于是 AUX 不出现在插件页,用户也无法在页面上启停/卸载。
+ * 迁移时会移除那条旧 insert,否则 bundle 层与补丁层各插一行同 id 的 aux。
+ */
+function ensureProfileBundle() {
+  // Never guess the profile home. A caller that pinned DSH_ROOT (a test, a fake
+  // deployment, a non-default root) must also name a profile home that belongs to
+  // that root — otherwise this step would rewrite the user's real ~/.dsh.
+  // DSH_AUX_PROFILE_HOME is the documented escape hatch for a deployment whose
+  // profile home legitimately lives outside its root.
+  const explicit = process.env.DSH_AUX_PROFILE_HOME;
+  const pinnedRoot = CALLER_DSH_ROOT ?? "";
+  let dshHome = process.env.DSH_HOME;
+  if (explicit !== void 0 && explicit !== "") {
+    dshHome = explicit;
+  } else if (pinnedRoot === "") {
+    if (dshHome === void 0 || dshHome === "") dshHome = join(process.env.HOME ?? "", ".dsh");
+  } else if (dshHome === void 0 || dshHome === "") {
+    log("profile-bundle: 钉了 DSH_ROOT 但没给 DSH_HOME —— 跳过 profile 接线(避免误改真实 profile 目录)");
+    return;
+  } else {
+    const rel = relative(resolve(pinnedRoot), resolve(dshHome));
+    if (rel.startsWith("..") || isAbsolute(rel)) {
+      log(
+        "profile-bundle: DSH_HOME(" +
+          dshHome +
+          ")不在 DSH_ROOT(" +
+          pinnedRoot +
+          ")之内 —— 跳过(这对组合通常是测试/假根配到了真实 profile;确需接线请设 DSH_AUX_PROFILE_HOME)",
+      );
+      return;
+    }
+  }
+  const packageName = readPackageName();
+  const profiles = findWiredProfiles(dshHome, packageName);
+  if (profiles.length === 0) {
+    log("profile-bundle: DSH_HOME 下没有提到本包的 profile,跳过");
+    return;
+  }
+  for (const dir of profiles) {
+    const report = planProfileBundle({
+      profileDir: dir,
+      packageName,
+      packageDir: join(REPO, "dsh-aux"),
+      dryRun: DRY,
+    });
+    log("profile-bundle " + describePlan(report));
+  }
+}
+
 function main() {
   const root = detectDshRoot();
   if (!root) {
@@ -293,6 +354,7 @@ function main() {
     }
   };
   step("symlink", () => ensureSymlink(root));
+  step("profile-bundle", () => ensureProfileBundle());
   step("P1-P6/P11", () => {
     log("重跑 P1-P6/P11 桥接补丁(幂等)...");
     runNode(join(HERE, "apply-patch.mjs"));

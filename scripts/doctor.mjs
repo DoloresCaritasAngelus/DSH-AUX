@@ -5,7 +5,7 @@
  * 检查:
  *   1. DSH 部署根是否可探测;
  *   2. dsh-aux symlink 是否在;
- *   3. web profile 是否注册 aux;
+ *   3. web profile 是否把 aux 接成 bundle(插件页可见性依赖它);
  *   4. P1-P8/P11 bridge 补丁是否都已打(通过 apply-patch --dry-run 判断);
  *   5. P7 session ignorable 是否已打;
  *   6. P8 aux/llm-call 白名单是否在;
@@ -21,9 +21,11 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { overlayProblem, readPackageName, stripLegacyPatch } from "../bridge/profile-bundle.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
+const PACKAGE_NAME = readPackageName(join(REPO, "dsh-aux"));
 
 /** 主支支持线以 compat.json 为单一真相源(与 CI 矩阵、README、TESTING 同源)。 */
 const COMPAT = JSON.parse(readFileSync(join(REPO, "compat.json"), "utf8"));
@@ -88,17 +90,50 @@ function main() {
       );
     }
 
-    // 2. profile patch
-    const patchFile = join(process.env.HOME, ".dsh/profiles", PROFILE, "cordis.patch.yml");
-    if (!existsSync(patchFile)) {
-      record("ERROR", "profile", `profile 补丁文件缺失: ${patchFile}`);
-    } else {
-      const patch = readFileSync(patchFile, "utf8");
+    // 2. profile bundle 接入 —— 插件管理器只枚举 bundle,所以这既是"能不能加载",
+    //    也是"插件页看不看得到、能不能在页面上启停/卸载"。
+    const dshHome = process.env.DSH_HOME ?? join(process.env.HOME ?? "", ".dsh");
+    const profileDir = join(dshHome, "profiles", PROFILE);
+    const manifestFile = join(profileDir, "package.json");
+    let selected = false;
+    let dependency = false;
+    let manifestRead = false;
+    if (existsSync(manifestFile)) {
+      try {
+        const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
+        selected =
+          Array.isArray(manifest?.dsh?.profile?.bundles) && manifest.dsh.profile.bundles.includes(PACKAGE_NAME);
+        dependency = typeof manifest?.dependencies?.[PACKAGE_NAME] === "string";
+        manifestRead = true;
+      } catch {
+        manifestRead = false;
+      }
+    }
+    const patchFile = join(profileDir, "cordis.patch.yml");
+    const patchText = existsSync(patchFile) ? readFileSync(patchFile, "utf8") : "";
+    const legacyInsert = stripLegacyPatch(patchText, PACKAGE_NAME).removed;
+    // DSH refuses an overlay that is not a top-level array, so a comment-only (or
+    // empty) patch file is a hard failure — the same class of failure this
+    // migration exists to prevent.
+    const overlayIssue = existsSync(patchFile) ? overlayProblem(patchText) : void 0;
+    if (!manifestRead) {
+      record("ERROR", "profile", `profile 清单缺失或不可解析: ${manifestFile}`);
+    } else if (overlayIssue !== void 0) {
+      record("ERROR", "profile", `profile ${PROFILE} 的补丁层会被 DSH 拒绝(${overlayIssue})`);
+    } else if (selected && legacyInsert) {
+      record("ERROR", "profile", `profile ${PROFILE} 同时有 bundle 声明与 patch 注入 —— loader 会重复行`);
+    } else if (!selected) {
       record(
-        patch.includes("id: aux") ? "OK" : "ERROR",
+        "ERROR",
         "profile",
-        patch.includes("id: aux") ? `profile ${PROFILE} 已注册 aux` : `profile ${PROFILE} 未注册 aux`,
+        legacyInsert
+          ? `profile ${PROFILE} 仍走 patch 注入:插件能加载,但插件页看不到它`
+          : `profile ${PROFILE} 未接入 aux`,
       );
+    } else if (!dependency) {
+      record("WARN", "profile", `profile ${PROFILE} 已选 aux bundle,但 dependencies 里没有它`);
+    } else {
+      record("OK", "profile", `profile ${PROFILE} 已以 bundle 接入 aux(插件页可见)`);
     }
 
     // 3. bridge patches dry-run

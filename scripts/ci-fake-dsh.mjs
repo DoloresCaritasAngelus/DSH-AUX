@@ -21,6 +21,7 @@
  * real DSH deployment or a node_modules you need to keep pristine.
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from "node:fs";
+import { readPackageName } from "../bridge/profile-bundle.mjs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,7 +47,10 @@ function run(label, scriptRel, extraArgs = []) {
   const args2 = APPLY ? extraArgs : [...extraArgs, "--dry-run"];
   const res = spawnSync(process.execPath, [script, ...args2], {
     cwd: REPO,
-    env: { ...process.env, DSH_ROOT: ROOT, HOME: FAKE_HOME },
+    // DSH_HOME must point inside the fake root too: self-heal refuses to touch a
+    // profile home it was not told about, and a leaked real DSH_HOME would make
+    // this smoke test write the user's own profile.
+    env: { ...process.env, DSH_ROOT: ROOT, DSH_HOME: join(FAKE_HOME, ".dsh"), HOME: FAKE_HOME },
     encoding: "utf8",
   });
   console.log(`\n== ${label} ==`);
@@ -82,9 +86,28 @@ function setupFakeRoot() {
   mkdirSync(join(ROOT, "node_modules/@dolorescaritasangelus"), { recursive: true });
   symlinkSync(join(REPO, "dsh-aux"), join(ROOT, "node_modules/@dolorescaritasangelus/dsh-aux"), "dir");
 
-  // fake user profile used by scripts/doctor.mjs
+  // Fake user profile used by scripts/doctor.mjs: an already-wired bundle
+  // profile (what install.sh writes), with an unrelated patch entry left in the
+  // patch layer to prove doctor only objects to our own legacy insert.
+  const packageName = readPackageName(join(REPO, "dsh-aux"));
   mkdirSync(join(FAKE_HOME, ".dsh/profiles/web"), { recursive: true });
-  writeFileSync(join(FAKE_HOME, ".dsh/profiles/web/cordis.patch.yml"), "id: aux\n");
+  writeFileSync(
+    join(FAKE_HOME, ".dsh/profiles/web/package.json"),
+    JSON.stringify(
+      {
+        name: "fake-profile",
+        private: true,
+        dependencies: { [packageName]: "file:" + join(REPO, "dsh-aux") },
+        dsh: { profile: { bundles: ["@deepseek-ai/dsh-base", packageName] } },
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  writeFileSync(
+    join(FAKE_HOME, ".dsh/profiles/web/cordis.patch.yml"),
+    "- insert:\n    - id: other\n      name: 'other-pkg'\n",
+  );
 
   // fake start script so doctor's start-hook check can be satisfied
   writeFileSync(join(ROOT, "start-dsh.sh"), "#!/bin/bash\n# dsh-aux self-heal\n");
@@ -93,7 +116,9 @@ function setupFakeRoot() {
 function runDoctor() {
   const res = spawnSync(process.execPath, [join(REPO, "scripts/doctor.mjs"), "--dsh-root", ROOT, "--json"], {
     cwd: REPO,
-    env: { ...process.env, DSH_ROOT: ROOT, HOME: FAKE_HOME },
+    // Same isolation as run(): doctor reads the profile through DSH_HOME, so an
+    // inherited real one would make this gate validate the developer's profile.
+    env: { ...process.env, DSH_ROOT: ROOT, DSH_HOME: join(FAKE_HOME, ".dsh"), HOME: FAKE_HOME },
     encoding: "utf8",
   });
   console.log("\n== doctor ==");

@@ -1,7 +1,10 @@
 # dsh-aux bundle layer: inserts the auxiliary-model system plugin row.
-# Loaded via `dsh plugin --profile <name> add <path-or-spec>` (the row id stays
-# stable so re-adds and profile patches can target it), or manually appended to
-# the profile's cordis.patch.yml.
+# Selected through the profile's `dsh.profile.bundles` —— either
+# `dsh plugin --profile <name> add <path-or-spec>` or
+# `node bridge/profile-bundle.mjs --profile-dir <profile dir>`. The row id stays
+# stable so re-adds and profile patches can target it.
+# Do NOT also append this block to the profile's cordis.patch.yml: the bundle
+# layer and the patch layer would then insert the same id twice.
 - insert:
     - id: aux
       name: "@dolorescaritasangelus/dsh-aux"
