@@ -134,7 +134,7 @@ export function registerAuxTools(service) {
                       // Failed entries only: the machine-readable reason.
                       // `code` is the AUX failure kind (route.js
                       // classifyFailure), `retryable` mirrors the in-tool
-                      // retry decision (rate-limit/timeout/connection).
+                      // retry decision (rate-limit/connection/server).
                       error: {
                         type: "object",
                         additionalProperties: false,

@@ -34,8 +34,9 @@ async function mapWithConcurrency(items, limit, fn) {
   return results;
 }
 
-/** Delay before the single automatic retry (ms): a rate-limited or timed-out
- * route usually needs a moment, and an immediate repeat mostly fails again. */
+/** Delay before the single automatic retry (ms): a rate-limited or server-side
+ * failure usually needs a moment, and an immediate repeat mostly fails again.
+ * (A timeout is never retried — see isRetryableFailure.) */
 const RETRY_DELAY_MS = 250;
 
 /** Abortable delay: resolves early when the caller cancels. */

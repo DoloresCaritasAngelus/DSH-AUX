@@ -57,7 +57,16 @@ export declare function resolvePrimaryRoute(
 
 /** Failure classification codes. */
 export type AuxFailureKind =
-  "aborted" | "timeout" | "rate-limit" | "auth" | "payment" | "model-not-found" | "connection" | "content" | "other";
+  | "aborted"
+  | "timeout"
+  | "rate-limit"
+  | "auth"
+  | "payment"
+  | "model-not-found"
+  | "server"
+  | "connection"
+  | "content"
+  | "other";
 
 /** Classify an auxiliary call failure. */
 export declare function classifyFailure(error: unknown, signal?: AbortSignal): AuxFailureKind;
