@@ -17,13 +17,7 @@
  *     的 vision_analyze 工具(imagePath 参数)把图片交给辅助视觉模型。
  *  2) @deepseek-ai/dsh-api-session-controller(prompt):alpha.x 接管图片
  *     能力门控,这里移除其"不支持图片输入的模型不能接收图片"的拦截。
- *  3) @deepseek-ai/dsh-tool-subagent(schema):为 subagent 工具增加
- *     可选的 `requires_vision` 参数(native 透明接管用)。
- *  4) @deepseek-ai/dsh-tool-subagent(request):executed 时读取
- *     `ctx.auxLlm.subagentRoute()` 注入 agentOptions/toolFilter。
- *  5) @deepseek-ai/dsh-workflow-worker-thread(startChild):让 workflow
- *     `agent()` 扇出的子代理同样走 AUX 子代理路由(includeWorkflow 门控)。
- *  6) @deepseek-ai/dsh-tool-skill(schema):为 skill 工具增加可选 `task`
+ *  3) @deepseek-ai/dsh-tool-skill(schema):为 skill 工具增加可选 `task`
  *     参数,供技能预审桥接读取主模型意图。
  *
  * 用法:
@@ -76,20 +70,6 @@ const AGENT_LOOP_FILE = guardTarget(
     "../../../node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js",
   ),
   "dsh-image-bridge",
-);
-const SUBAGENT_TOOL_FILE = guardTarget(
-  deployedFile(
-    "../../../@deepseek-ai/dsh-tool-subagent/lib/index.js",
-    "../../../node_modules/@deepseek-ai/dsh-tool-subagent/lib/index.js",
-  ),
-  "dsh-subagent-bridge",
-);
-const WORKFLOW_ENGINE_FILE = guardTarget(
-  deployedFile(
-    "../../../@deepseek-ai/dsh-workflow-worker-thread/lib/index.js",
-    "../../../node_modules/@deepseek-ai/dsh-workflow-worker-thread/lib/index.js",
-  ),
-  "dsh-workflow-bridge",
 );
 const SKILL_TOOL_FILE = guardTarget(
   deployedFile(
@@ -266,67 +246,6 @@ const TARGETS = [
       },
     ],
     patched: await readFile(join(HERE, "patched-session-controller-prompt-block.txt"), "utf8"),
-    backupPrefix: BACKUP_PREFIX,
-  },
-  {
-    label: "dsh-tool-subagent (schema)",
-    file: SUBAGENT_TOOL_FILE,
-    mark: "requires_vision",
-    states: [
-      { name: "patched", detect: (d) => d.includes("requires_vision:"), action: "skip" },
-      {
-        name: "original-alpha2",
-        detect: (d) =>
-          d.includes("Adapter-owned reasoning effort for the effective child route.") ||
-          d.includes("providerRouteDefaults !== void 0"),
-        block: await readFile(join(HERE, "orig-subagent-schema-alpha2-block.txt"), "utf8"),
-        replacement: await readFile(join(HERE, "patched-subagent-schema-alpha2-block.txt"), "utf8"),
-        action: "replace",
-      },
-    ],
-    patched: await readFile(join(HERE, "patched-subagent-schema-alpha2-block.txt"), "utf8"),
-    backupPrefix: BACKUP_PREFIX,
-  },
-  {
-    label: "dsh-tool-subagent (request)",
-    file: SUBAGENT_TOOL_FILE,
-    mark: 'ctx.get("auxLlm")',
-    states: [
-      {
-        name: "patched",
-        detect: (d) => d.includes('ctx.get("auxLlm")') && d.includes("subagentRoute"),
-        action: "skip",
-      },
-      {
-        name: "original-alpha2",
-        detect: (d) =>
-          d.includes("...requestedChildAgentOptions !== void 0 ? { agentOptions: requestedChildAgentOptions } : {}"),
-        block: await readFile(join(HERE, "orig-subagent-request-alpha2-block.txt"), "utf8"),
-        replacement: await readFile(join(HERE, "patched-subagent-request-alpha2-block.txt"), "utf8"),
-        action: "replace",
-      },
-    ],
-    patched: await readFile(join(HERE, "patched-subagent-request-alpha2-block.txt"), "utf8"),
-    backupPrefix: BACKUP_PREFIX,
-  },
-  {
-    label: "dsh-workflow-worker-thread",
-    file: WORKFLOW_ENGINE_FILE,
-    mark: "subagentIncludeWorkflow",
-    states: [
-      {
-        name: "patched",
-        detect: (d) => d.includes("subagentIncludeWorkflow") && d.includes("subagentRoute"),
-        action: "skip",
-      },
-      {
-        name: "original",
-        detect: (d) => d.includes("run = await this.subagents.start(this.provider, {"),
-        block: await readFile(join(HERE, "orig-workflow-startchild-block.txt"), "utf8"),
-        action: "replace",
-      },
-    ],
-    patched: await readFile(join(HERE, "patched-workflow-startchild-block.txt"), "utf8"),
     backupPrefix: BACKUP_PREFIX,
   },
   {

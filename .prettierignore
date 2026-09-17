@@ -8,6 +8,9 @@ package-lock.json
 # 已退役的历史补丁脚本(保持冻结原样)
 bridge/retired/
 
+# 退役归档区(冻结原文,不再格式化)
+retired/
+
 # 图片资源
 assets/
 

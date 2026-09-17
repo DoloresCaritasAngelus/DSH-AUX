@@ -18,8 +18,8 @@
 | [IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md](./IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md) | 🔵 已实现(保留作回执) | 计划已随 0.4.2 执行完毕;原状态头"待执行"已腐烂 | 代码 `dsh-aux/src/images/**` + CHANGELOG 0.4.2 | 图库扩展为资产库、或再次需要并行任务编排时 |
 | [SESSION-ATTACHMENT-GC.md](./SESSION-ATTACHMENT-GC.md) | 🔵 已实现(保留作回执) | 功能 2026-08-14 落地,文档停更 | 代码 `dsh-aux/src/images/**` + CHANGELOG 0.1.2 | 附件对象库结构或 `session/disposed` 语义变化时 |
 | [VISION-AGENT.md](./VISION-AGENT.md) | 🔵 已实现(保留作回执) | 策略已定稿落地;记忆职责移交 image-memory | 代码 `dsh-aux/src/images/memory.js` + 根 README 的 vision 章节 | 视觉子代理策略或记忆方案再次变化时 |
-| [SUBAGENT-BRIDGE.md](./SUBAGENT-BRIDGE.md) | 🔵 已实现(保留作回执) | 桥接随 v0.3.0 上线,文档停更 | 代码 `dsh-aux/src/subagent-bridge.js` + 根 README 的子代理章节 | 子代理路由语义再次改动时 |
-| [WORKFLOW-BRIDGE.md](./WORKFLOW-BRIDGE.md) | 🔵 已实现(保留作回执) | `aux.subagent.includeWorkflow` 已上线(默认 true) | 代码 `dsh-aux/src/index.js` + `config.js` | workflow 引擎或子代理路由再次改动时 |
+| [SUBAGENT-BRIDGE.md](./SUBAGENT-BRIDGE.md) | 🗄 已归档 | **功能 2026-09-17 退役**(官方 DSH 原生已具备子代理模型选择);代码与补丁移入 `retired/subagent-bridge/` | `retired/subagent-bridge/` + 官方 `dsh-tool-subagent` 原生能力 | 仅作对照,不据此恢复 |
+| [WORKFLOW-BRIDGE.md](./WORKFLOW-BRIDGE.md) | 🗄 已归档 | **功能 2026-09-17 退役**(同 SUBAGENT-BRIDGE,该补丁唯一目的就是给 workflow 扇出的子代理改路由) | `retired/subagent-bridge/` | 仅作对照,不据此恢复 |
 | [PRD.md](./PRD.md) | ⬜ 历史 | 三任务时代的 v1 需求规格,缺 web_crawl / 桥接 / 平台化转向 | PROJECT.md + `docs/design/` | 仅史料,不再回看 |
 | [UPSTREAM-PR.md](./UPSTREAM-PR.md) | 🗄 已归档 | 上游 DSH 开源(MIT)但不开放 Issues/PR,"提上游合入"路径不存在 | `docs/design/upstream-requests.md`(草稿)+ `bridge/` 补丁台账 | 上游开放 Issue/PR 通道时 |
 | [COMPARISON.md](./COMPARISON.md) | ⬜ 历史 | 所比对象与结论停留在 2026-08-17 快照 | 根 README 的能力说明 + CREDITS.md | 再次做同类插件对比时 |

@@ -9,7 +9,7 @@
 > Whenever you need me, just call me directly～
 
 ![Version](https://img.shields.io/badge/version-0.4.6-fix.1-blue)
-![Tests](https://img.shields.io/badge/tests-635-brightgreen)
+![Tests](https://img.shields.io/badge/tests-605-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.5--rc.2-0078D4)
 
@@ -18,7 +18,6 @@
 # dsh-aux — Auxiliary Model System for DSH
 
 > Give the main agent a "co-pilot": **vision analysis, web extraction, and long-text compression** are handled by a separate auxiliary LLM, so the main model stays focused on the conversation.
-> It can also transparently take over your existing `subagent` / `workflow` calls—**without creating extra sub-agents** and without stealing the main model's conversation.
 
 > 💬 "Leave these chores to me, and you just enjoy the chat~"
 
@@ -62,7 +61,6 @@ Models keep getting stronger, but handing "look at this image", "read this page"
 | **Unified routing & fallback** | Per-task model/timeout/concurrency; fallback to the main model on failure, cooldown after repeated failures |
 | **Platform switches** | Each tool/bridge can be `native` / `aux`; `compat` is reserved for the future |
 | **SKILL audit** | Four modes: `native` / `audit` / `report` / `report-ondemand` |
-| **Subagent / workflow bridge** | Native `subagent` and parallel `agent()` children of `workflow` transparently use AUX |
 | **Skill pre-audit bridge** | An auxiliary model reads SKILL.md + current task first and returns a pre-audit report |
 | **Compaction bridge** | With a `compaction` task configured, native auto/manual compaction routes through AUX |
 | **Settings + status panel** | Grouped and collapsible, bilingual; full platform status, patch diagnostics, one-click repair, and restart detection |
@@ -144,7 +142,7 @@ This is the core v0.4.0 experience: AUX is no longer "automatic but opaque"—it
 | `aux` | AUX on; use our implementation / bridge |
 | `compat` | **Reserved for the future**, currently unavailable and disabled in the UI |
 
-Applies to: `vision_analyze`, `web_extract`, `web_crawl`, `compress_text`, `imageBridge`, `subagentBridge`, `workflowBridge`, `compactionBridge`, `skillAudit`.
+Applies to: `vision_analyze`, `web_extract`, `web_crawl`, `compress_text`, `imageBridge`, `compactionBridge`, `skillAudit`.
 
 > 💬 "Don't want me in the way? One click back to native~"
 
@@ -244,7 +242,7 @@ See [IMAGE-LIBRARY-CONTRACT.md](https://github.com/DoloresCaritasAngelus/DSH-AUX
 
 ### Why look here first?
 
-Some AUX bridges need platform patches to work fully (`image-bridge`, `subagent` / `workflow`, `compaction`, `skill`, etc.). The old experience led users into two traps:
+Some AUX bridges need platform patches to work fully (`image-bridge`, `compaction`, `skill`, etc.). The old experience led users into two traps:
 
 - not knowing whether a patch is actually required;
 - not knowing whether their patch is actually installed.
@@ -270,7 +268,7 @@ This settings page turns both into **visible status**: it tells you each tool/br
 
 ### What else the settings page can do
 
-Web → Settings → Auxiliary Models. Configure per-task model, timeout, concurrency, `maxChars`, and **reasoning effort** for `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. The page is grouped into collapsible "Tool Tasks / Bridge Tasks / Subagents / Global / Platform Switches" sections and follows the DSH language (zh/en).
+Web → Settings → Auxiliary Models. Configure per-task model, timeout, concurrency, `maxChars`, and **reasoning effort** for `vision` / `web_extract` / `web_crawl` / `compress` / `compaction` / `skill`. The page is grouped into collapsible "Tool Tasks / Bridge Tasks / Global / Platform Switches" sections and follows the DSH language (zh/en).
 
 - **Status chip**: the composer shows the latest auxiliary call (task, duration, whether it fell back).
 - **Diagnostics & repair**: each tool/bridge shows a status dot, patch badge, and unavailable reason; missing patches can be re-applied in one click, with restart detection after writing.
@@ -279,35 +277,6 @@ Web → Settings → Auxiliary Models. Configure per-task model, timeout, concur
 - **Privacy**: you can turn off "Show auxiliary model status chip in conversation UI"; when off, the `aux-status` projection is no longer exposed to Web/third-party readers, while `/aux status` still works.
 
 ## Bridges & advanced capabilities
-
-### Subagent / workflow bridge
-
-The native `subagent` tool and the parallel `agent()` children fanned out by `workflow` are **transparently bridged** to AUX—you keep using `subagent` / `workflow` as usual, but the actual work is done by the AUX auxiliary model. **Zero new tools, zero system-prompt changes.**
-
-| Mode | Which model subagents use |
-|---|---|
-| `native` (default) | No interception; fully native / main-model behavior |
-| `manual` | All subagents use the `subagent.general` model |
-| `vision-aware` | Uses `subagent.vision` when vision is needed, otherwise `general` |
-
-> 💬 "Hand your subagents to me too—I won't talk over them, just help~"
-
-<details>
-<summary><b>Subagent config example (click to expand)</b></summary>
-
-```yaml
-aux:
-  subagent:
-    mode: vision-aware        # native | manual | vision-aware
-    general: { provider: opencode-go, model: glm-5.2, reasoningEffort: high }
-    vision:  { provider: opencode-go, model: kimi-k2.7-code, reasoningEffort: high }
-    includeWorkflow: true      # workflow parallel agent() children also use AUX
-    prepareTools: true         # inject vision_analyze etc. into subagents as a fallback
-    visionKeywords: [ "image", "picture", "screenshot" ]
-    retryVisionWithAux: false  # reserved experimental config, not implemented yet
-```
-
-</details>
 
 ### Skill pre-audit bridge (skill-audit)
 
@@ -376,7 +345,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are official DSH packages plus the platform-provided `react`/`zod`; no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (635 tests); file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (605 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 
@@ -389,7 +358,6 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **Vision delivery route**: `aux.visionRoute` (aux by default / native-when-capable / auto); native delivery only applies to routes whitelisted in `aux.nativeRoutes`, and `forceAuxVision` wins.
 - **Multi-level fallback chain**: `aux.tasks.<task>.models` is an ordered array of "provider/model" entries (primary → backup 1 → backup 2 …); while it is non-empty the singular `provider/model` is ignored (`/aux status` warns). `/aux model <task> <provider/model>` writes a **single-entry chain** — add more levels in the settings page's "Fallback chain" field (one per line) or in `settings.yaml`. The chain tail still considers the main model per `fallbackToMain` / `visionFallbackToMain`.
 - **Vision polish (Phase 3)**: failed entries report the reason and whether a retry helps (rate-limit/timeout/connection retry once in-tool); an extension-less `imagePath` is sniffed by magic bytes (aligned with `read_image`); animated GIFs are analyzed from the first frame; direct fetches pin the validated IP (closing DNS rebinding); `aux.tasks.<task>.models` provides an ordered fallback chain; the `vision_analyze` conversation card shows a `【图N/共M】` badge with thumbnail and conclusion.
-- **subagent-bridge**: transparently takes over native `subagent` and `workflow` parallel `agent()` children.
 
 ### Minimal / Anchored Standard compatibility
 

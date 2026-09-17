@@ -20,8 +20,6 @@
 |---|---|
 | `dsh-agent-loop` | 模型输入边界桥接：非图像模型/强制 AUX 时改写 image block |
 | `dsh-api-session-controller` | 移除“不支持图片输入的模型不能接收图片”的门控 |
-| `dsh-tool-subagent` | schema 增加 `requires_vision`；request 读取 `ctx.auxLlm.subagentRoute` |
-| `dsh-workflow-worker-thread` | workflow `agent()` 子代理也走 AUX 路由 |
 | `dsh-tool-skill` | schema 增加可选 `task` 参数供预审桥接 |
 | `dsh-session` | P7 ignorable 写入口 + P8 `aux/llm-call` 白名单 |
 | `dsh-session-format-v0-to-v1` | P12 放行 `aux/*` 事件 + P13 放行官方历史写法(0.1.5 旧会话迁移) |
@@ -49,8 +47,6 @@ node apply-patch.mjs        # 自动识别状态:原始 → 已补丁 / 中间�
 # 目标:
 #   dsh-agent-loop
 #   dsh-api-session-controller
-#   dsh-tool-subagent(schema + request)
-#   dsh-workflow-worker-thread
 #   dsh-tool-skill(schema)
 ```
 
@@ -60,9 +56,15 @@ node apply-patch.mjs        # 自动识别状态:原始 → 已补丁 / 中间�
 
 - `dsh-host-apiproxy` admit / selectModel
 - rc.6 settings 动态暴露 P9/P10
-- rc.8 专用 agent-loop / subagent 原始块
+- rc.8 专用 agent-loop 原始块
+- 子代理桥接三个 target:`dsh-tool-subagent`(schema / request)与 `dsh-workflow-worker-thread`(**2026-09-17 退役**,块文件与源码移入仓库根 `retired/subagent-bridge/`)
 
 这些文件移入 `bridge/retired/`，不在主支参与安装/检测；未来需要时可直接从 legacy 分支或 retired 目录参考/复用。
+
+> ⚠️ `--rollback` **只遍历当前 `TARGETS`，且没有 target 过滤**：退役的 target 不在其中，
+> 所以它既**不会**把已打补丁的部署还原回官方原件，也**不该**被用来做退役还原 —— 直接跑会把
+> agent-loop / api-session-controller / skill 等**全部**补丁一起弹回。要回官方原件请走 DSH 重装/升级，
+> 或用该目标目录下最近一次 `*.bak-bridge-*` 手工覆盖。
 
 ## P12/P13 — 0.1.5 会话迁移放行
 
@@ -94,9 +96,6 @@ DSH 0.1.5 的会话读取管线新增 v0→v1 迁移,对每个历史事件做两
   - `orig-agent-loop-anchor-text-block.txt` / `patched-agent-loop-anchor-text-block.txt`（旧路径文本 → attachmentId 锚点文本的原地升级）
   - `orig-session-append-0.1.5-block.txt` / `patched-session-append-0.1.5-block.txt`
   - `orig-session-controller-prompt-block.txt` / `patched-session-controller-prompt-block.txt`
-  - `orig-subagent-schema-alpha2-block.txt` / `patched-subagent-schema-alpha2-block.txt`
-  - `orig-subagent-request-alpha2-block.txt` / `patched-subagent-request-alpha2-block.txt`
-  - `orig-workflow-startchild-block.txt` / `patched-workflow-startchild-block.txt`
   - `orig-skill-tool-block.txt` / `patched-skill-tool-block.txt`
   - session P7/P8 块
 - 校验不匹配则跳过不打，绝不破坏文件。

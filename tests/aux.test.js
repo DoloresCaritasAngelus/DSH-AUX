@@ -80,7 +80,6 @@ import { collectPatchLedger } from "../dsh-aux/src/status.js";
 import { fetchWithSsrf } from "../dsh-aux/src/fetch.js";
 import { resolveImageRef } from "../dsh-aux/src/images/resolve.js";
 import { imageBridgeStatus } from "../dsh-aux/src/image-bridge.js";
-import { workflowBridgeStatus } from "../dsh-aux/src/subagent-bridge.js";
 import { recordAuxEvent, sessionEventsSupported } from "../dsh-aux/src/events.js";
 import { recordImageMemory } from "../dsh-aux/src/images/memory.js";
 import {
@@ -1688,11 +1687,6 @@ test("projectSettings: 暴露 forceAuxVision / visionFallbackToMain 默认值", 
   const projected = projectSettings({});
   assert.equal(projected.forceAuxVision, false);
   assert.equal(projected.visionFallbackToMain, true);
-  assert.equal(projected.subagent.mode, "native");
-  assert.equal(projected.subagent.includeWorkflow, true);
-  assert.equal(projected.subagent.prepareTools, true);
-  assert.equal(projected.subagent.retryVisionWithAux, false);
-  assert.deepEqual(projected.subagent.visionKeywords, []);
   const custom = projectSettings({ forceAuxVision: true, visionFallbackToMain: false });
   assert.equal(custom.forceAuxVision, true);
   assert.equal(custom.visionFallbackToMain, false);
@@ -1713,12 +1707,11 @@ test("projectSettings: enabled/skill/debug 默认值及透传", () => {
   assert.equal(projected.debug.maxDebugEventBytes, 65536);
   assert.equal(projected.debug.redactSecrets, true);
   const custom = projectSettings({
-    enabled: { vision_analyze: "native", subagentBridge: "native" },
+    enabled: { vision_analyze: "native" },
     skill: { mode: "report" },
     debug: { fullToolTrace: true, maxDebugEventBytes: 4096, debugEventsInHistory: true, redactSecrets: false },
   });
   assert.equal(custom.enabled.vision_analyze, "native");
-  assert.equal(custom.enabled.subagentBridge, "native");
   assert.equal(custom.enabled.web_extract, "aux");
   assert.equal(custom.skill.mode, "report");
   assert.equal(custom.debug.fullToolTrace, true);
@@ -1727,99 +1720,15 @@ test("projectSettings: enabled/skill/debug 默认值及透传", () => {
   assert.equal(custom.debug.redactSecrets, false);
 });
 
-test("projectSettings: subagent 段透传", () => {
-  const projected = projectSettings({
-    subagent: {
-      mode: "vision-aware",
-      includeWorkflow: false,
-      general: { provider: "opencode-go", model: "glm-5.2" },
-      vision: { provider: "opencode-go", model: "kimi-k2.7-code" },
-      prepareTools: false,
-      retryVisionWithAux: true,
-      visionKeywords: ["看图", "image"],
-    },
-  });
-  assert.equal(projected.subagent.mode, "vision-aware");
-  assert.equal(projected.subagent.includeWorkflow, false);
-  assert.deepEqual(projected.subagent.general, { provider: "opencode-go", model: "glm-5.2" });
-  assert.deepEqual(projected.subagent.vision, { provider: "opencode-go", model: "kimi-k2.7-code" });
-  assert.equal(projected.subagent.prepareTools, false);
-  assert.equal(projected.subagent.retryVisionWithAux, true);
-  assert.deepEqual(projected.subagent.visionKeywords, ["看图", "image"]);
-});
-
-test("validateAuxSettings: 拒绝 subagent.general/vision 半配置", () => {
-  assert.throws(
-    () => validateAuxSettings({ subagent: { general: { provider: "opencode-go" } } }),
-    /subagent\.general provider and model must be supplied together/,
-  );
-  assert.throws(
-    () => validateAuxSettings({ subagent: { vision: { model: "kimi-k2.7-code" } } }),
-    /subagent\.vision provider and model must be supplied together/,
-  );
-  validateAuxSettings({ subagent: { general: { provider: "p", model: "m" } } });
-  assert.throws(
-    () => validateAuxSettings({ subagent: { general: { reasoningEffort: "high" } } }),
-    /subagent\.general reasoningEffort requires provider and model/,
-  );
-});
-
-test("subagentRoute: native / manual / vision-aware 服务方法", async () => {
-  const { ctx } = await makeHarness();
-  // native 默认
-  assert.equal(ctx.auxLlm.subagentRoute({ prompt: "看图" }).settled, false);
-  // manual
-  ctx.auxLlm._subagentSettings = {
-    mode: "manual",
-    general: { provider: "opencode-go", model: "glm-5.2" },
-  };
-  assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: "x" }).agentOptions, {
-    provider: "opencode-go",
-    model: "glm-5.2",
-  });
-  // vision-aware + 关键词
-  ctx.auxLlm._subagentSettings = {
-    mode: "vision-aware",
-    general: { provider: "opencode-go", model: "glm-5.2" },
-    vision: { provider: "opencode-go", model: "kimi-k2.7-code" },
-  };
-  assert.deepEqual(
-    ctx.auxLlm.subagentRoute({ prompt: "描述 imagePath=/tmp/a.png", requiresVision: "auto" }).agentOptions,
-    { provider: "opencode-go", model: "kimi-k2.7-code" },
-  );
-});
-
-test("平台开关: subagentBridge=native 时 subagentRoute 直接原生", async () => {
-  const { ctx } = await makeHarness();
-  ctx.auxLlm._enabled = { ...ctx.auxLlm._enabled, subagentBridge: "native" };
-  ctx.auxLlm._subagentSettings = { mode: "manual", general: { provider: "opencode-go", model: "glm-5.2" } };
-  assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: "x" }), { settled: false });
-});
-
-test("settings source 接线: forceAuxVision / visionFallbackToMain / subagent 联动", async () => {
+test("settings source 接线: forceAuxVision / visionFallbackToMain 联动", async () => {
   const { ctx } = await makeHarness();
   ctx.auxLlm._source = () => ({
     forceAuxVision: true,
     visionFallbackToMain: false,
-    subagent: { mode: "manual", includeWorkflow: false, general: { provider: "opencode-go", model: "glm-5.2" } },
   });
   ctx.auxLlm._recomputeMerged();
   assert.equal(ctx.auxLlm.forceAuxVision, true);
   assert.equal(ctx.auxLlm.visionFallbackToMain, false);
-  assert.equal(ctx.auxLlm.subagentMode, "manual");
-  assert.equal(ctx.auxLlm.subagentIncludeWorkflow, false);
-  assert.deepEqual(ctx.auxLlm.subagentRoute({ prompt: "x" }).agentOptions, {
-    provider: "opencode-go",
-    model: "glm-5.2",
-  });
-  // includeWorkflow 缺省 → true
-  ctx.auxLlm._source = () => ({ subagent: { mode: "native" } });
-  ctx.auxLlm._recomputeMerged();
-  assert.equal(ctx.auxLlm.subagentIncludeWorkflow, true);
-  // workflowBridge=native → includeWorkflow 强制 false
-  ctx.auxLlm._source = () => ({ enabled: { workflowBridge: "native" } });
-  ctx.auxLlm._recomputeMerged();
-  assert.equal(ctx.auxLlm.subagentIncludeWorkflow, false);
 });
 
 test("visionFallbackToMain=false 且未配置 vision 主路线 → 主模型仍作为唯一路线可用", async () => {
@@ -2052,7 +1961,7 @@ test("/aux status --json 命令: 返回结构化平台状态", async () => {
   assert.equal(out.kind, "success");
   const data = JSON.parse(out.text);
   assert.ok(Array.isArray(data.items), "应返回 items 数组");
-  assert.ok(data.items.length >= 9, "应覆盖 4 个工具 + 5 个桥接");
+  assert.ok(data.items.length >= 8, "应覆盖 4 个工具 + 4 个桥接项(图片 / 图片生命周期 / 压缩 / 技能预审)");
   for (const entry of data.items) {
     assert.ok(["native", "aux", "compat"].includes(entry.mode), `mode 非法: ${entry.mode}`);
     assert.ok(
@@ -2819,11 +2728,6 @@ test("image-bridge 状态: 通过 Node 解析能给出明确状态(不再因源�
   assert.ok(["v3", "v2", "v1", "partial", "missing"].includes(status), `应返回明确状态而非 unknown,实际: ${status}`);
 });
 
-test("workflow-bridge 状态: 通过 Node 解析能给出明确状态(不再因源码树误报 unknown)", async () => {
-  const status = await workflowBridgeStatus();
-  assert.ok(["installed", "missing"].includes(status), `应返回明确状态而非 unknown,实际: ${status}`);
-});
-
 test("bridge-locate: require.resolve 能解析 @deepseek-ai 包主入口", () => {
   const target = resolvePackageFile("dsh-agent-loop");
   assert.ok(target !== void 0, "应能解析 dsh-agent-loop");
@@ -2833,7 +2737,7 @@ test("bridge-locate: require.resolve 能解析 @deepseek-ai 包主入口", () =>
 test("collectPatchLedger: 返回结构完整且状态枚举合法", async () => {
   const ledger = await collectPatchLedger();
   assert.ok(Array.isArray(ledger), "应返回数组");
-  assert.ok(ledger.length >= 8, "应覆盖 alpha 线 P1-P8 主要补丁");
+  assert.ok(ledger.length >= 7, "应覆盖现存补丁台账的主要条目");
   for (const entry of ledger) {
     assert.equal(typeof entry.id, "string");
     assert.equal(typeof entry.pkg, "string");

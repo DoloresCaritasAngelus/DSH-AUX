@@ -2,6 +2,31 @@
 
 ## 未发布 (Unreleased)
 
+### 破坏性变更 — 子代理桥接退役
+
+官方 DSH 在子代理 / agent team 方向持续推进:`0.1.5-rc.2` 已自带 `dsh-subagent`、
+`dsh-tool-subagent`、`dsh-client-ui-subagent`、`dsh-workflow` 一族包,原生 `subagent`
+工具已支持用 `provider` / `model` / `reasoning_effort` 选择子代理模型。AUX 的透明接管
+因此成为重复能力,且维护成本随每个 DSH 版本上涨(三个锚点补丁要跟着宿主文件重切)。
+
+- **移除的功能**:原生 `subagent` 与 `workflow` 并行 `agent()` 的透明 AUX 路由。
+- **移除的宿主补丁**:`dsh-tool-subagent`(schema 增加 `requires_vision`)、
+  `dsh-tool-subagent`(request 注入 `agentOptions` / `toolFilter`)、
+  `dsh-workflow-worker-thread`(workflow `agent()` 子代理路由)。`bridge/apply-patch.mjs`
+  的补丁目标由 6 个减为 3 个。
+- **移除的配置键**:`aux.subagent.*` 与 `aux.enabled.subagentBridge` / `aux.enabled.workflowBridge`。
+  `settings.yaml` 中的残留键会被 schema 剥离,不需要手工清理。
+- **行为影响**:退役前生产已把 `subagentBridge` / `workflowBridge` 置为 `native`,
+  而该值下服务端直接短路为 `{ settled: false }` —— **运行时行为不变**;变的是界面与维护面。
+- **界面变化**:设置页移除「子代理」分组与两个平台开关;`/aux status` 移除对应两个桥接项
+  与三条补丁台账行。
+- **未受影响**:技能预审(`skillAudit`)、图片桥接、会话压缩桥接、会话事件补丁与四个 AUX 工具。
+- **去处**:代码、测试与补丁块移入仓库根 `retired/subagent-bridge/` —— 仅留痕,不参与
+  构建 / 安装 / 自愈 / 测试。
+
+> **升级**:被移除的 `aux` 配置键失效,主模型与其余任务配置不受影响;不需要重打补丁
+> (退役的补丁不会再加)。下一次 DSH 重装或升级会顺带清掉磁盘上的旧子代理补丁。
+
 ## 0.4.6-fix.1 (2026-09-11) — 平台开关残留失效修复 + 设置页诊断面板恢复
 
 > **升级**:本版**改动了桥接补丁**(`dsh-agent-loop` 与 `dsh-api-session-controller`)。升级后重启 DSH 让启动自愈重打补丁即可(或重跑 `install.sh` / `/aux patch`);已装旧补丁的部署由新增的升级态**原地更新**,不需要手工回滚。
