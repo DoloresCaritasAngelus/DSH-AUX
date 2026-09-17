@@ -31,7 +31,6 @@ import {
   mergeTaskConfig,
   resolveConfig,
   resolvePrimaryRoute,
-  resolveRouteChain,
   route,
   shouldFallback,
   taskConcurrency,
@@ -535,19 +534,18 @@ export class AuxLlmService extends Service {
     const attempts = [];
     try {
       const mainRoute = await this._mainRoute(request);
-      // Ordered auxiliary chain: `models` (when configured) else the singular
-      // provider/model, else the task default. Each candidate is tried in turn
-      // with the existing cooldown skip and image-capability gate.
-      const chain = resolveRouteChain(definition, this.taskDefaults);
-      const candidates = [...chain];
+      // One route per task (singular provider/model, else the task default).
+      // It is tried with the existing cooldown skip and image-capability gate.
+      const primary = resolvePrimaryRoute(definition, this.taskDefaults);
+      const candidates = primary === void 0 ? [] : [primary];
       const candidateKeys = () => candidates.map((entry) => entry.provider + "/" + entry.model);
       // `visionFallbackToMain=false` disables falling back to the main model
-      // AFTER a configured vision aux chain fails; when NO vision aux route is
+      // AFTER a configured vision aux route fails; when NO vision aux route is
       // configured at all, the main model is the only option (not a fallback),
       // so keep it usable.
       let allowMainFallback =
         (request.allowMainFallback ?? this.fallbackToMain) &&
-        (task !== "vision" || this.visionFallbackToMain || chain.length === 0);
+        (task !== "vision" || this.visionFallbackToMain || candidates.length === 0);
       // Vision fallback additionally requires an EXPLICIT image declaration from
       // the main route (modalities known and containing image). Silence is not
       // consent: providers commonly report no modality list at all, and falling
@@ -555,13 +553,13 @@ export class AuxLlmService extends Service {
       // rate-limited) into a confusing one (the next main-model turn cannot see
       // the image). Only a genuine fallback is gated: with no aux route
       // configured the main route is the only option, not a fallback.
-      if (allowMainFallback && task === "vision" && chain.length > 0 && mainRoute !== void 0) {
+      if (allowMainFallback && task === "vision" && candidates.length > 0 && mainRoute !== void 0) {
         allowMainFallback = (await this._resolveImageCapability(mainRoute, request.signal)) === true;
       }
       if (
         allowMainFallback &&
         mainRoute !== void 0 &&
-        !chain.some((entry) => entry.provider === mainRoute.provider && entry.model === mainRoute.model)
+        !candidates.some((entry) => entry.provider === mainRoute.provider && entry.model === mainRoute.model)
       ) {
         candidates.push(mainRoute);
       }
@@ -907,25 +905,18 @@ export class AuxLlmService extends Service {
     }
   }
 
-  /** One task's routing status row: primary, the full chain, and its source. */
+  /** One task's routing status row: the resolved route and where it came from. */
   _describeTask(task, definition, label) {
-    const chain = resolveRouteChain(definition, this.taskDefaults);
-    const primary = chain[0] ?? null;
-    const models = Array.isArray(definition?.models)
-      ? definition.models.filter((spec) => typeof spec === "string" && spec.length > 0)
-      : [];
+    const primary = resolvePrimaryRoute(definition, this.taskDefaults) ?? null;
     const hasSingular = definition?.provider !== void 0 && definition?.model !== void 0;
     return {
       task,
       label,
-      configured: definition?.provider !== void 0 || models.length > 0,
+      configured: definition?.provider !== void 0,
       primary,
-      chain,
-      chainSource: models.length > 0 ? "models" : hasSingular ? "single" : primary === null ? "none" : "default",
-      // A non-empty chain makes the singular provider/model inert. Reported
-      // (not refused): an existing config must keep loading.
-      singularIgnored: models.length > 0 && hasSingular,
-      models,
+      // "single" = configured route, "default" = the task's built-in default,
+      // "none" = nothing configured (the caller falls back to the main model).
+      chainSource: hasSingular ? "single" : primary === null ? "none" : "default",
       timeoutMs: taskTimeoutMs(definition),
       maxConcurrency: taskConcurrency(definition),
     };

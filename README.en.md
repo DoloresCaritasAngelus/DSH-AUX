@@ -9,7 +9,7 @@
 > Whenever you need me, just call me directly～
 
 ![Version](https://img.shields.io/badge/version-0.4.6-fix.1-blue)
-![Tests](https://img.shields.io/badge/tests-611-brightgreen)
+![Tests](https://img.shields.io/badge/tests-600-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.5--rc.2-0078D4)
 
@@ -206,7 +206,7 @@ node scripts/doctor.mjs    # post-update health check (does not modify anything)
 | `/aux debug <target> [N]` | Cross-session view (@this / session id / prefix / cwd) |
 | `/aux patch` | Install all patches required by the current DSH and self-heal |
 | `/aux patch --json` | Same, with structured step results |
-| `/aux model <task> [provider/model]` | View / set a task's auxiliary model (writes a single-entry chain; use the settings page's "Fallback chain" field for more levels) |
+| `/aux model <task> [provider/model]` | Inspect / set a task's auxiliary model |
 | `/aux vision <path> <question...>` | Directly view an image from the command line |
 | `/aux test <task>` | Self-test a task route |
 | `/aux memory [n]` | View recent image analysis memory |
@@ -345,7 +345,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are official DSH packages plus the platform-provided `react`/`zod`; no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (611 tests); file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (600 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 
@@ -356,8 +356,8 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **image ownership & delete safety**: a `session/event` ownership hook plus a `session/created` recovery barrier (in-memory log scan); deletions are refused globally while a live session is unbackfilled (fail-closed, visible in `/aux status`); reclaim moves objects into `objects/.trash/` (7-day recovery window).
 - **GC debt**: an `attachment-refs.json` sidecar plus official `imageHostPath` reclamation and full `.ext` hard-link cleanup; the derived `request-images/` cache is reclaimed by mtime LRU under a total cap (256 MiB by default, `requestImagesMaxMiB`).
 - **Vision delivery route**: `aux.visionRoute` (aux by default / native-when-capable / auto); native delivery only applies to routes whitelisted in `aux.nativeRoutes`, and `forceAuxVision` wins. The **fallback** (`visionFallbackToMain`) only falls back to a main route that **explicitly declares image input**; when that capability is unknown or declared text-only the vision call fails outright instead of handing the image to a model that cannot see it.
-- **Multi-level fallback chain**: `aux.tasks.<task>.models` is an ordered array of "provider/model" entries (primary → backup 1 → backup 2 …); while it is non-empty the singular `provider/model` is ignored (`/aux status` warns). `/aux model <task> <provider/model>` writes a **single-entry chain** — add more levels in the settings page's "Fallback chain" field (one per line) or in `settings.yaml`. The chain tail still considers the main model per `fallbackToMain` / `visionFallbackToMain`.
-- **Vision polish (Phase 3)**: failed entries report the reason and whether a retry helps (rate-limit/connection/server retry once in-tool; a **timeout is not retried** — the route already spent its whole `timeoutMs`, so raise that task's timeout instead); an extension-less `imagePath` is sniffed by magic bytes (aligned with `read_image`); animated GIFs are analyzed from the first frame; direct fetches pin the validated IP (closing DNS rebinding); `aux.tasks.<task>.models` provides an ordered fallback chain; the `vision_analyze` conversation card shows a `【图N/共M】` badge with thumbnail and conclusion.
+- **Auxiliary route and fallback**: one auxiliary route per task (singular `provider` / `model`, else the task default). On failure it **falls back to the main model** per `fallbackToMain` / `visionFallbackToMain` (vision additionally requires the main model to declare image support — see below). There is **no multi-level chain**: to spread across several models, change the configuration yourself.
+- **Vision polish (Phase 3)**: failed entries report the reason and whether a retry helps (rate-limit/connection/server retry once in-tool; a **timeout is not retried** — the route already spent its whole `timeoutMs`, so raise that task's timeout instead); an extension-less `imagePath` is sniffed by magic bytes (aligned with `read_image`); animated GIFs are analyzed from the first frame; direct fetches pin the validated IP (closing DNS rebinding); the `vision_analyze` conversation card shows a `【图N/共M】` badge with thumbnail and conclusion.
 
 ### Minimal / Anchored Standard compatibility
 
@@ -391,7 +391,7 @@ If the image block's attachment object has already been GC/cleaned, or none of t
 
 **Q3: Do I need to configure a model for dsh-aux?**
 
-No. dsh-aux is **zero-config**: it works without any model configuration and falls back to the session's main model. You can assign a dedicated model later via the settings page or `/aux model <task> <provider/model>`; for multi-level fallback, list several "provider/model" entries in order in the settings page's "Fallback chain" field or in `aux.tasks.<task>.models`.
+No. dsh-aux is **zero-config**: it works without any model configuration and falls back to the session's main model. You can assign a dedicated model later via the settings page or `/aux model <task> <provider/model>`
 
 ## Related Projects
 

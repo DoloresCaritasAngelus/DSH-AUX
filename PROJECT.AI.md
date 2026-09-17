@@ -38,7 +38,7 @@
 - 任务（task）：`vision_analyze`、`web_extract`、`web_crawl`、`compress_text`，以及桥接任务 `compaction`、`skill`。
 - 桥接：skill 审计、会话压缩、图片输入桥接透明走 AUX。
 - 路由解析：显式配置 > 任务默认 > 会话主模型；每任务可配 provider/model/超时/并发/思考档位。
-- 多级降级链：`aux.tasks.<task>.models` 为有序数组（主选 → 备1 → …），失败自动降级主模型，连续失败进入冷却。
+- 降级：每个任务一条辅助路由（单数 provider/model）；失败自动降级主模型，连续失败进入冷却。（多级链已于 2026-09-17 退役）
 - 平台开关：每个工具/桥接可在 `native` / `aux` 间切换，`compat` 预留。
 - 可观测：每次调用写 `aux/llm-call` 会话事件；`/aux status --json` 输出结构化状态；设置页“诊断与修复”展示补丁台账。
 - 客户端：设置页 `settings.section` id `aux`、对话状态芯片、图片库面板。
@@ -105,7 +105,7 @@
 
 ## Tests / quality gates
 
-- 全量测试：`node --test tests/*.test.js`；🔻 基线 **611**（2026-09-11 快照，以实跑 `# pass/# fail` 为准，文件清单见 `TESTING.md`）。
+- 全量测试：`node --test tests/*.test.js`；🔻 基线 **600**（2026-09-11 快照，以实跑 `# pass/# fail` 为准，文件清单见 `TESTING.md`）。
 - 本机验证清代理环境：`env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy -u NODE_USE_ENV_PROXY NO_PROXY='*' no_proxy='*' node --test tests/*.test.js`。
 - CI 门禁（`.github/workflows/ci.yml` test job）：提交信息规范、ESLint（0 error）、Prettier、全量测试、`ci-doc-hygiene`、`ci-docs-index`、`gen-package-readme --check`、`gen-project-ai --check`、`ci-syntax-check`、`ci-pack-check`、`bash -n`、`ci-fake-dsh`。
 - compat job：DSH 矩阵 `[0.1.5-rc.2]`；`0.1.2-alpha.2` ~ `0.1.2-rc.1` 冻结在 legacy 分支 / `v0.4.4-legacy` Release。

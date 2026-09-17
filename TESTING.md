@@ -11,7 +11,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **611**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **600**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 - `tests/bridge.test.js` 的部署包探测是**显式 opt-in**(`BRIDGE_DEPLOYED_SRC=1` 或 `DSH_AGENT_LOOP`);默认不探测 ⇒ 本机与 CI 的 `# tests` 计数一致。
@@ -89,7 +89,6 @@ node scripts/pr-body-hygiene.mjs [--pr <n>] [--stdin < draft.md]      # PR 标�
 | `tests/ci-doc-hygiene.test.js` | 文档脱密闸变异测试:段数不足 / 发布段空正文 / 哨兵缺失 / Unreleased 缺失必须非零退出;另覆盖**无扩展名与符号链接**:符号链接指向本机绝对路径必须命中、相对链接目标不误报、含 NUL 的二进制被跳过 |
 | `tests/ci-docs-index.test.js` | 文档树索引闸变异测试:索引缺行 / 状态词非法 / archive 缺退役头 / 状态头与索引不一致 / 索引指向不存在文件 |
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
-| `tests/route-chain.test.js` | 多级降级链(P5.3):`tasks.<task>.models` 有序回退、单数 provider/model 兼容路径、设置投影/校验 |
 | `tests/vision-route.test.js` | vision 交付路由(P2):`resolveVisionDelivery` 决策矩阵(白名单/否定模态/forceAuxVision/auto 双条件)、native 零辅助调用、形状含 `mode`、交付失败点名 `visionRoute: 'aux'` |
 | `tests/vision-ordinal.test.js` | vision 输出序号(P5.6):消息级/调用级 `imageOrdinal`、`presentationMeta` 同序 ordinals |
 | `tests/vision-toolview.test.js` | vision_analyze toolview 卡片(P5.6):keyed `tool.call.toolview` 注册 + 各调用态渲染(假模块加载器 + 最小 React) |

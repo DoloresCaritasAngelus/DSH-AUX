@@ -2,6 +2,15 @@
 
 ## 未发布 (Unreleased)
 
+### 破坏性变更 — 多级降级链退役
+
+- **移除能力**:`aux.tasks.<task>.models`(按序尝试多个辅助模型)整体退役。降级只保留一条路径 —— 辅助路由失败后**回退到主模型**,不再逐级尝试备用辅助模型。
+- **移除入口**:设置页那个「降级链 (provider/model,每行一条,按序尝试)」多行输入控件;`/aux model <task> <provider/model>` 改为写**单数** `provider` / `model`(不再写单元素链)。
+- **移除的状态面**:`/aux status` 不再输出整链与「单数被忽略」警告;`describe()` 不再返回 `chain` / `models` / `singularIgnored`;`aux/llm-call` 不再写 `candidates` / `selectedIndex`(登记表保留这两个成员,以便旧会话仍可读)。
+- **迁移**:`settings.yaml` 里残留的 `tasks.<task>.models` 会被 schema **剥离并忽略**(不报错);该任务回到它的单数 `provider` / `model`,没有则回到任务默认、再回到主模型。**插件配置**(而非 settings.yaml)里的 `models` 会报 unknown key 错误 —— 那条路径本来就是严格校验的。
+- **去处**:被移除的三个纯函数(`parseRouteSpec` / `assertRouteSpecList` / `resolveRouteChain`)与它们的用例移入仓库根 `retired/multi-level-chain/`。
+- **测试基线** 611 → 600。
+
 ### 变更 — 失败处理口径与失败原因字段
 
 - **重试口径收敛**:工具内那一次自动重试现在只针对 `rate-limit` / `connection` / `server`(5xx);`timeout` **不再重试** —— 路由已经用光了整个 `timeoutMs`,再试一次只是把调用方等待的时间翻倍。慢路由的杠杆是调高该任务的 `timeoutMs`。
