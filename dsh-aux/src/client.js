@@ -196,7 +196,8 @@ window.__ModuleLoader__.load({
       ".ax-tv-image:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}",
       ".ax-tv-image img{width:100%;height:100%;object-fit:cover;display:block}",
       ".ax-tv-imageFail{cursor:pointer}",
-      ".ax-tv-lightbox{position:fixed;inset:0;z-index:1000;padding:40px;display:grid;place-items:center;background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur);cursor:zoom-out}",
+      ".ax-tv-lightbox{position:fixed;inset:0;z-index:1000;padding:40px;display:grid;place-items:center;cursor:zoom-out}",
+      ".ax-tv-lightboxMask{position:absolute;inset:0;background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur)}",
       ".ax-tv-lightboxImage{position:relative;object-fit:contain;max-width:min(100%,1600px);max-height:calc(100vh - 80px);background:var(--dsw-specific-input-major);box-shadow:var(--dsw-shadow-lv3);border-radius:12px}",
       ".ax-tv-lightboxClose{position:fixed;top:20px;right:20px;width:36px;height:36px;display:grid;place-items:center;font:inherit;border:.5px solid var(--dsw-alias-border-l2-darkmode-thin);border-radius:999px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);cursor:pointer}",
     ].join("");
@@ -3656,6 +3657,9 @@ window.__ModuleLoader__.load({
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);
       }, [onClose]);
+      // The dismiss handler sits on a dedicated mask layer, never on an ancestor of
+      // the image: with it on the container, a click on the enlarged image would
+      // bubble and close the preview the user just asked for.
       const node = react.createElement(
         "div",
         {
@@ -3663,8 +3667,12 @@ window.__ModuleLoader__.load({
           role: "dialog",
           "aria-modal": "true",
           "aria-label": label,
-          onClick: onClose,
         },
+        react.createElement("div", {
+          className: "ax-tv-lightboxMask",
+          "aria-hidden": "true",
+          onClick: onClose,
+        }),
         react.createElement("img", { className: "ax-tv-lightboxImage", src, alt: label }),
         react.createElement(
           "button",
