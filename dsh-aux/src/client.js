@@ -24,6 +24,15 @@ window.__ModuleLoader__.load({
     var exports = module.exports;
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
     let react = require("react");
+    // Optional, and guarded: used only to portal the image lightbox out of the
+    // conversation tree. A loader that cannot resolve it must not take the
+    // whole client half down.
+    let reactDom = null;
+    try {
+      reactDom = require("react-dom");
+    } catch {
+      reactDom = null;
+    }
     /** Normalize old `{ ok, result: { ok, value } }` and new `{ ok, value }` remote responses. */
     const unwrapResponse = (resp) => (resp && typeof resp === "object" && resp.result !== void 0 ? resp.result : resp);
     // Package-owned stylesheet, deduplicated by tag id and cleaned up with the run.
@@ -181,6 +190,16 @@ window.__ModuleLoader__.load({
       ".ax-tv-error{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:18px;overflow-wrap:anywhere}",
       ".ax-tv-text{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;overflow-wrap:anywhere}",
       ".ax-tv-gallery{min-width:0}",
+      ".ax-tv-images{display:flex;flex-wrap:wrap;gap:6px;min-width:0}",
+      ".ax-tv-image{appearance:none;font:inherit;width:64px;height:64px;padding:0;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-tertiary);cursor:pointer}",
+      ".ax-tv-image:hover{border-color:var(--dsw-alias-label-dimmed)}",
+      ".ax-tv-image:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}",
+      ".ax-tv-image img{width:100%;height:100%;object-fit:cover;display:block}",
+      ".ax-tv-imageFail{cursor:pointer}",
+      ".ax-tv-lightbox{position:fixed;inset:0;z-index:1000;padding:40px;display:grid;place-items:center;cursor:zoom-out}",
+      ".ax-tv-lightboxMask{position:absolute;inset:0;background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur)}",
+      ".ax-tv-lightboxImage{position:relative;object-fit:contain;max-width:min(100%,1600px);max-height:calc(100vh - 80px);background:var(--dsw-specific-input-major);box-shadow:var(--dsw-shadow-lv3);border-radius:12px}",
+      ".ax-tv-lightboxClose{position:fixed;top:20px;right:20px;width:36px;height:36px;display:grid;place-items:center;font:inherit;border:.5px solid var(--dsw-alias-border-l2-darkmode-thin);border-radius:999px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);cursor:pointer}",
     ].join("");
     const tagId = "@dolorescaritasangelus/dsh-aux/Aux.css";
     if (
@@ -227,6 +246,9 @@ window.__ModuleLoader__.load({
       "toolview.running": "分析中…",
       "toolview.failed": "分析失败",
       "toolview.image": "图",
+      "toolview.imageOpen": "打开大图",
+      "toolview.imageFailed": "图片加载失败，点击重试",
+      "toolview.imageClose": "关闭",
       "placeholder.inheritModel": "(继承主模型)",
       "placeholder.inheritDefault": "(继承默认)",
       "global.fallbackToMain": "失败时降级到主模型 (fallbackToMain)",
@@ -458,6 +480,9 @@ window.__ModuleLoader__.load({
       "toolview.running": "Analyzing…",
       "toolview.failed": "Analysis failed",
       "toolview.image": "Image",
+      "toolview.imageOpen": "Open image",
+      "toolview.imageFailed": "Image failed to load — click to retry",
+      "toolview.imageClose": "Close",
       "placeholder.inheritModel": "(Inherit main model)",
       "placeholder.inheritDefault": "(Inherit default)",
       "global.fallbackToMain": "Fall back to main model on failure (fallbackToMain)",
@@ -3510,12 +3535,167 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The package-private child slot that carries the vision_analyze image
+     * gallery. DSH 0.1.6 declares the official `tool.call.images` itself (its
+     * read_image toolview does) and `dsh-client-ui-slots` rejects a second
+     * declaration of one slot name, so AUX namespaces its own instead of
+     * reusing the official name.
+     */
+    const AUX_TOOL_IMAGES_SLOT = "aux.tool.call.images";
+
+    /**
+     * AUX-owned gallery filling {@link AUX_TOOL_IMAGES_SLOT}. The official
+     * gallery is not reusable: dsh-client-ui-attachment registers it into that
+     * one official slot name and exports no React component as a package value,
+     * so AUX renders its own thumbnails and its own lightbox.
+     */
+    function AuxToolImages(props) {
+      const t = (props && props.t) || __t;
+      const images = Array.isArray(props && props.images) ? props.images : [];
+      const loadImage = props && props.loadImage;
+      const align = (props && props.align) || "start";
+      const [opened, setOpened] = react.useState(null);
+      if (images.length === 0 || typeof loadImage !== "function") return null;
+      return react.createElement(
+        "div",
+        { className: "ax-tv-images", "data-align": align },
+        ...images.map((image, index) =>
+          react.createElement(AuxToolImage, {
+            key: "aux-image-" + index,
+            image,
+            loadImage,
+            t,
+            onOpen: setOpened,
+          }),
+        ),
+        opened === null
+          ? null
+          : react.createElement(AuxImageLightbox, {
+              src: opened.src,
+              label: opened.label,
+              t,
+              onClose: () => setOpened(null),
+            }),
+      );
+    }
+
+    /**
+     * One gallery thumbnail, resolved through the host-supplied `loadImage`.
+     * The synchronous `loadImage.peek` cache seeds the first render so an
+     * already-loaded image does not flash a placeholder; the promise path covers
+     * the rest, and a reader failure falls back to a retryable placeholder.
+     */
+    function AuxToolImage(props) {
+      const { image, loadImage, t, onOpen } = props;
+      const attachment = image && image.attachment;
+      const preview = image && image.preview;
+      const [url, setUrl] = react.useState(() =>
+        attachment === void 0 || typeof loadImage.peek !== "function" ? null : (loadImage.peek(attachment) ?? null),
+      );
+      const [failed, setFailed] = react.useState(false);
+      const [attempt, setAttempt] = react.useState(0);
+      react.useEffect(() => {
+        if (attachment === void 0) return void 0;
+        let live = true;
+        setFailed(false);
+        Promise.resolve(loadImage(attachment)).then(
+          (resolved) => {
+            if (live) setUrl(resolved ?? null);
+          },
+          () => {
+            if (live) setFailed(true);
+          },
+        );
+        return () => {
+          live = false;
+        };
+      }, [attachment, loadImage, attempt]);
+      const src = preview !== void 0 && preview !== null && preview.url !== void 0 ? preview.url : url;
+      const label =
+        (image && image.label) ?? (preview && preview.name) ?? (attachment && attachment.name) ?? t("toolview.image");
+      if (failed) {
+        return react.createElement(
+          "button",
+          {
+            type: "button",
+            className: "ax-tv-image ax-tv-imageFail",
+            title: t("toolview.imageFailed"),
+            "aria-label": t("toolview.imageFailed"),
+            onClick: () => setAttempt(attempt + 1),
+          },
+          "🖼",
+        );
+      }
+      if (src === null || src === void 0 || src === "") {
+        return react.createElement("div", { className: "ax-tv-image", "aria-hidden": "true" }, "…");
+      }
+      return react.createElement(
+        "button",
+        {
+          type: "button",
+          className: "ax-tv-image",
+          title: t("toolview.imageOpen"),
+          "aria-label": t("toolview.imageOpen") + " " + label,
+          onClick: () => onOpen({ src, label }),
+        },
+        react.createElement("img", { src, alt: label }),
+      );
+    }
+
+    /**
+     * Full-size preview for one thumbnail. Portaled to the document body when
+     * react-dom is available: an opener inside a transformed ancestor would
+     * otherwise clip a fixed backdrop. Closes on Escape, backdrop press, or the
+     * close control.
+     */
+    function AuxImageLightbox(props) {
+      const { src, label, t, onClose } = props;
+      react.useEffect(() => {
+        const onKeyDown = (event) => {
+          if (event.key === "Escape") onClose();
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+      }, [onClose]);
+      // The dismiss handler sits on a dedicated mask layer, never on an ancestor of
+      // the image: with it on the container, a click on the enlarged image would
+      // bubble and close the preview the user just asked for.
+      const node = react.createElement(
+        "div",
+        {
+          className: "ax-tv-lightbox",
+          role: "dialog",
+          "aria-modal": "true",
+          "aria-label": label,
+        },
+        react.createElement("div", {
+          className: "ax-tv-lightboxMask",
+          "aria-hidden": "true",
+          onClick: onClose,
+        }),
+        react.createElement("img", { className: "ax-tv-lightboxImage", src, alt: label }),
+        react.createElement(
+          "button",
+          {
+            type: "button",
+            className: "ax-tv-lightboxClose",
+            title: t("toolview.imageClose"),
+            "aria-label": t("toolview.imageClose"),
+            onClick: onClose,
+          },
+          "✕",
+        ),
+      );
+      return reactDom === null ? node : reactDom.createPortal(node, document.body);
+    }
+
+    /**
      * vision_analyze toolview card. Registering this key suppresses the generic
      * tool row for every vision_analyze result, so all four states must render:
      * running, cancelled, failed (text only) and settled (badges + gallery +
      * conclusion). The gallery is dispatched through the declared
-     * tool.call.images child slot; the official conversation.message.images slot
-     * is never replaced.
+     * {@link AUX_TOOL_IMAGES_SLOT} child slot; the official
+     * conversation.message.images slot is never replaced.
      */
     function VisionAnalyzeRow(props) {
       const t = (props && props.t) || __t;
@@ -3550,7 +3730,7 @@ window.__ModuleLoader__.load({
           react.createElement(
             "div",
             { className: "ax-tv-gallery", key: "gallery" },
-            renderSlot("tool.call.images", { images: model.images, loadImage, align: "start" }),
+            renderSlot(AUX_TOOL_IMAGES_SLOT, { images: model.images, loadImage, align: "start" }),
           ),
         );
       }
@@ -3567,7 +3747,8 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Client plugin body: register the settings page and the status chip.
+     * Client plugin body: register the vision_analyze toolview (with its own
+     * image gallery), the settings page and the status chip.
      * @param ctx - client root context.
      */
     function apply(ctx) {
@@ -3596,13 +3777,22 @@ window.__ModuleLoader__.load({
             name: "tool.call.toolview",
             key: "vision_analyze",
             locale: NS,
-            // Declaring the Tool image gallery as a child is what authorizes
-            // this entry's renderSlot to dispatch it; the official
-            // conversation.message.images slot stays untouched.
-            children: { "tool.call.images": { kind: "single", scope: "session" } },
+            // Declaring the image gallery as a child is what authorizes this
+            // entry's renderSlot to dispatch it. The name is AUX's own: DSH
+            // 0.1.6 has its read_image toolview declare the official
+            // "tool.call.images", and a second declaration of one slot name is
+            // rejected. The official conversation.message.images slot stays
+            // untouched either way.
+            children: { [AUX_TOOL_IMAGES_SLOT]: { kind: "single", scope: "session" } },
           },
           VisionAnalyzeRow,
         ),
+      );
+      // The gallery that fills the child slot declared above. inject() is driven
+      // by the slot's declaration epoch, so this does not depend on the two
+      // registrations running in a particular order.
+      ctx.slots.inject(AUX_TOOL_IMAGES_SLOT, () =>
+        ctx.slots.register({ name: AUX_TOOL_IMAGES_SLOT, locale: NS }, AuxToolImages),
       );
       ctx.slots.inject("settings.section", () =>
         ctx.slots.register(

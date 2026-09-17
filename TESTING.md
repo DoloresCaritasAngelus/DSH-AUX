@@ -11,7 +11,7 @@ cd <仓库路径>
 node --test tests/*.test.js
 ```
 
-- 🔻**易腐烂·快照数字** 基线 **600**(2026-09-11)。**以跑出的 `# pass/# fail` 为准**,
+- 🔻**易腐烂·快照数字** 基线 **606**(2026-09-18)。**以跑出的 `# pass/# fail` 为准**,
   别把数字当硬事实;每次增删测试后同步更新本表的"基线"与"文件清单"。
 - 若进程因挂起定时器不自动退出(偶发),以 `# pass/# fail` 计数为准。
 - `tests/bridge.test.js` 的部署包探测是**显式 opt-in**(`BRIDGE_DEPLOYED_SRC=1` 或 `DSH_AGENT_LOOP`);默认不探测 ⇒ 本机与 CI 的 `# tests` 计数一致。
@@ -91,7 +91,7 @@ node scripts/pr-body-hygiene.mjs [--pr <n>] [--stdin < draft.md]      # PR 标�
 | `tests/skill-bridge.test.js` | 技能预审桥接(skill 路由配置门控/上下文构造/报告拼装/失败回退) |
 | `tests/vision-route.test.js` | vision 交付路由(P2):`resolveVisionDelivery` 决策矩阵(白名单/否定模态/forceAuxVision/auto 双条件)、native 零辅助调用、形状含 `mode`、交付失败点名 `visionRoute: 'aux'` |
 | `tests/vision-ordinal.test.js` | vision 输出序号(P5.6):消息级/调用级 `imageOrdinal`、`presentationMeta` 同序 ordinals |
-| `tests/vision-toolview.test.js` | vision_analyze toolview 卡片(P5.6):keyed `tool.call.toolview` 注册 + 各调用态渲染(假模块加载器 + 最小 React) |
+| `tests/vision-toolview.test.js` | vision_analyze toolview 卡片(P5.6):keyed `tool.call.toolview` 注册 + 各调用态渲染 + **包私有图片槽 `aux.tool.call.images` 与自建画廊**(假模块加载器 + 最小 React) |
 | `tests/vision-batch-mode.test.js` | 多图返回顶层 `mode` 过**编译后** schema(全成功/单元素/部分失败/native)+ 多来源拒绝 + 每批一次 delivery |
 | `tests/vision-echo.test.js` | vision_analyze 轨迹回显(输出 schema 锁形/官方 read_image 形状对齐/Session 加载边) |
 | `tests/web-crawl.test.js` | web_crawl(robots/范围/hosts/seed/模式/预算) |
