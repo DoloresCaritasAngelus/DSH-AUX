@@ -9,7 +9,7 @@
  * 本闸把「让路」这件事对**每个补丁**钉成断言,新增补丁必须在此登记其让路方式。
  * 三种合法让路形态:
  *  1. **读开关并短路**(behavior patch:改写、门控);
- *  2. **把判定委托给会读开关的 AUX 服务**(如 `auxLlm.subagentRoute`,native 时返回 settled:false);
+ *  2. **把判定委托给会读开关的 AUX 服务**(补丁只转发,服务端在 native 下短路;当前无实例);
  *  3. **纯增量 schema**(只加可选参数,不改变既有行为)—— 允许无条件,但必须证明「原有行一行未少」。
  *
  * 运行:cd <仓库路径> && node --test tests/bridge-switch-constraints.test.js
@@ -23,7 +23,6 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
 const block = (name) => readFileSync(join(REPO, "bridge", name), "utf8");
-const source = (rel) => readFileSync(join(REPO, rel), "utf8");
 
 test("agent-loop(图像改写):读 imageBridge 开关,native 时不改写", () => {
   const b = block("patched-agent-loop-0.1.5-block.txt");

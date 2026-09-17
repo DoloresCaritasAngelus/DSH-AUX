@@ -55,7 +55,7 @@ dsh plugin --profile web add "file:/path/to/dsh-aux"
 
 ```sh
 cd <仓库>/bridge
-node apply-patch.mjs                 # image-bridge / subagent / workflow / skill 补丁(幂等)
+node apply-patch.mjs                 # image-bridge / skill 补丁(幂等)
 # 设置页可写 aux 在当前 DSH 0.1.5-alpha.1 线是原生能力,不再需要 rc.6 settings 白名单补丁
 ```
 
@@ -136,12 +136,6 @@ rm "$DSH_ROOT/node_modules/<NAME>"
   到纯文本模型(v3)。安装:install.sh 已包含;
   单独重装:`cd <repo>/bridge && node apply-patch.mjs`(幂等,可 --dry-run / --rollback)。
   `npm update` 后需重跑;`/aux status` 会报告状态。
-- **subagent-bridge(集成组件,默认安装)**:透明接管原生 `subagent` 工具,按
-  native / manual / vision-aware 模式让子代理走 AUX 辅助模型;给子代理注入
-  `vision_analyze` 作兜底。零系统提示词改动,兼容极简 / Anchored Standard。
-  `workflow` 的 `agent()` 并行子代理也可走同一路由(includeWorkflow)。
-  设置:设置页「子代理辅助模型」或 `aux.subagent`。补丁随 install.sh 应用,
-  也可单独 `cd <repo>/bridge && node apply-patch.mjs`;`/aux status` 报告状态。
 - **skill-audit(集成组件,默认安装)**:配置 `skill` 辅助模型后,原生 `skill`
   工具调用会先由辅助模型精读 SKILL.md + 当前任务,返回预审报告(如何应用 /
   适用性 / 已知坑 / 🔻易腐烂旧断言 / 执行建议)。主模型同时看到原始 SKILL.md

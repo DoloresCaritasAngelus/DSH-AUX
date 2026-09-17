@@ -127,7 +127,7 @@ run = await this.subagents.start(this.provider, {
 4. 纯函数:`resolveSubagentRoute` 不变(不做 includeWorkflow 短路,避免影响
    `subagent` 工具路径)
 5. 桥接补丁:
-   - `bridge/orig-workflow-startchild-block.txt` / `patched-workflow-startchild-block.txt`
+   - `retired/subagent-bridge/bridge/orig-workflow-startchild-block.txt` / `patched-workflow-startchild-block.txt`
    - `bridge/apply-patch.mjs` 新增 `dsh-workflow-worker-thread` 目标
 6. `/aux status` 增加独立的 `workflow-bridge: installed/missing`(新增
    `workflowBridgeStatus()`,与 `subagentBridgeStatus` 分开)
