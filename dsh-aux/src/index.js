@@ -545,9 +545,19 @@ export class AuxLlmService extends Service {
       // AFTER a configured vision aux chain fails; when NO vision aux route is
       // configured at all, the main model is the only option (not a fallback),
       // so keep it usable.
-      const allowMainFallback =
+      let allowMainFallback =
         (request.allowMainFallback ?? this.fallbackToMain) &&
         (task !== "vision" || this.visionFallbackToMain || chain.length === 0);
+      // Vision fallback additionally requires an EXPLICIT image declaration from
+      // the main route (modalities known and containing image). Silence is not
+      // consent: providers commonly report no modality list at all, and falling
+      // back onto a text-only main route turns a clear failure (aux model
+      // rate-limited) into a confusing one (the next main-model turn cannot see
+      // the image). Only a genuine fallback is gated: with no aux route
+      // configured the main route is the only option, not a fallback.
+      if (allowMainFallback && task === "vision" && chain.length > 0 && mainRoute !== void 0) {
+        allowMainFallback = (await this._resolveImageCapability(mainRoute, request.signal)) === true;
+      }
       if (
         allowMainFallback &&
         mainRoute !== void 0 &&
@@ -642,6 +652,16 @@ export class AuxLlmService extends Service {
         errorCode: attempts.map((a) => a.kind).join(","),
         fallbackUsed: attempts.length > 1,
         candidates: candidateKeys(),
+        // Per-attempt breakdown on the NORMAL event, not only under
+        // fullToolTrace: which routes were tried and how each failed is the
+        // first question when diagnosing a call. Values are coerced so the
+        // event never carries an undefined member: recordAuxEvent strips only
+        // top-level keys, and a nested undefined breaks the session snapshot.
+        attempts: attempts.map((a) => ({
+          provider: a.provider ?? "",
+          model: a.model ?? "",
+          kind: a.kind ?? "other",
+        })),
         purpose: request.purpose,
         mode: request.mode ?? "aux",
       });

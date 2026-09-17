@@ -233,7 +233,7 @@ window.__ModuleLoader__.load({
       "placeholder.inheritDefault": "(继承默认)",
       "global.fallbackToMain": "失败时降级到主模型 (fallbackToMain)",
       "global.forceAuxVision": "强制原生图片也走 AUX 视觉 (forceAuxVision)",
-      "global.visionFallbackToMain": "视觉辅助失败时降级到主模型 (visionFallbackToMain)",
+      "global.visionFallbackToMain": "视觉辅助失败时降级到主模型 (visionFallbackToMain;仅当主模型声明支持图片)",
       "global.showStatusChip": "在对话界面显示辅助模型状态芯片",
       "global.visionRoute": "vision 交付路由 (visionRoute)",
       "global.visionRoute.aux": "aux —— 始终用辅助视觉模型",
@@ -466,7 +466,8 @@ window.__ModuleLoader__.load({
       "placeholder.inheritDefault": "(Inherit default)",
       "global.fallbackToMain": "Fall back to main model on failure (fallbackToMain)",
       "global.forceAuxVision": "Force native images through AUX vision (forceAuxVision)",
-      "global.visionFallbackToMain": "Fall back to main model when vision fails (visionFallbackToMain)",
+      "global.visionFallbackToMain":
+        "Fall back to main model when vision fails (visionFallbackToMain; only when the main model declares image support)",
       "global.showStatusChip": "Show auxiliary model status chip in conversation UI",
       "global.visionRoute": "Vision delivery route (visionRoute)",
       "global.visionRoute.aux": "aux — always use the auxiliary vision model",

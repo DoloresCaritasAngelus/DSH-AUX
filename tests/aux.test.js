@@ -3112,3 +3112,42 @@ test("归属钩子: agent/inbox/spliced 的 inserted 不计入(避免重复)", a
   const owned = ctx.auxLlm._sessionImages.get(session.id);
   assert.equal(owned === void 0 || owned.has(attachmentId) === false, true, "spliced 不得登记");
 });
+
+test("vision 回退正向门: 主路由未显式声明图片能力 → 不作为回退候选", async () => {
+  const { ctx } = await makeHarness({ tasks: { vision: { provider: "p", model: "primary" } } });
+  failRoute(ctx, "primary", () => Object.assign(new Error("rate limited"), { status: 429 }));
+  // harness 的默认主路由 opencode-go/deepseek-v4-flash 声明 ["text"](显式不支持)
+  const session = makeSession();
+  await assert.rejects(() => ctx.auxLlm.call("vision", { messages: imageMessage(), session }));
+  const event = session.events.find((entry) => entry.type === AUX_CALL_EVENT);
+  assert.deepEqual(event.data.candidates, ["p/primary"], "text-only 主路由不得作为视觉回退");
+});
+
+test("vision 回退正向门: 主路由显式声明图片能力 → 回退并作答", async () => {
+  const { ctx } = await makeHarness({ tasks: { vision: { provider: "p", model: "primary" } } });
+  failRoute(ctx, "primary", () => Object.assign(new Error("rate limited"), { status: 429 }));
+  // harness 的模态表里 glm-5.2 = ["text","image"](显式声明支持图片)
+  ctx.auxLlm._mainRoute = async () => ({ provider: "opencode-go", model: "glm-5.2" });
+  const session = makeSession();
+  const result = await ctx.auxLlm.call("vision", { messages: imageMessage(), session });
+  assert.equal(result.model, "glm-5.2", "显式声明图片能力的主路由应被用作回退");
+  const event = session.events.find((entry) => entry.type === AUX_CALL_EVENT);
+  assert.deepEqual(event.data.candidates, ["p/primary", "opencode-go/glm-5.2"]);
+  assert.equal(event.data.selectedIndex, 1);
+});
+
+test("失败事件带逐次尝试(attempts),不依赖 fullToolTrace", async () => {
+  const { ctx } = await makeHarness({ tasks: { compress: { provider: "p", model: "primary" } } });
+  failRoute(ctx, "primary", () => Object.assign(new Error("429 too many requests"), { status: 429 }));
+  const session = makeSession();
+  await assert.rejects(() =>
+    ctx.auxLlm.call("compress", {
+      messages: [{ content: [{ type: "text", text: "hi" }] }],
+      session,
+      allowMainFallback: false,
+    }),
+  );
+  const event = session.events.find((entry) => entry.type === AUX_CALL_EVENT);
+  assert.deepEqual(event.data.attempts, [{ provider: "p", model: "primary", kind: "rate-limit" }]);
+  assert.equal(event.data.errorCode, "rate-limit");
+});

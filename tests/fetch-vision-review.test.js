@@ -114,7 +114,7 @@ test("vision_analyze multi-image: partial failure preserves successful analyses"
     provider: "",
     model: "",
     mode: "aux",
-    error: { code: "other", message: "boom for bad1", retryable: false },
+    error: { code: "other", message: "boom for bad1", retryable: false, attempts: 1, route: "" },
   });
   assert.deepEqual(result.analyses[2], {
     analysis: "OK ok2",
@@ -143,7 +143,7 @@ test("vision_analyze multi-image: all failures produce error entries without thr
     assert.equal(entry.analysis, failureInstruction("other"));
     assert.equal(entry.provider, "");
     assert.equal(entry.model, "");
-    assert.deepEqual(entry.error, { code: "other", message: "always fails", retryable: false });
+    assert.deepEqual(entry.error, { code: "other", message: "always fails", retryable: false, attempts: 1, route: "" });
   }
 });
 
@@ -195,6 +195,8 @@ test("vision_analyze multi-image: 可重试失败重试后仍失败 → 结构�
     code: "connection",
     message: "fetch failed",
     retryable: true,
+    attempts: 2,
+    route: "",
   });
 });
 
@@ -209,6 +211,8 @@ test("vision_analyze multi-image: 不可重试失败不重试(调用计数 1)", 
     code: "content",
     message: "the model does not support image input",
     retryable: false,
+    attempts: 1,
+    route: "",
   });
   assert.match(result.analyses[0].analysis, /不可重试/);
   assert.match(result.analyses[0].analysis, /请勿重复调用同一来源/);
@@ -241,16 +245,20 @@ test("vision_analyze: 取消后不重试(调用计数 1)", async () => {
 
 test("失败分类: 可重试集合与 DSH LlmError 码对齐表", () => {
   assert.equal(isRetryableFailure("rate-limit"), true);
-  assert.equal(isRetryableFailure("timeout"), true);
   assert.equal(isRetryableFailure("connection"), true);
-  for (const kind of ["aborted", "auth", "payment", "model-not-found", "content", "other"]) {
+  assert.equal(isRetryableFailure("server"), true);
+  // 超时明确排除:路由已经用光了整个 timeoutMs,再试一次只是把等待时间翻倍;
+  // 慢路由的杠杆是调高该任务的 timeoutMs,不是重试。
+  assert.equal(isRetryableFailure("timeout"), false, "超时不得自动重试");
+  for (const kind of ["aborted", "auth", "payment", "model-not-found", "content", "timeout", "other"]) {
     assert.equal(isRetryableFailure(kind), false, kind + " 不得自动重试");
   }
   // DSH 默认可重试码 = EMPTY_RESPONSE/RATE_LIMIT/SERVER/TIMEOUT/TRANSPORT;
-  // AUX 只重试其中三个瞬态类(other 覆盖的 5xx 不重试,有意分歧)。
+  // AUX 现在与其中三个一致(RATE_LIMIT/SERVER/TRANSPORT),只把 TIMEOUT 排除。
   assert.equal(DSH_FAILURE_CODES["rate-limit"], "RATE_LIMIT");
   assert.equal(DSH_FAILURE_CODES.timeout, "TIMEOUT");
   assert.equal(DSH_FAILURE_CODES.connection, "TRANSPORT");
+  assert.equal(DSH_FAILURE_CODES.server, "SERVER");
   assert.equal(DSH_FAILURE_CODES.other, "UNKNOWN");
   // 分类器能产出的每个 kind 都必须在映射表里
   const samples = [
@@ -262,6 +270,9 @@ test("失败分类: 可重试集合与 DSH LlmError 码对齐表", () => {
     [{ status: 404 }, "model-not-found"],
     [{ message: "ECONNREFUSED" }, "connection"],
     [{ code: "UNSUPPORTED_CONTENT" }, "content"],
+    [{ status: 500 }, "server"],
+    [{ status: 503 }, "server"],
+    [{ message: "internal server error" }, "server"],
     [{ message: "boom" }, "other"],
   ];
   for (const entry of samples) {
@@ -269,4 +280,44 @@ test("失败分类: 可重试集合与 DSH LlmError 码对齐表", () => {
     assert.equal(kind, entry[1]);
     assert.equal(typeof DSH_FAILURE_CODES[kind], "string", kind + " 缺少 DSH 映射");
   }
+});
+
+test("重试口径: 超时不再重试(调用计数 1)", async () => {
+  const { service, exec, calls } = makeVisionStub(() => {
+    const error = new Error("timed out after 600000ms");
+    error.code = "TIMEOUT";
+    throw error;
+  });
+  const result = await runVision(service, { question: "q", images: [{ attachmentId: "bad1" }] }, exec);
+  assert.equal(calls.count, 1, "超时不得在工具内重试:应由调用方调高该任务的 timeoutMs");
+  assert.equal(result.analyses[0].error.code, "timeout");
+  assert.equal(result.analyses[0].error.retryable, false);
+  assert.equal(result.analyses[0].error.attempts, 1);
+});
+
+test("失败分类: 5xx 归为 server,可重试,重试一次(调用计数 2)", async () => {
+  const { service, exec, calls } = makeVisionStub(() => {
+    const error = new Error("internal server error");
+    error.status = 503;
+    throw error;
+  });
+  const result = await runVision(service, { question: "q", images: [{ attachmentId: "bad1" }] }, exec);
+  assert.equal(result.analyses[0].error.code, "server", "5xx 不得再落进 other 黑洞");
+  assert.equal(result.analyses[0].error.retryable, true);
+  assert.equal(result.analyses[0].error.attempts, 2);
+  assert.equal(calls.count, 2);
+});
+
+test("失败原因字段: route 取自 AUX 调用内最后一次尝试的路由", async () => {
+  const { service, exec } = makeVisionStub(() => {
+    const error = new Error("all routes failed");
+    error.attempts = [
+      { provider: "p", model: "one", kind: "rate-limit", error: null },
+      { provider: "q", model: "two", kind: "server", error: null },
+    ];
+    throw error;
+  });
+  const result = await runVision(service, { question: "q", images: [{ attachmentId: "bad1" }] }, exec);
+  assert.equal(result.analyses[0].error.route, "q/two");
+  assert.equal(result.analyses[0].error.attempts, 1, "非可重试失败只试一次");
 });

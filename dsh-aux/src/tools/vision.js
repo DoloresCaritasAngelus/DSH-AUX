@@ -74,21 +74,42 @@ async function resolveDelivery(service, exec) {
 }
 
 /**
- * Analyze one image, retrying once when the failure class is transient
- * (rate limit / timeout / connection). The retry re-enters the whole route
- * chain, so a primary route that just entered cooldown can land on a backup.
- * Non-transient failures and aborted calls are rethrown untouched.
+ * Analyze one image, retrying once when the failure class is worth repeating
+ * (rate limit / connection / server — see `isRetryableFailure`; a timeout is
+ * NOT, because the route already consumed its whole `timeoutMs` and the
+ * operator's lever there is the timeout itself). The retry re-enters the whole
+ * route chain, so a primary route that just entered cooldown can land on a
+ * backup. Non-retryable failures and aborted calls are rethrown untouched.
  */
 async function analyzeWithRetry(service, item, question, exec, delivery) {
   try {
     return await analyzeOne(service, item, question, exec, delivery);
   } catch (error) {
     const kind = classifyFailure(error, exec.signal);
-    if (exec.signal?.aborted === true || !isRetryableFailure(kind)) throw error;
+    if (exec.signal?.aborted === true || !isRetryableFailure(kind)) throw markTries(error, 1);
     await sleep(RETRY_DELAY_MS, exec.signal);
-    if (exec.signal?.aborted === true) throw error;
-    return await analyzeOne(service, item, question, exec, delivery);
+    if (exec.signal?.aborted === true) throw markTries(error, 1);
+    try {
+      return await analyzeOne(service, item, question, exec, delivery);
+    } catch (finalError) {
+      throw markTries(finalError, 2);
+    }
   }
+}
+
+/**
+ * In-tool attempt counts, keyed by the thrown error object. A WeakMap keeps the
+ * service's own error object unmutated: it may be frozen, and adding fields to
+ * a foreign error is not ours to do.
+ */
+const ATTEMPT_TRIES = new WeakMap();
+
+/** Record how many in-tool attempts produced this failure (1 or 2). */
+function markTries(error, tries) {
+  if (error !== null && (typeof error === "object" || typeof error === "function")) {
+    ATTEMPT_TRIES.set(error, tries);
+  }
+  return error;
 }
 
 /** Model-facing reason word per classified failure kind. */
@@ -96,6 +117,7 @@ const FAILURE_REASON_TEXT = Object.freeze({
   "rate-limit": "限流",
   timeout: "超时",
   connection: "连接失败",
+  server: "服务端错误",
   auth: "鉴权失败",
   payment: "额度不足",
   "model-not-found": "模型不可用",
@@ -203,6 +225,16 @@ export async function runVision(service, args, exec) {
     // message. `code` is the AUX kind from route.js (DSH alignment table in
     // DSH_FAILURE_CODES); `retryable` mirrors the in-tool retry decision.
     const kind = classifyFailure(entry.reason, exec.signal);
+    // Which route failed last (an AuxCallError carries every attempt) and how
+    // many in-tool attempts this image cost (see markTries). Both default
+    // defensively: a non-AUX throw carries neither.
+    const routeAttempts = Array.isArray(entry.reason?.attempts) ? entry.reason.attempts : [];
+    const lastRoute = routeAttempts[routeAttempts.length - 1];
+    const route =
+      lastRoute !== void 0 && typeof lastRoute.provider === "string" && lastRoute.provider.length > 0
+        ? lastRoute.provider + "/" + (lastRoute.model ?? "")
+        : "";
+    const tries = ATTEMPT_TRIES.get(entry.reason);
     return {
       analysis: failureInstruction(kind),
       provider: "",
@@ -212,6 +244,8 @@ export async function runVision(service, args, exec) {
         code: kind,
         message: entry.reason?.message ?? String(entry.reason),
         retryable: isRetryableFailure(kind),
+        attempts: typeof tries === "number" ? tries : 1,
+        route,
       },
     };
   });

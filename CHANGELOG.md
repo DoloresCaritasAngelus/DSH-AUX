@@ -2,6 +2,13 @@
 
 ## 未发布 (Unreleased)
 
+### 变更 — 失败处理口径与失败原因字段
+
+- **重试口径收敛**:工具内那一次自动重试现在只针对 `rate-limit` / `connection` / `server`(5xx);`timeout` **不再重试** —— 路由已经用光了整个 `timeoutMs`,再试一次只是把调用方等待的时间翻倍。慢路由的杠杆是调高该任务的 `timeoutMs`。
+- **5xx 有了自己的分类**:新增 `server`(DSH 映射 `SERVER`)。此前 5xx 落进 `other` 并被报告为「不可重试」,那本身就是错误信息。
+- **vision 回退新增正向门**:`visionFallbackToMain` 只回退到**显式声明支持图片**的主路由(`inputModalities` 已知且含 `image`);能力未知或声明为纯文本时,视觉调用**直接失败**,而不是把图交给一个看不了图的模型 —— 那会把「辅助模型限流」这种清晰的失败变成「主模型看不到图」这种难懂的失败。注意:供应商常常不上报模态列表,这些路由会被判为未知 → 不回退。
+- **失败原因字段补齐**:`vision_analyze` 多图失败条目新增 `attempts`(工具内试了几次)与 `route`(最后失败的路由 `provider/model`);`aux/llm-call` 失败事件新增 `attempts`(逐次尝试的 provider/model/kind),不必再开 `fullToolTrace` 才能排障。
+
 ### 破坏性变更 — 子代理桥接退役
 
 官方 DSH 在子代理 / agent team 方向持续推进:`0.1.5-rc.2` 已自带 `dsh-subagent`、

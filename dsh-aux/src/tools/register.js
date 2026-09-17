@@ -143,6 +143,10 @@ export function registerAuxTools(service) {
                           code: { type: "string", required: true },
                           message: { type: "string", required: true },
                           retryable: { type: "boolean", required: true },
+                          // How many in-tool attempts this image cost (1 or 2),
+                          // and which provider/model route failed last.
+                          attempts: { type: "number", required: true },
+                          route: { type: "string", required: true },
                         },
                       },
                     },
