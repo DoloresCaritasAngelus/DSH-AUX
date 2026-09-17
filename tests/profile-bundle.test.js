@@ -18,6 +18,7 @@ import {
   ensureLegacyPatch,
   findWiredProfiles,
   normalizeEmptyOverlay,
+  overlayProblem,
   planProfileBundle,
   stripLegacyPatch,
 } from "../bridge/profile-bundle.mjs";
@@ -107,6 +108,48 @@ test("planProfileBundle: 修复上一轮留下的空补丁层", () => {
   });
 });
 
+test("stripLegacyPatch: 别的插件条目即使正文提到本包也绝不能被摘", () => {
+  const other = [
+    "# dsh-plugin-session-delete: 会话删除(它的注释里会提到 dsh-aux)",
+    "# 说明:dsh-aux 的会话图片清理随之生效 —— 只是提及,不是本包条目",
+    "- insert:",
+    "    - id: chameleon-session-delete",
+    "      name: '@huanlin/dsh-plugin-session-delete'",
+    "",
+  ].join("\n");
+  const res = stripLegacyPatch(other, PKG);
+  assert.equal(res.removed, false, "必须按条目自己的 name 判定,不能用整块子串");
+  assert.equal(res.text, other);
+});
+
+test("ensureLegacyPatch: 已有 [] 时不得写出不可解析的 YAML", () => {
+  withProfile({ "cordis.patch.yml": "# 只剩注释\n[]\n" }, (dir) => {
+    assert.equal(ensureLegacyPatch(dir, PKG), true);
+    const written = readFileSync(join(dir, "cordis.patch.yml"), "utf8");
+    assert.ok(!/^[ \t]*\[\][ \t]*$/m.test(written), "块序列不能跟在流序列 [] 后面");
+    assert.ok(written.includes(PKG));
+    assert.equal(overlayProblem(written), void 0, "产物必须是 DSH 能接受的顶层数组");
+    assert.equal(stripLegacyPatch(written, PKG).removed, true, "产物应能被后续 strip 识别");
+  });
+});
+
+test("ensureLegacyPatch: 幂等", () => {
+  withProfile({ "cordis.patch.yml": "- id: other\n  name: 'x'\n" }, (dir) => {
+    assert.equal(ensureLegacyPatch(dir, PKG), true);
+    assert.equal(ensureLegacyPatch(dir, PKG), false, "第二次不应再写");
+    const written = readFileSync(join(dir, "cordis.patch.yml"), "utf8");
+    assert.equal(written.split(PKG).length - 1, 1, "不得写第二份");
+    assert.ok(written.includes("id: other"), "无关条目必须保留");
+  });
+});
+
+test("overlayProblem: 只剩注释或没有顶层项会被 DSH 拒绝", () => {
+  assert.equal(overlayProblem("- insert:\n    - id: x\n"), void 0);
+  assert.equal(overlayProblem("[]\n"), void 0);
+  assert.equal(typeof overlayProblem("# 只剩注释\n"), "string");
+  assert.equal(typeof overlayProblem(""), "string");
+});
+
 test("stripLegacyPatch: 不含本包时原样返回", () => {
   const other = "- insert:\n    - id: other\n      name: 'other-pkg'\n";
   const res = stripLegacyPatch(other, PKG);
@@ -123,6 +166,84 @@ test("ensureBundleWiring: 补 dependencies 与 bundles,且幂等", () => {
   const second = ensureBundleWiring(data, { packageName: PKG, packageDir: PKG_DIR });
   assert.equal(second.changed, false, "第二次不应再报改动");
   assert.deepEqual(data.dsh.profile.bundles, ["@deepseek-ai/dsh-base", PKG], "不应重复追加");
+});
+
+test("ensureBundleWiring: 依赖在但未选中 = 用户停用,不得回填", () => {
+  const data = {
+    dependencies: { [PKG]: bundleSpec(PKG_DIR) },
+    dsh: { profile: { bundles: ["@deepseek-ai/dsh-base"] } },
+  };
+  const before = JSON.stringify(data);
+  const result = ensureBundleWiring(data, { packageName: PKG, packageDir: PKG_DIR });
+  assert.equal(result.disabled, true, "这是插件页的停用态,不是待接线态");
+  assert.equal(result.changed, false);
+  assert.equal(JSON.stringify(data), before, "不得改动清单");
+});
+
+test("ensureBundleWiring: 容器类型错时报告问题而不是静默丢弃", () => {
+  const broken = [
+    { dsh: [] },
+    { dsh: { profile: { bundles: {} } } },
+    { dsh: { profile: { bundles: ["@deepseek-ai/dsh-base"], selected: true } }, dependencies: [] },
+  ];
+  for (const data of broken) {
+    const before = JSON.stringify(data);
+    const result = ensureBundleWiring(data, { packageName: PKG, packageDir: PKG_DIR });
+    assert.equal(typeof result.problem, "string", JSON.stringify(data) + " 应被报为问题");
+    assert.equal(result.changed, false);
+    assert.equal(JSON.stringify(data), before, "出错时不得改动清单");
+  }
+});
+
+test("planProfileBundle: 停用态与坏清单都不写盘", () => {
+  const disabled =
+    JSON.stringify(
+      {
+        name: "p",
+        private: true,
+        dependencies: { [PKG]: bundleSpec(PKG_DIR) },
+        dsh: { profile: { bundles: ["@deepseek-ai/dsh-base"] } },
+      },
+      null,
+      2,
+    ) + "\n";
+  withProfile({ "package.json": disabled }, (dir) => {
+    const report = planProfileBundle({ profileDir: dir, packageName: PKG, packageDir: PKG_DIR });
+    assert.equal(report.disabled, true);
+    assert.equal(readFileSync(join(dir, "package.json"), "utf8"), disabled, "停用态不得改写");
+    assert.equal(describePlan(report).includes("停用"), true);
+  });
+  const broken = JSON.stringify({ name: "p", private: true, dsh: { profile: { bundles: {} } } }, null, 2) + "\n";
+  withProfile({ "package.json": broken }, (dir) => {
+    const report = planProfileBundle({ profileDir: dir, packageName: PKG, packageDir: PKG_DIR });
+    assert.equal(typeof report.problem, "string");
+    assert.equal(readFileSync(join(dir, "package.json"), "utf8"), broken, "坏清单不得改写");
+    assert.equal(describePlan(report).includes("未接线"), true);
+  });
+});
+
+test("findWiredProfiles: 只在注释里提到本包的 profile 不算数", () => {
+  const home = mkdtempSync(join(tmpdir(), "dsh-home-"));
+  try {
+    const commentOnly = join(home, "profiles", "commentonly");
+    const real = join(home, "profiles", "real");
+    mkdirSync(commentOnly, { recursive: true });
+    mkdirSync(real, { recursive: true });
+    writeFileSync(join(commentOnly, "package.json"), JSON.stringify({ name: "c" }) + "\n");
+    writeFileSync(
+      join(commentOnly, "cordis.patch.yml"),
+      "# dsh-aux 只是被提到,没有它的条目\n- id: other\n  name: 'x'\n",
+    );
+    writeFileSync(join(real, "package.json"), JSON.stringify({ name: "r" }) + "\n");
+    writeFileSync(join(real, "cordis.patch.yml"), "- insert:\n    - id: aux\n      name: '" + PKG + "'\n");
+    assert.deepEqual(
+      findWiredProfiles(home, PKG).map((dir) => dir.split("/").pop()),
+      ["real"],
+      "纯注释提及不得被当成接线对象",
+    );
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test("planProfileBundle: 缺 dsh.profile 时补齐结构并写盘", () => {

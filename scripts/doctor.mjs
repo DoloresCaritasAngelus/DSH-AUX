@@ -21,7 +21,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readPackageName, stripLegacyPatch } from "../bridge/profile-bundle.mjs";
+import { overlayProblem, readPackageName, stripLegacyPatch } from "../bridge/profile-bundle.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
@@ -110,10 +110,16 @@ function main() {
       }
     }
     const patchFile = join(profileDir, "cordis.patch.yml");
-    const legacyInsert =
-      existsSync(patchFile) && stripLegacyPatch(readFileSync(patchFile, "utf8"), PACKAGE_NAME).removed;
+    const patchText = existsSync(patchFile) ? readFileSync(patchFile, "utf8") : "";
+    const legacyInsert = stripLegacyPatch(patchText, PACKAGE_NAME).removed;
+    // DSH refuses an overlay that is not a top-level array, so a comment-only (or
+    // empty) patch file is a hard failure — the same class of failure this
+    // migration exists to prevent.
+    const overlayIssue = existsSync(patchFile) ? overlayProblem(patchText) : void 0;
     if (!manifestRead) {
       record("ERROR", "profile", `profile 清单缺失或不可解析: ${manifestFile}`);
+    } else if (overlayIssue !== void 0) {
+      record("ERROR", "profile", `profile ${PROFILE} 的补丁层会被 DSH 拒绝(${overlayIssue})`);
     } else if (selected && legacyInsert) {
       record("ERROR", "profile", `profile ${PROFILE} 同时有 bundle 声明与 patch 注入 —— loader 会重复行`);
     } else if (!selected) {

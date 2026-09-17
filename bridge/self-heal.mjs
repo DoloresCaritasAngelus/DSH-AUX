@@ -42,7 +42,13 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deployedFile, guardPackageFile, guardTarget } from "./target.js";
 import { planFormatV0Patch } from "./format-admissions.mjs";
-import { describePlan, findWiredProfiles, planProfileBundle, readPackageName } from "./profile-bundle.mjs";
+import {
+  CALLER_DSH_ROOT,
+  describePlan,
+  findWiredProfiles,
+  planProfileBundle,
+  readPackageName,
+} from "./profile-bundle.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url)); // <repo>/bridge
 const REPO = resolve(HERE, "..");
@@ -284,7 +290,17 @@ function ensureFormatAdmissions(root) {
  * 迁移时会移除那条旧 insert,否则 bundle 层与补丁层各插一行同 id 的 aux。
  */
 function ensureProfileBundle() {
-  const dshHome = process.env.DSH_HOME ?? join(process.env.HOME ?? "", ".dsh");
+  // Never guess the profile home. A caller that pinned DSH_ROOT (a test, a fake
+  // deployment, a non-default root) must also say where the profiles live, or
+  // this step would rewrite the user's real profile directory.
+  let dshHome = process.env.DSH_HOME;
+  if (dshHome === void 0 || dshHome === "") {
+    if (CALLER_DSH_ROOT !== void 0 && CALLER_DSH_ROOT !== "") {
+      log("profile-bundle: 指定了 DSH_ROOT 但未指定 DSH_HOME —— 跳过 profile 接线(避免误改真实 profile 目录)");
+      return;
+    }
+    dshHome = join(process.env.HOME ?? "", ".dsh");
+  }
   const packageName = readPackageName();
   const profiles = findWiredProfiles(dshHome, packageName);
   if (profiles.length === 0) {

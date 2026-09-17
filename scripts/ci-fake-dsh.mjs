@@ -47,7 +47,10 @@ function run(label, scriptRel, extraArgs = []) {
   const args2 = APPLY ? extraArgs : [...extraArgs, "--dry-run"];
   const res = spawnSync(process.execPath, [script, ...args2], {
     cwd: REPO,
-    env: { ...process.env, DSH_ROOT: ROOT, HOME: FAKE_HOME },
+    // DSH_HOME must point inside the fake root too: self-heal refuses to touch a
+    // profile home it was not told about, and a leaked real DSH_HOME would make
+    // this smoke test write the user's own profile.
+    env: { ...process.env, DSH_ROOT: ROOT, DSH_HOME: join(FAKE_HOME, ".dsh"), HOME: FAKE_HOME },
     encoding: "utf8",
   });
   console.log(`\n== ${label} ==`);

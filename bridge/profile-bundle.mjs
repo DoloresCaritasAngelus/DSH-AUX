@@ -23,13 +23,28 @@
  *   node bridge/profile-bundle.mjs --all                  # 扫描 DSH_HOME 下提到本包的 profile
  *   node bridge/profile-bundle.mjs --all --dry-run
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
 const PACKAGE_DIR = join(REPO, "dsh-aux");
+/**
+ * The DSH_ROOT the caller set, captured before main() defaults it in place.
+ * Callers that pin a deployment root but leave the profile home alone must not
+ * have their real profile written to.
+ */
+export const CALLER_DSH_ROOT = process.env.DSH_ROOT;
 
 function log(message) {
   console.log("[profile-bundle] " + message);
@@ -70,6 +85,25 @@ export function normalizeEmptyOverlay(text) {
 }
 
 /**
+ * Why DSH would refuse this patch layer, if it would. DSH requires a top-level
+ * YAML array of loader patch entries, and a comment-only (or empty) document
+ * parses as `null`, which it rejects outright.
+ *
+ * @param text - the current cordis.patch.yml text.
+ * @returns the reason, or undefined when the document is acceptable.
+ */
+export function overlayProblem(text) {
+  const meaningful = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+  if (meaningful.length === 0) return "补丁层只剩注释:YAML 会解析成 null";
+  if (meaningful.length === 1 && meaningful[0] === "[]") return void 0;
+  if (!meaningful.some((line) => /^-\s/.test(line))) return "补丁层没有顶层列表项";
+  return void 0;
+}
+
+/**
  * Drop the one top-level patch entry that names the package, together with the
  * comment run that introduces it. Unrelated entries and the header comment stay
  * untouched.
@@ -90,7 +124,13 @@ export function stripLegacyPatch(text, packageName) {
     let end = start + 1;
     while (end < lines.length && !/^\S/.test(lines[end])) end += 1;
     const block = lines.slice(start, end).join("\n");
-    if (!block.includes(packageName)) continue;
+    // Match the entry's own `name:` value exactly. A substring test would also
+    // remove an unrelated plugin's entry that merely mentions this package.
+    const nameLine = block.match(/^[ \t]+name:[ \t]*(.*)$/m);
+    if (nameLine === null) continue;
+    const rawName = nameLine[1].trim();
+    const quotedName = rawName.match(/^["']([^"']+)["']/);
+    if ((quotedName !== null ? quotedName[1] : rawName.split("#")[0].trim()) !== packageName) continue;
     // Take the comment run written directly above the entry — never across a
     // blank line, which is what separates it from the file header or a neighbour.
     let from = start;
@@ -125,14 +165,15 @@ export function ensureLegacyPatch(profileDir, packageName) {
   const patchPath = join(profileDir, "cordis.patch.yml");
   const current = existsSync(patchPath) ? readFileSync(patchPath, "utf8") : "";
   if (stripLegacyPatch(current, packageName).removed) return false;
+  // An explicit empty flow sequence must go first: a block sequence may not
+  // follow `[]`, and DSH refuses the document that results.
+  const base = current.replace(/^[ \t]*\[\][ \t]*$/gm, "").replace(/\s+$/, "");
+  const block =
+    '# dsh-aux: auxiliary model system (host plane row)\n- insert:\n    - id: aux\n      name: "' + packageName + '"\n';
   mkdirSync(profileDir, { recursive: true });
-  writeFileSync(
-    patchPath,
-    current +
-      '\n# dsh-aux: auxiliary model system (host plane row)\n- insert:\n    - id: aux\n      name: "' +
-      packageName +
-      '"\n',
-  );
+  // Keep a blank line before the block so a later strip cannot absorb an
+  // unrelated comment run that ends this file.
+  writeFileSync(patchPath, (base === "" ? "" : base + "\n\n") + block);
   return true;
 }
 
@@ -146,16 +187,36 @@ export function ensureLegacyPatch(profileDir, packageName) {
 export function ensureBundleWiring(data, options) {
   const { packageName, packageDir } = options;
   const notes = [];
-  if (typeof data.dependencies !== "object" || data.dependencies === null) data.dependencies = {};
+  const plain = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+  // Validate every container BEFORE touching anything: a wrong-typed container
+  // would swallow the wiring silently (a key assigned on an array survives until
+  // JSON.stringify drops it again), and a report of "problem" must leave the
+  // manifest exactly as it was.
+  for (const key of ["dependencies", "dsh"]) {
+    if (data[key] !== void 0 && !plain(data[key])) return { changed: false, notes, problem: key + " 不是对象" };
+  }
+  if (data.dsh?.profile !== void 0 && !plain(data.dsh.profile)) {
+    return { changed: false, notes, problem: "dsh.profile 不是对象" };
+  }
+  if (data.dsh?.profile?.bundles !== void 0 && !Array.isArray(data.dsh.profile.bundles)) {
+    return { changed: false, notes, problem: "dsh.profile.bundles 不是数组" };
+  }
   const spec = bundleSpec(packageDir);
-  if (data.dependencies[packageName] !== spec) {
+  const dependencyPresent = typeof data.dependencies?.[packageName] === "string";
+  const selected = Array.isArray(data.dsh?.profile?.bundles) && data.dsh.profile.bundles.includes(packageName);
+  // The plugin manager turns a bundle off by dropping it from `bundles` while
+  // keeping the dependency, so that pair is a deliberate "install but disabled".
+  // Re-selecting it here would silently undo the user's switch at every start.
+  if (dependencyPresent && !selected) return { changed: false, notes, disabled: true };
+  if (!dependencyPresent) {
+    if (data.dependencies === void 0) data.dependencies = {};
     data.dependencies[packageName] = spec;
     notes.push('dependencies["' + packageName + '"] = "' + spec + '"');
   }
-  if (typeof data.dsh !== "object" || data.dsh === null) data.dsh = {};
-  if (typeof data.dsh.profile !== "object" || data.dsh.profile === null) data.dsh.profile = {};
-  if (!Array.isArray(data.dsh.profile.bundles)) data.dsh.profile.bundles = [];
-  if (!data.dsh.profile.bundles.includes(packageName)) {
+  if (!selected) {
+    if (data.dsh === void 0) data.dsh = {};
+    if (data.dsh.profile === void 0) data.dsh.profile = {};
+    if (data.dsh.profile.bundles === void 0) data.dsh.profile.bundles = [];
     data.dsh.profile.bundles.push(packageName);
     notes.push("dsh.profile.bundles += " + packageName);
   }
@@ -190,6 +251,8 @@ export function planProfileBundle(options) {
     return { profileDir, skipped: "unparsable-manifest" };
   }
   const wiring = ensureBundleWiring(data, { packageName, packageDir });
+  if (wiring.problem !== void 0) return { profileDir, problem: wiring.problem };
+  if (wiring.disabled === true) return { profileDir, disabled: true };
   const selected = data.dsh.profile.bundles.includes(packageName);
   const next = JSON.stringify(data, null, 2) + "\n";
   const patchPath = join(profileDir, "cordis.patch.yml");
@@ -233,6 +296,12 @@ export function describePlan(report) {
     if (report.legacyWritten === false) return why + " —— 补丁注入兜底已在位";
     return why;
   }
+  if (report.disabled === true) {
+    return report.profileDir + ": 已在 profile 依赖中但未选中 bundle(= 被停用),保持现状";
+  }
+  if (report.problem !== void 0) {
+    return report.profileDir + ": ⚠️ 未接线 —— " + report.problem + "(请人工核对 profile 清单)";
+  }
   const parts = [];
   if (report.manifestChanged) parts.push("profile package.json 已更新");
   if (report.patchChanged) {
@@ -254,17 +323,30 @@ export function findWiredProfiles(dshHome, packageName) {
   const found = [];
   for (const name of readdirSync(root)) {
     const dir = join(root, name);
+    let stat = null;
+    try {
+      stat = statSync(dir);
+    } catch {
+      stat = null;
+    }
+    if (stat === null || !stat.isDirectory()) continue;
     const manifestPath = join(dir, "package.json");
     if (!existsSync(manifestPath)) continue;
+    // Structured, not substring: a profile is ours only when the manifest really
+    // depends on the package or selects it as a bundle, or when the patch layer
+    // still carries our legacy insert.
     let mentions = false;
     try {
-      mentions = readFileSync(manifestPath, "utf8").includes(packageName);
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      mentions =
+        typeof manifest?.dependencies?.[packageName] === "string" ||
+        (Array.isArray(manifest?.dsh?.profile?.bundles) && manifest.dsh.profile.bundles.includes(packageName));
     } catch {
       mentions = false;
     }
     if (!mentions && existsSync(join(dir, "cordis.patch.yml"))) {
       try {
-        mentions = readFileSync(join(dir, "cordis.patch.yml"), "utf8").includes(packageName);
+        mentions = stripLegacyPatch(readFileSync(join(dir, "cordis.patch.yml"), "utf8"), packageName).removed;
       } catch {
         mentions = false;
       }

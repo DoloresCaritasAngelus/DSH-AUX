@@ -71,16 +71,24 @@ mkdir -p "$DSH_ROOT/node_modules"
 ln -sfn /path/to/dsh-aux "$DSH_ROOT/node_modules/<NAME>"
 # 找到 profile(默认 web),把本包接成它的 bundle(有仓库时用脚本,幂等):
 PROFILE_DIR=~/.dsh/profiles/web
-node <仓库>/bridge/profile-bundle.mjs --profile-dir "$PROFILE_DIR"
+node <仓库>/bridge/profile-bundle.mjs --profile-dir "$PROFILE_DIR" --legacy-fallback
 ```
 
 脚本会写两处 —— `dependencies[<NAME>] = "file:<仓库>/dsh-aux"` 与
 `dsh.profile.bundles += <NAME>` —— 并移除可能残留的旧 `cordis.patch.yml`
-insert 行(两层各插一行同 id 会重复)。若 profile 目录还不存在(DSH 从未跑过),
-脚本会退回写那条旧的 patch 行,等 DSH 建好 profile 后由启动自愈迁移。
+insert 行(两层各插一行同 id 会重复)。
+
+两种边界要留意:
+
+- **profile 目录还不存在**(DSH 从未跑过):加 `--legacy-fallback` 才会退回写那条旧
+  patch 行;等 DSH 建好 profile 后,启动自愈会把它迁移成 bundle。不加这个开关就什么
+  都不写。
+- **依赖在、但 bundle 没选**:那是用户在插件页把它**停用**了 —— 脚本与启动自愈都会
+  保持现状,不会把它悄悄打开;要恢复请在插件页打开。
 
 > 注意:手工写时 `name` 必须与包名完全一致(含 scope);`id` 保持 `aux` 稳定。
-> 只有 bundle 接入的插件才出现在 DSH 的插件页(Plugins),也只有它能在页面上启停。
+> 只有 bundle 接入的插件才出现在 DSH 的插件页(Plugins),也只有它能在页面上启停 ——
+> 页面上停用后,启动自愈不会再把它打开。
 
 ## 3. 验证(必须全部通过)
 
