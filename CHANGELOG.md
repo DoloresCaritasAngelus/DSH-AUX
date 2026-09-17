@@ -31,6 +31,19 @@
 
 测试基线 617 → 625(新增 8 条覆盖上述边界)。
 
+### 修复 — bundle 接线:第二轮复核跟进
+
+聚焦复核(只审上一轮跟进)又给出两条阻断与一条新回归,逐条修:
+
+- **测试 / 门禁会把真实 profile 当目标(B2 没堵全)**:上一轮的闸只拦「钉了 `DSH_ROOT` 但没给 `DSH_HOME`」,漏了「`DSH_HOME` 被环境继承」这条路。修法两层:① 相关夹具显式把 profile 家目录指进自己的临时目录并**删掉继承来的 `DSH_HOME`**;② 自愈新增**结构化判据** —— 钉了 `DSH_ROOT` 时,`DSH_HOME` 必须落在该根之内,否则跳过;部署根与家目录确实分离的,用新开关 `DSH_AUX_PROFILE_HOME` 显式指定(`install.sh` 与自愈都认它)。
+- **`doctor` 的判定不 hermetic**:它按 `DSH_HOME` 读 profile,而 CI 假根只清了 `run()` 没清 `runDoctor()` —— 本机跑门禁校验的其实是真实 profile。已修。
+- **新回归:摘旧条目的判据漏了手写风格**(flow 风格、`- name:` 写在条目行、多行 insert 全部认不出,而旧的子串判据能中)。后果是幂等破、已选 bundle 时旧 insert 不摘、`doctor` 报假绿。已改为在**条目正文里**按任意风格取 `name:` 值再精确比对(仍然不看注释,避免误摘"只是提到本包"的别的条目)。
+- **`[] # 注释` 与顶层 flow 序列仍会写出 DSH 拒绝的 YAML**:`[]` 的可选尾注释此前没被识别;flow 序列上追加块条目必然非法。现在前者照常移走,后者**拒绝写入并报原因**(新增 `planLegacyPatch` 纯函数,`--dry-run` 也能预演)。
+- **`overlayProblem` 假阳**:合法的 flow 风格 overlay 被判成「没有顶层列表项」。现在块风格与 flow 风格都认;并写清它只是**形状检查**,不做完整 YAML 校验(坏缩进 / 重复键仍由 DSH 在装载时拒绝)。
+- **`ci-install-smoke` 的覆盖面回归**:它的自愈步骤一度因新闸而**静默跳过** profile 接线,注释里写的「install.sh 写兜底 patch → 启动自愈迁移」那条主旅程不再被覆盖。现已显式命名 profile 家目录,并**新增该旅程的端到端用例**:无 profile → 写兜底 patch → DSH 建好 profile → 自愈迁移成 bundle。
+
+测试基线 625 → 628。
+
 ### 修复 — 客户端图片槽与官方槽撞名,界面无法进入
 
 - **症状**:在 0.1.6-alpha.2 上,web 界面停在 `Failed to load plugins` / `web boot: 1 entry did not activate` / `@dolorescaritasangelus/dsh-aux: failed`,**主应用永不挂载** —— 也就是整个界面进不去。服务层完全正常(进程、3080 鉴权、host 日志都干净):失败只存在于浏览器端的 `client-modules` 状态里,不写 host 日志。

@@ -116,7 +116,9 @@ function setupFakeRoot() {
 function runDoctor() {
   const res = spawnSync(process.execPath, [join(REPO, "scripts/doctor.mjs"), "--dsh-root", ROOT, "--json"], {
     cwd: REPO,
-    env: { ...process.env, DSH_ROOT: ROOT, HOME: FAKE_HOME },
+    // Same isolation as run(): doctor reads the profile through DSH_HOME, so an
+    // inherited real one would make this gate validate the developer's profile.
+    env: { ...process.env, DSH_ROOT: ROOT, DSH_HOME: join(FAKE_HOME, ".dsh"), HOME: FAKE_HOME },
     encoding: "utf8",
   });
   console.log("\n== doctor ==");

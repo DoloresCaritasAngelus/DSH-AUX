@@ -72,6 +72,7 @@ ln -sfn /path/to/dsh-aux "$DSH_ROOT/node_modules/<NAME>"
 # 找到 profile(默认 web),把本包接成它的 bundle(有仓库时用脚本,幂等):
 PROFILE_DIR=~/.dsh/profiles/web
 node <仓库>/bridge/profile-bundle.mjs --profile-dir "$PROFILE_DIR" --legacy-fallback
+# (部署根与 profile 家目录不在一起时,用 DSH_AUX_PROFILE_HOME 指定 profile 家目录 —— install.sh 与启动自愈都认它)
 ```
 
 脚本会写两处 —— `dependencies[<NAME>] = "file:<仓库>/dsh-aux"` 与

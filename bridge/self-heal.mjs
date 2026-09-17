@@ -38,7 +38,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deployedFile, guardPackageFile, guardTarget } from "./target.js";
 import { planFormatV0Patch } from "./format-admissions.mjs";
@@ -291,15 +291,32 @@ function ensureFormatAdmissions(root) {
  */
 function ensureProfileBundle() {
   // Never guess the profile home. A caller that pinned DSH_ROOT (a test, a fake
-  // deployment, a non-default root) must also say where the profiles live, or
-  // this step would rewrite the user's real profile directory.
+  // deployment, a non-default root) must also name a profile home that belongs to
+  // that root — otherwise this step would rewrite the user's real ~/.dsh.
+  // DSH_AUX_PROFILE_HOME is the documented escape hatch for a deployment whose
+  // profile home legitimately lives outside its root.
+  const explicit = process.env.DSH_AUX_PROFILE_HOME;
+  const pinnedRoot = CALLER_DSH_ROOT ?? "";
   let dshHome = process.env.DSH_HOME;
-  if (dshHome === void 0 || dshHome === "") {
-    if (CALLER_DSH_ROOT !== void 0 && CALLER_DSH_ROOT !== "") {
-      log("profile-bundle: 指定了 DSH_ROOT 但未指定 DSH_HOME —— 跳过 profile 接线(避免误改真实 profile 目录)");
+  if (explicit !== void 0 && explicit !== "") {
+    dshHome = explicit;
+  } else if (pinnedRoot === "") {
+    if (dshHome === void 0 || dshHome === "") dshHome = join(process.env.HOME ?? "", ".dsh");
+  } else if (dshHome === void 0 || dshHome === "") {
+    log("profile-bundle: 钉了 DSH_ROOT 但没给 DSH_HOME —— 跳过 profile 接线(避免误改真实 profile 目录)");
+    return;
+  } else {
+    const rel = relative(resolve(pinnedRoot), resolve(dshHome));
+    if (rel.startsWith("..") || isAbsolute(rel)) {
+      log(
+        "profile-bundle: DSH_HOME(" +
+          dshHome +
+          ")不在 DSH_ROOT(" +
+          pinnedRoot +
+          ")之内 —— 跳过(这对组合通常是测试/假根配到了真实 profile;确需接线请设 DSH_AUX_PROFILE_HOME)",
+      );
       return;
     }
-    dshHome = join(process.env.HOME ?? "", ".dsh");
   }
   const packageName = readPackageName();
   const profiles = findWiredProfiles(dshHome, packageName);

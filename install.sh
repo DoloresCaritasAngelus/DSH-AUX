@@ -52,7 +52,11 @@ case "$PACKAGE_NAME" in
   *) echo "错误: 包名格式不合法: $PACKAGE_NAME" >&2; exit 1 ;;
 esac
 NODE_MODULES="$DSH_ROOT/node_modules"
-PROFILE_DIR="${DSH_HOME:-$HOME/.dsh}/profiles/$PROFILE"
+# profile 所在的 DSH_HOME:显式开关 > DSH_HOME > 默认 ~/.dsh。
+# DSH_AUX_PROFILE_HOME 给「部署根与 profile 家目录不在一起」的部署(以及测试夹具)
+# 用;自愈那边也认它。
+PROFILE_HOME="${DSH_AUX_PROFILE_HOME:-${DSH_HOME:-$HOME/.dsh}}"
+PROFILE_DIR="$PROFILE_HOME/profiles/$PROFILE"
 
 echo "== dsh-aux 一键安装 =="
 echo "  部署根: $DSH_ROOT"

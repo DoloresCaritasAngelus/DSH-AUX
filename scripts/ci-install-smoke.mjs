@@ -40,12 +40,14 @@ cpSync(join(REPO, "node_modules", "@deepseek-ai"), join(DSH_ROOT, "node_modules"
 });
 writeFileSync(join(DSH_ROOT, "start-dsh.sh"), '#!/bin/bash\ncd "$HOME/dsh"\nexec npx @deepseek-ai/dsh web\n');
 
-// DSH_HOME must not leak in: install.sh falls back to it before HOME, so an
-// exported DSH_HOME would point this smoke test at the real ~/.dsh profile.
-const env = { ...process.env, HOME: FAKE_HOME, DSH_ROOT };
+// The profile home must be named explicitly and the inherited DSH_HOME must go:
+// either one would otherwise point install.sh / self-heal at the developer's real
+// profile. DSH_ROOT here is a sibling of FAKE_HOME, so the explicit profile home
+// is what both scripts honour.
+const env = { ...process.env, HOME: FAKE_HOME, DSH_ROOT, DSH_AUX_PROFILE_HOME: join(FAKE_HOME, ".dsh") };
 delete env.DSH_HOME;
-const run = (label, cmd, args) => {
-  const r = spawnSync(cmd, args, { cwd: REPO, env, encoding: "utf8" });
+const run = (label, cmd, args, envOverride = env) => {
+  const r = spawnSync(cmd, args, { cwd: REPO, env: envOverride, encoding: "utf8" });
   if (r.status !== 0) {
     console.error(`❌ ${label} 退出码 ${r.status}`);
     if (r.stdout) console.error(r.stdout.slice(-2000));
@@ -103,6 +105,32 @@ run("doctor --dsh-root", process.execPath, ["scripts/doctor.mjs", "--dsh-root", 
 // 5. update.sh 幂等(CI 内 --no-pull:不拉远端,只重跑接线)
 run("update.sh --no-pull(幂等)", "bash", ["./update.sh", "--no-pull", "--dsh-root", DSH_ROOT]);
 if (!existsSync(AUX_TARGET)) fail("update.sh 之后插件 symlink 丢失");
+
+// 6. 全新部署旅程:profile 尚未建立 → install.sh 写兜底 patch;DSH 首次运行建好
+//    profile 后,启动自愈把它迁移成 bundle。(上面 1.5 走的是 profile 已存在的支线,
+//    这条才覆盖 README 里描述的那条主旅程。)
+const LEGACY_HOME = join(ROOT, "legacy-home");
+const legacyEnv = { ...env, HOME: LEGACY_HOME, DSH_AUX_PROFILE_HOME: join(LEGACY_HOME, ".dsh") };
+run("install.sh(profile 尚未建立)", "bash", ["./install.sh", "--dsh-root", DSH_ROOT], legacyEnv);
+const legacyProfileDir = join(LEGACY_HOME, ".dsh", "profiles", "web");
+const legacyPatchPath = join(legacyProfileDir, "cordis.patch.yml");
+if (!existsSync(legacyPatchPath)) fail("profile 尚未建立时,install.sh 应写兜底 patch");
+if (!readFileSync(legacyPatchPath, "utf8").includes(packageName)) fail("兜底 patch 未含本包");
+if (existsSync(join(legacyProfileDir, "package.json"))) fail("兜底路径不应创建 profile 清单");
+
+writeFileSync(
+  join(legacyProfileDir, "package.json"),
+  JSON.stringify(
+    { name: "dsh-profile-web", private: true, dsh: { profile: { bundles: ["@deepseek-ai/dsh-base"] } } },
+    null,
+    2,
+  ) + "\n",
+);
+run("self-heal(把兜底 patch 迁移成 bundle)", process.execPath, ["bridge/self-heal.mjs"], legacyEnv);
+const legacyManifest = JSON.parse(readFileSync(join(legacyProfileDir, "package.json"), "utf8"));
+if (!legacyManifest?.dsh?.profile?.bundles?.includes(packageName)) fail("自愈未把兜底 patch 迁移成 bundle");
+if (typeof legacyManifest?.dependencies?.[packageName] !== "string") fail("迁移后缺少 file: 依赖");
+if (readFileSync(legacyPatchPath, "utf8").includes(packageName)) fail("迁移后 patch 注入应当已被摘除");
 
 rmSync(ROOT, { recursive: true, force: true });
 console.log("install-smoke 通过。");

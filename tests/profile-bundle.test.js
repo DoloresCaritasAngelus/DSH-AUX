@@ -19,6 +19,7 @@ import {
   findWiredProfiles,
   normalizeEmptyOverlay,
   overlayProblem,
+  planLegacyPatch,
   planProfileBundle,
   stripLegacyPatch,
 } from "../bridge/profile-bundle.mjs";
@@ -124,9 +125,9 @@ test("stripLegacyPatch: 别的插件条目即使正文提到本包也绝不能�
 
 test("ensureLegacyPatch: 已有 [] 时不得写出不可解析的 YAML", () => {
   withProfile({ "cordis.patch.yml": "# 只剩注释\n[]\n" }, (dir) => {
-    assert.equal(ensureLegacyPatch(dir, PKG), true);
+    assert.equal(ensureLegacyPatch(dir, PKG).action, "append");
     const written = readFileSync(join(dir, "cordis.patch.yml"), "utf8");
-    assert.ok(!/^[ \t]*\[\][ \t]*$/m.test(written), "块序列不能跟在流序列 [] 后面");
+    assert.ok(!/^[ \t]*\[\][ \t]*(#.*)?$/m.test(written), "块序列不能跟在流序列 [] 后面");
     assert.ok(written.includes(PKG));
     assert.equal(overlayProblem(written), void 0, "产物必须是 DSH 能接受的顶层数组");
     assert.equal(stripLegacyPatch(written, PKG).removed, true, "产物应能被后续 strip 识别");
@@ -135,19 +136,46 @@ test("ensureLegacyPatch: 已有 [] 时不得写出不可解析的 YAML", () => {
 
 test("ensureLegacyPatch: 幂等", () => {
   withProfile({ "cordis.patch.yml": "- id: other\n  name: 'x'\n" }, (dir) => {
-    assert.equal(ensureLegacyPatch(dir, PKG), true);
-    assert.equal(ensureLegacyPatch(dir, PKG), false, "第二次不应再写");
+    assert.equal(ensureLegacyPatch(dir, PKG).action, "append");
+    assert.equal(ensureLegacyPatch(dir, PKG).action, "skip", "第二次不应再写");
     const written = readFileSync(join(dir, "cordis.patch.yml"), "utf8");
     assert.equal(written.split(PKG).length - 1, 1, "不得写第二份");
     assert.ok(written.includes("id: other"), "无关条目必须保留");
   });
 });
 
-test("overlayProblem: 只剩注释或没有顶层项会被 DSH 拒绝", () => {
+test("overlayProblem: 只剩注释或非数组会被 DSH 拒绝,流风格数组合法", () => {
   assert.equal(overlayProblem("- insert:\n    - id: x\n"), void 0);
   assert.equal(overlayProblem("[]\n"), void 0);
+  assert.equal(overlayProblem("[{ id: x, name: y }]\n"), void 0, "流风格数组也是数组");
   assert.equal(typeof overlayProblem("# 只剩注释\n"), "string");
   assert.equal(typeof overlayProblem(""), "string");
+  assert.equal(typeof overlayProblem("id: aux\nname: x\n"), "string", "顶层映射不是数组");
+});
+
+test("stripLegacyPatch: 流风格/条目行写法的旧条目也要认出来", () => {
+  const styles = [
+    "- insert: [{ id: aux, name: '" + PKG + "' }]\n",
+    "- { name: '" + PKG + "', id: aux }\n",
+    '- name: "' + PKG + '"\n  id: aux\n',
+    "- insert:\n    - id: aux\n      name: '" + PKG + "'\n",
+  ];
+  for (const style of styles) {
+    assert.equal(stripLegacyPatch(style, PKG).removed, true, "应认出:" + JSON.stringify(style));
+  }
+});
+
+test("planLegacyPatch: 流风格文档下拒绝追加(追加会写出非法 YAML)", () => {
+  const plan = planLegacyPatch("[{ id: other, name: 'x' }]\n", PKG);
+  assert.equal(plan.action, "none");
+  assert.equal(typeof plan.problem, "string");
+});
+
+test("planLegacyPatch: '[] # 注释' 也要先移走", () => {
+  const plan = planLegacyPatch("[] # keep\n", PKG);
+  assert.equal(plan.action, "append");
+  assert.ok(!/\[\]/.test(plan.text), "流序列必须被移走");
+  assert.equal(overlayProblem(plan.text), void 0);
 });
 
 test("stripLegacyPatch: 不含本包时原样返回", () => {
@@ -301,7 +329,7 @@ test("planProfileBundle: 全新部署没有 profile 时,兜底写 patch(等 DSH 
     const patch = readFileSync(join(profileDir, "cordis.patch.yml"), "utf8");
     assert.ok(patch.includes("id: aux"));
     assert.ok(patch.includes(PKG));
-    assert.equal(ensureLegacyPatch(profileDir, PKG), false, "兜底本身也要幂等");
+    assert.equal(ensureLegacyPatch(profileDir, PKG).action, "skip", "兜底本身也要幂等");
   });
 });
 

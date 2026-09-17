@@ -105,9 +105,12 @@ test("self-heal:补丁失配只 WARN 不中断启动(退出码 0),并转发失�
     assert.notEqual(drifted, pristine, "fixture 应注入漂移");
     writeFileSync(file, drifted);
 
+    // DSH_HOME must be redirected into the fixture: self-heal refuses a profile
+    // home outside the pinned root, and inheriting a real DSH_HOME would make this
+    // test rewrite the developer's own profile.
     const res = spawnSync(process.execPath, [join(REPO, "bridge/self-heal.mjs")], {
       cwd: REPO,
-      env: { ...process.env, DSH_ROOT: root },
+      env: { ...process.env, DSH_ROOT: root, DSH_HOME: join(root, "home", ".dsh") },
       encoding: "utf8",
     });
     assert.equal(res.status, 0, "自愈失败不得中断 DSH 启动");

@@ -79,7 +79,7 @@ export function readPackageName(packageDir = PACKAGE_DIR) {
  */
 export function normalizeEmptyOverlay(text) {
   if (/^-\s/m.test(text)) return { text, changed: false };
-  if (/^\[\]\s*$/m.test(text)) return { text, changed: false };
+  if (/^[ \t]*\[\][ \t]*(#.*)?$/m.test(text)) return { text, changed: false };
   const head = text.replace(/\s*$/, "");
   return { text: (head === "" ? "" : head + "\n") + "[]\n", changed: true };
 }
@@ -98,9 +98,11 @@ export function overlayProblem(text) {
     .map((line) => line.trim())
     .filter((line) => line !== "" && !line.startsWith("#"));
   if (meaningful.length === 0) return "补丁层只剩注释:YAML 会解析成 null";
-  if (meaningful.length === 1 && meaningful[0] === "[]") return void 0;
-  if (!meaningful.some((line) => /^-\s/.test(line))) return "补丁层没有顶层列表项";
-  return void 0;
+  // DSH wants a top-level array; both block style (`- …`) and flow style (`[…]`)
+  // are arrays, and a bare mapping is not. This is a shape check, not a YAML
+  // validator — broken indentation or a duplicate key still fails at load.
+  if (/^-/.test(meaningful[0]) || meaningful[0].startsWith("[")) return void 0;
+  return "补丁层不是顶层数组";
 }
 
 /**
@@ -124,13 +126,14 @@ export function stripLegacyPatch(text, packageName) {
     let end = start + 1;
     while (end < lines.length && !/^\S/.test(lines[end])) end += 1;
     const block = lines.slice(start, end).join("\n");
-    // Match the entry's own `name:` value exactly. A substring test would also
-    // remove an unrelated plugin's entry that merely mentions this package.
-    const nameLine = block.match(/^[ \t]+name:[ \t]*(.*)$/m);
-    if (nameLine === null) continue;
-    const rawName = nameLine[1].trim();
-    const quotedName = rawName.match(/^["']([^"']+)["']/);
-    if ((quotedName !== null ? quotedName[1] : rawName.split("#")[0].trim()) !== packageName) continue;
+    // Match the entry's OWN name value exactly, in whichever style the file was
+    // written — block (`name: x`), flow (`{ name: x }`), quoted or bare. A
+    // substring test would also remove an unrelated plugin's entry that merely
+    // mentions this package, and a block-only match misses hand-written flow style.
+    const declared = [...block.matchAll(/(?<![\w-])name:[ \t]*("[^"]*"|'[^']*'|[^,\n}\]#\s]+)/g)].map((match) =>
+      match[1].replace(/^["']|["']$/g, ""),
+    );
+    if (!declared.includes(packageName)) continue;
     // Take the comment run written directly above the entry — never across a
     // blank line, which is what separates it from the file header or a neighbour.
     let from = start;
@@ -154,27 +157,52 @@ export function stripLegacyPatch(text, packageName) {
 }
 
 /**
- * Last-resort wiring for a deployment that has no profile yet: DSH creates the
- * profile on its own first run, so a fresh install writes the patch entry it has
- * always written, and the next start-up self-heal migrates that to a bundle once
- * the profile manifest exists.
+ * Decide what the legacy fallback would write for one patch layer.
  *
- * @returns whether the entry was written.
+ * @param current - the current cordis.patch.yml text ("" when absent).
+ * @param packageName - the package name to look for.
+ * @returns `skip` when our entry is already there, `append` with the new text, or
+ *   `none` with a reason when appending would corrupt the document.
+ */
+export function planLegacyPatch(current, packageName) {
+  if (stripLegacyPatch(current, packageName).removed) return { action: "skip" };
+  // Drop an explicit empty flow sequence first — with any trailing comment: a
+  // block sequence may not follow `[]`, and DSH refuses the document that results.
+  const kept = current.replace(/^[ \t]*\[\][ \t]*(#.*)?$/gm, "").replace(/\s+$/, "");
+  // Only column-0 lines decide the document's shape: a block entry's continuation
+  // lines are indented, and appending after them is fine. A column-0 line that is
+  // neither a comment nor a `-` entry means the layer is a flow sequence or a
+  // mapping — growing it with a block entry would stop being valid YAML.
+  const offenders = kept
+    .split("\n")
+    .filter((line) => line !== "" && !/^\s/.test(line) && !line.startsWith("#"))
+    .filter((line) => !/^-(\s|$)/.test(line));
+  if (offenders.length > 0) {
+    return { action: "none", problem: "补丁层不是块序列,追加会写出非法 YAML" };
+  }
+  const block =
+    '# dsh-aux: auxiliary model system (host plane row)\n- insert:\n    - id: aux\n      name: "' + packageName + '"\n';
+  // Keep a blank line before the block so a later strip cannot absorb an
+  // unrelated comment run that ends this file.
+  return { action: "append", text: (kept === "" ? "" : kept + "\n\n") + block };
+}
+
+/**
+ * Apply {@link planLegacyPatch} for a deployment that has no profile yet: DSH
+ * creates the profile on its own first run, so a fresh install writes the patch
+ * entry it has always written, and the next start-up self-heal migrates it to a
+ * bundle once the profile manifest exists.
+ *
+ * @returns the plan that was applied (or the reason nothing was).
  */
 export function ensureLegacyPatch(profileDir, packageName) {
   const patchPath = join(profileDir, "cordis.patch.yml");
   const current = existsSync(patchPath) ? readFileSync(patchPath, "utf8") : "";
-  if (stripLegacyPatch(current, packageName).removed) return false;
-  // An explicit empty flow sequence must go first: a block sequence may not
-  // follow `[]`, and DSH refuses the document that results.
-  const base = current.replace(/^[ \t]*\[\][ \t]*$/gm, "").replace(/\s+$/, "");
-  const block =
-    '# dsh-aux: auxiliary model system (host plane row)\n- insert:\n    - id: aux\n      name: "' + packageName + '"\n';
+  const plan = planLegacyPatch(current, packageName);
+  if (plan.action !== "append") return plan;
   mkdirSync(profileDir, { recursive: true });
-  // Keep a blank line before the block so a later strip cannot absorb an
-  // unrelated comment run that ends this file.
-  writeFileSync(patchPath, (base === "" ? "" : base + "\n\n") + block);
-  return true;
+  writeFileSync(patchPath, plan.text);
+  return plan;
 }
 
 /**
@@ -236,10 +264,11 @@ export function planProfileBundle(options) {
     const report = { profileDir, skipped: "no-manifest" };
     if (legacyFallback) {
       const patchPath = join(profileDir, "cordis.patch.yml");
-      const already = existsSync(patchPath) && stripLegacyPatch(readFileSync(patchPath, "utf8"), packageName).removed;
-      report.legacyWritten = !already;
+      const current = existsSync(patchPath) ? readFileSync(patchPath, "utf8") : "";
+      const plan = dryRun ? planLegacyPatch(current, packageName) : ensureLegacyPatch(profileDir, packageName);
+      report.legacyWritten = plan.action === "append";
+      if (plan.problem !== void 0) report.problem = plan.problem;
       report.dryRun = dryRun;
-      if (!already && !dryRun) ensureLegacyPatch(profileDir, packageName);
     }
     return report;
   }
@@ -292,6 +321,7 @@ export function planProfileBundle(options) {
 export function describePlan(report) {
   if (report.skipped !== undefined) {
     const why = report.profileDir + ": 跳过(" + report.skipped + ")";
+    if (report.problem !== void 0) return why + " —— ⚠️ 兜底未写:" + report.problem;
     if (report.legacyWritten === true) return why + " —— 已写补丁注入兜底,profile 建好后自愈会迁移成 bundle";
     if (report.legacyWritten === false) return why + " —— 补丁注入兜底已在位";
     return why;
