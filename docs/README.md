@@ -28,6 +28,7 @@
 | [docs/design/WEB-CRAWL-DESIGN.md](./design/WEB-CRAWL-DESIGN.md) | ✅ 活跃 | web_crawl 深度抓取设计;核心已上线,P4 延后项仍待评估 | 🔻 测试数、源码行号 |
 | [docs/design/upstream-requests.md](./design/upstream-requests.md) | ✅ 活跃 | 向上游提出的三条功能请求(英文,尚未开 issue) | 🔻 DSH 基线版本与行号 |
 | [docs/design/upstream-requests.zh.md](./design/upstream-requests.zh.md) | ✅ 活跃 | 上游功能请求中文版(与英文版同源) | 🔻 DSH 基线版本与行号 |
+| [docs/design/ROUTE-CHAIN-SETTINGS-DESIGN.md](./design/ROUTE-CHAIN-SETTINGS-DESIGN.md) | ✅ 活跃 | 降级链编辑控件设计(未实现):保留多行文本框,补行内校验 / 目录插入 / 生效路由预览 | 🔻 归档分支行号、测试结构 |
 | [docs/archive/README.md](./archive/README.md) | ✅ 活跃 | 归档目录索引:归档清单 + 退役原因总表 | — |
 | [docs/archive/IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md](./archive/IMAGE-LIBRARY-IMPLEMENTATION-PLAN.md) | 🔵 已实现(保留作回执) | 图库实施计划(Phase / 并行任务 / 审核关卡);0.4.2 已执行完毕 | — |
 | [docs/archive/SESSION-ATTACHMENT-GC.md](./archive/SESSION-ATTACHMENT-GC.md) | 🔵 已实现(保留作回执) | 会话删除时清理附件图片的设计与实现记录 | — |
