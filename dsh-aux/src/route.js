@@ -235,6 +235,7 @@ export function assertRouteSpecList(value, label) {
  *   - "auth"        — 401/403 or invalid key
  *   - "payment"     — 402 / credit exhaustion
  *   - "model-not-found" — 404-ish unknown model
+ *   - "server"      — provider 5xx / server-side failure
  *   - "connection"  — transport/network failure
  *   - "content"     — provider refused the request (unsupported content/params)
  *   - "other"       — anything else
@@ -250,6 +251,9 @@ export function classifyFailure(error, signal) {
   const message = typeof failure?.message === "string" ? failure.message : String(error?.message ?? error ?? "");
   const lower = message.toLowerCase();
   if (code === "ABORTED" || code === "aborted") return "aborted";
+  // An explicit 5xx status wins over message heuristics (a 504 body may read
+  // "gateway timeout", but the class we care about is "the server broke").
+  if (status !== void 0 && status >= 500 && status < 600) return "server";
   if (code.includes("TIMEOUT") || /timeout|timed out|deadline/i.test(lower)) return "timeout";
   if (status === 429 || /rate.?limit|throttl|too many requests/i.test(lower)) return "rate-limit";
   if (status === 402 || /402|credit|balance|insufficient.?funds|payment/i.test(lower)) return "payment";
@@ -258,6 +262,9 @@ export function classifyFailure(error, signal) {
   if (/fetch failed|econnrefused|econnreset|enetunreach|dns|socket|network|tls|certificate/i.test(lower))
     return "connection";
   if (code === "UNSUPPORTED_CONTENT" || /unsupported|does not support|cannot represent/i.test(lower)) return "content";
+  // Message-only server errors (no structured status) would otherwise land in
+  // the other-kind black hole and be reported as non-retryable.
+  if (/internal server error|bad gateway|service unavailable|server error/i.test(lower)) return "server";
   return "other";
 }
 
@@ -277,6 +284,7 @@ export const DSH_FAILURE_CODES = Object.freeze({
   timeout: "TIMEOUT",
   "rate-limit": "RATE_LIMIT",
   payment: "QUOTA",
+  server: "SERVER",
   auth: "AUTH",
   "model-not-found": "UNKNOWN_MODEL",
   connection: "TRANSPORT",
@@ -285,18 +293,18 @@ export const DSH_FAILURE_CODES = Object.freeze({
 });
 
 /**
- * Whether one automatic in-tool retry is worth attempting. Exactly the
- * transient classes DSH itself retries — TIMEOUT, RATE_LIMIT, TRANSPORT
- * (`dsh-llm/src/retry-policy.ts` DEFAULT_RETRYABLE_CODES).
+ * Whether one automatic in-tool retry is worth attempting.
  *
- * Deliberate divergence from DSH: an unclassified failure lands in `other`,
- * which also covers provider 5xx responses that DSH classifies as SERVER and
- * does retry. AUX does not repeat an unknown failure inside the tool — the
- * model gets `retryable: false` and decides, instead of the tool burning a
- * second call on an error nobody classified.
+ * RATE_LIMIT / TRANSPORT / SERVER are cheap to repeat: they fail fast, and DSH
+ * itself retries them (`dsh-llm/src/retry-policy.ts` DEFAULT_RETRYABLE_CODES).
+ *
+ * `timeout` is deliberately EXCLUDED even though DSH retries it: a timeout
+ * means the route consumed its whole `timeoutMs` and never answered, so a
+ * second attempt doubles the wall-clock the caller waits for the same odds.
+ * The lever for a slow route is that task's `timeoutMs`, not a retry.
  */
 export function isRetryableFailure(kind) {
-  return kind === "rate-limit" || kind === "timeout" || kind === "connection";
+  return kind === "rate-limit" || kind === "connection" || kind === "server";
 }
 
 /**

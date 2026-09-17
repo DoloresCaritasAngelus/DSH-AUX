@@ -43,6 +43,7 @@ export const AUX_EVENT_SHAPES = Object.freeze({
       "mode",
       "candidates",
       "selectedIndex",
+      "attempts",
     ]),
   }),
   "aux/debug": Object.freeze({
