@@ -62,8 +62,6 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     vision: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
-      // Ordered fallback chain ("provider/model" per entry). When non-empty it
-      // wins over provider/model; those singular fields are then ignored.
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1),
@@ -71,8 +69,6 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     web_extract: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
-      // Ordered fallback chain ("provider/model" per entry). When non-empty it
-      // wins over provider/model; those singular fields are then ignored.
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       maxChars: z.number().step(1).min(1),
@@ -81,8 +77,6 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     web_crawl: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
-      // Ordered fallback chain ("provider/model" per entry). When non-empty it
-      // wins over provider/model; those singular fields are then ignored.
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       maxChars: z.number().step(1).min(1),
@@ -91,8 +85,6 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     compress: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
-      // Ordered fallback chain ("provider/model" per entry). When non-empty it
-      // wins over provider/model; those singular fields are then ignored.
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1),
@@ -100,8 +92,6 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     compaction: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
-      // Ordered fallback chain ("provider/model" per entry). When non-empty it
-      // wins over provider/model; those singular fields are then ignored.
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1),
@@ -109,8 +99,6 @@ export const AUX_SETTINGS_SCHEMA = z.object({
     skill: z.object({
       provider: z.string().min(1),
       model: z.string().min(1),
-      // Ordered fallback chain ("provider/model" per entry). When non-empty it
-      // wins over provider/model; those singular fields are then ignored.
       timeoutMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS),
       maxConcurrency: z.number().step(1).min(1),
       reasoningEffort: z.string().min(1),

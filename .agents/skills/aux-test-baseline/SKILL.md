@@ -25,7 +25,7 @@ user-invocable: false
 4. **断言指向语义,不是实现字符串**(避免脆断言);但能用"该在的文案"时用包含式。
 
 ## 测试只调实现、不重复逻辑
-5. 需要"算一遍"的测试复用生成器/纯函数(如 `isInSync`,`resolveRouteChain`),
+5. 需要"算一遍"的测试复用生成器/纯函数(如 `isInSync`,`resolveVisionDelivery`),
    **不复制复制逻辑**(先例:`readme-sync.test.js` import 生成器)。
    🔻易腐烂:上面两个**函数名**是快照,以 `src/*.js` 当前导出为准(纯函数抽取
    原则本身稳定)。

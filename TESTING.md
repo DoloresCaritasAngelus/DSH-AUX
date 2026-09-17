@@ -106,7 +106,7 @@ node scripts/pr-body-hygiene.mjs [--pr <n>] [--stdin < draft.md]      # PR 标�
    - `tests/readme-sync.test.js` → 锁 README 单一真相;
    - `/aux history` 简述/全量/空记录 → 锁溯源视图语义。
 2. **测试只调实现、不重复逻辑**:需要"算一遍"时复用生成器/纯函数
-   (`isInSync`、`resolveRouteChain`…),不复制复制逻辑(先例 `readme-sync.test.js`)。
+   (`isInSync`、`resolveVisionDelivery`…),不复制复制逻辑(先例 `readme-sync.test.js`)。
 3. **纯决策逻辑抽成可单测纯函数**(路由/命令视图),别藏在 handler 里。
 4. **上下文卫生(G5)可测**:断言"非引导的 AUX 消息注入 = 拒绝"路径
    (事件 ignorable+非 surface;bootstrap 晋升提醒一次/一行)。
