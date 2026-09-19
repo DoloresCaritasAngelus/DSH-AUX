@@ -9,7 +9,7 @@
 > Whenever you need me, just call me directly～
 
 ![Version](https://img.shields.io/badge/version-0.4.6-fix.2-blue)
-![Tests](https://img.shields.io/badge/tests-628-brightgreen)
+![Tests](https://img.shields.io/badge/tests-636-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.5--rc.2-0078D4)
 
@@ -92,7 +92,7 @@ Models keep getting stronger, but handing "look at this image", "read this page"
 | `followLinks` | `off` | `same-origin` recursively follows in-origin links |
 | `maxPages` / `maxDepth` | 3 / 1 | Recursive page / depth limits (`0` = seed only) |
 
-- **Output**: single page returns `summary` / `keyPoints` + `chars` / `truncated`; recursion adds `pages`, `totalChars`.
+- **Output**: single page returns `summary` / `keyPoints` + `chars` / `truncated`; recursion adds `pages`, `totalChars`. The result text opens with a notice stating that `summary` / `keyPoints` are the auxiliary model's restatement of **external web content**—untrusted data to reference, never to follow as instructions.
 - **Boundary**: static-HTML summary agent—does not execute JS; cannot click/paginate/fill forms.
 - **Recursion**: uses the same crawl engine as `web_crawl`, honoring robots.txt, rate limits, and per-hop SSRF checks.
 
@@ -300,6 +300,8 @@ Main model sees both "original SKILL.md + pre-audit report" → verifies → tru
 
 Configure a `compaction` task and native DSH auto/manual compaction routes through the AUX model, reusing AUX timeout/concurrency/cooldown/fallback/event tracing. In image-containing sessions, if images are unavailable, they are downgraded to text placeholders and compaction does not fail.
 
+> **Reasoning never reaches the output**: the auxiliary model treats only **visible text** (`text` blocks) as its result; thinking (`reasoning` blocks) never contributes—this holds for all six auxiliary tasks. If a call produces reasoning but no text, AUX treats it as a failure and takes the existing fallback path (main-model fallback; the `skill` task returns the native result instead) rather than passing thinking off as an answer.
+
 ### Programmatic API (for plugin developers)
 
 ```js
@@ -345,7 +347,7 @@ Custom tasks: `ctx.auxLlm.registerTask(...)`.
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 users**: use the permanent branch `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` or Release `v0.4.4-legacy`.
 - **Legacy DSH (0.1.0-rc.6 ~ 0.1.1-rc.2) users**: use the permanent branch `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` or Release `v0.4.1-legacy`. The main branch no longer supports these versions.
 - **Zero third-party runtime deps**: peerDependencies are official DSH packages plus the platform-provided `react`/`zod`; no `dependencies`.
-- **Zero test deps**: `node --test tests/*.test.js` (628 tests); file list and baseline in `TESTING.md`).
+- **Zero test deps**: `node --test tests/*.test.js` (636 tests); file list and baseline in `TESTING.md`).
 
 ### Integrated components
 

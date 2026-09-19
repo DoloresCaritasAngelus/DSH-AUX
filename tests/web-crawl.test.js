@@ -296,6 +296,24 @@ test("runWebCrawl: 模式 A 输出结构 + 单次聚合 aux 调用", async () =>
   });
 });
 
+test("runWebCrawl: JS-challenge 分支返回结构化标记且不发起辅助调用", async () => {
+  const { ctx, streams } = await makeLocalHarness();
+  const map = {
+    "https://a.example/robots.txt": "",
+    "https://a.example/root":
+      "<html><head><title>Just a moment...</title></head><body>cf-browser-verification</body></html>",
+  };
+  await withFetchMap(map, async () => {
+    const exec = {
+      signal: new AbortController().signal,
+      agent: { session: undefined, options: { provider: "opencode-go", model: "deepseek-v4-flash" } },
+    };
+    const value = await runWebCrawl(ctx.auxLlm, { url: "https://a.example/root", maxPages: 1, maxDepth: 0 }, exec);
+    assert.equal(value.browserRequired, true, "应识别为 JS-challenge 壳页");
+    assert.equal(streams.length, 0, "识别为挑战页时不应消耗辅助调用");
+  });
+});
+
 test("runWebCrawl: 每页 char 预算取自合并配置(web_crawl.maxChars)", async () => {
   const { ctx } = await makeLocalHarness({ tasks: { web_crawl: { maxChars: 200 } } });
   const long = "<html><body>" + "T".repeat(4000) + "</body></html>";

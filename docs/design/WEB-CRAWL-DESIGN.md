@@ -1,7 +1,7 @@
 # web_crawl 设计稿(深度站点抓取)
 
 > 状态:✅ 活跃
-> 最后核实:2026-09-09
+> 最后核实:2026-09-19
 > 🔻 版本快照:核心 P0–P3 已上线;P4 的 domain/PSL、渲染 provider、web_search 联动明确延后(见文末)
 > 承接 `WEB-EXTRACT-REVIEW.md` 的 **F1/F2**:web_extract 已落地
 > 同源 BFS(`followLinks: "same-origin"` + 聚合摘要);web_crawl 把它升级为**独立
@@ -102,6 +102,13 @@
   `blocked` 因 SSRF/HTTP 错误拒绝。
 - `title` 从 `<title>`/`<h1>` 正则抽取(尽力而为,缺失省略)。
 - register 输出 schema 用 `additionalProperties:false` 全部说明。
+- **输出侧不可信提示落在 render 文本上**(0.4.6-fix.3 起,每个返回分支都有,含
+  JS-challenge 分支):`summary`/`keyPoints`/`perPage` 是辅助模型对**外部网页内容**的
+  转述,仍可能夹带注入,故工具结果文本以一行提示开头,声明其属不可信数据、仅供参考、
+  不得当作指令。**不能放进返回的 value 或 schema** —— 模型读的是 `output.render()`
+  的产物(`dsh-agent-loop` 用 `result.content` 构造 tool-result 消息),schema 与字段
+  description 永不下发给模型;原生 `dsh-tool-web` 同理。输入侧另有
+  `<<<UNTRUSTED PAGE DATA <nonce>>>` 数据块隔离(`src/prompt.js`),两者互补。
 
 ## 4. 并发与工具安全语义
 

@@ -111,6 +111,29 @@ test("extractKeyPoints: 空输入", () => {
   assert.deepEqual(extractKeyPoints("  \n  "), { summary: "", keyPoints: [] });
 });
 
+// 块边界必须是换行而非空格:join(" ") 会把 reasoning 散文与紧随其后的
+// "SUMMARY:" 压到同一行,打穿下面的行首锚定 —— 这正是 P1 的成因。
+// 收口点改 join("\n") 后,分节行仍独立成行,锚定成立。
+test("extractKeyPoints: 分节标签独立成行时锚定成立(join 空格会打穿)", () => {
+  const newlineJoined = "前言散文。\nSUMMARY: 真摘要\nKEY POINTS:\n- 要点1";
+  assert.equal(extractKeyPoints(newlineJoined).summary, "真摘要");
+  // 反证:同一内容若被空格压平,行首锚定失配 → 前言被当摘要(即缺陷现象)。
+  const spaceJoined = "前言散文。 SUMMARY: 真摘要\nKEY POINTS:\n- 要点1";
+  assert.equal(extractKeyPoints(spaceJoined).summary, "前言散文。 SUMMARY: 真摘要");
+});
+
+// 已知限制(刻意不做行内兜底):模型若把前言与标签写在同一行,解析器不认。
+// 曾评估过"行内放宽"的加固,但它会把正文里正常出现的 "摘要:" 误判为分节
+// (下方第二条断言即该误判),收益不抵风险,故保留现状并在此锁定。
+test("extractKeyPoints: 行内前言不解析为分节(已知限制,锁定现状)", () => {
+  const inlinePreamble = "Here is the summary. SUMMARY: 真摘要\nKEY POINTS:\n- 要点1";
+  assert.equal(extractKeyPoints(inlinePreamble).summary, "Here is the summary. SUMMARY: 真摘要");
+  // 行内放宽的误命中:普通正文提到 "摘要:" 就会被当成分节。
+  const proseMentionsLabel = "本文讨论摘要:技术。\n- a\n- b";
+  assert.equal(extractKeyPoints(proseMentionsLabel).summary, "本文讨论摘要:技术。");
+  assert.deepEqual(extractKeyPoints(proseMentionsLabel).keyPoints, ["a", "b"]);
+});
+
 // ── H5 注入加固(离线 prompt 结构) ─────────────────────────────────────────
 
 test("wrapUntrustedPageData: 返回闭合数据块且两次 nonce 不同", () => {
@@ -360,6 +383,66 @@ test("H1: seam 缺失(web 无 fetch 能力)时回退本地逐跳抓取", async (
       assert.ok(!userText.includes("<html>"));
     },
   );
+});
+
+// 输出侧隔离必须落在 **render 文本** 上:模型读的是 render 产物,不是返回的
+// value —— dsh-agent-loop 用 `result.content`(= output.render() 的结果)构造
+// tool-result 消息,而 output.schema 与字段 description 永不下发给模型。把提示
+// 只写进 value/schema 等于什么都没做(原生 dsh-tool-web 也是把
+// EXTERNAL_WEB_CONTENT_NOTICE 放进 render 文本)。
+// 输入侧另有 <<<UNTRUSTED PAGE DATA <nonce>>> 数据块隔离(prompt.js),两者互补。
+test("web_extract/web_crawl: render 文本带模型可见的不可信提示(每个分支)", async () => {
+  const { tools } = await makeLocalHarness();
+  const notice = "不可信数据";
+  for (const name of ["web_extract", "web_crawl"]) {
+    const def = tools.find((t) => t.name === name);
+    assert.ok(def, `${name} 应已注册`);
+    const shapes = [
+      {
+        label: "正常摘要",
+        value: {
+          url: "https://e.test/",
+          summary: "S",
+          keyPoints: ["k"],
+          root: "https://e.test/",
+          scope: "same-origin",
+          fetched: 1,
+          skipped: 0,
+          blocked: 0,
+          pages: [],
+          perPage: [],
+        },
+      },
+      {
+        label: "JS-challenge",
+        value: {
+          url: "https://e.test/",
+          browserRequired: true,
+          error: "需浏览器渲染",
+          summary: "被拦截",
+          keyPoints: [],
+        },
+      },
+      {
+        label: "逐页摘要",
+        value: {
+          root: "https://e.test/",
+          scope: "same-origin",
+          mode: "per-page",
+          fetched: 2,
+          skipped: 0,
+          blocked: 0,
+          pages: [],
+          perPage: [{ url: "https://e.test/a", summary: "sa", keyPoints: [] }],
+        },
+      },
+    ];
+    for (const { label, value } of shapes) {
+      const rendered = def.output.render({}, value);
+      const text = rendered.map((b) => b.text ?? "").join("\n");
+      assert.ok(text.includes(notice), `${name} 的 ${label} 分支 render 文本必须带不可信提示`);
+    }
+  }
 });
 
 test("H2: provider 返回缺 final URL 时拒绝(不信任事后缺失)", async () => {
