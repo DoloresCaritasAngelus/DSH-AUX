@@ -381,58 +381,67 @@ test("H1: seam 缺失(web 无 fetch 能力)时回退本地逐跳抓取", async (
       const userText = streams[0].messages[0].content.find((b) => b.type === "text").text;
       assert.ok(userText.includes("本地回退"));
       assert.ok(!userText.includes("<html>"));
-      assert.equal(value.untrusted, true, "抓取类结果必须带输出侧 untrusted 标记");
     },
   );
 });
 
-// 输出侧隔离:summary/keyPoints 是辅助模型对不可信页面的转述,可能夹带注入,
-// 故每个返回分支都必须显式标注 untrusted(输入侧已有 nonce 数据块隔离)。
-// 同时锁定 register.js 的 output schema 与实现一致 —— DSH 会强制校验工具
-// 输出(dsh-tools createSuccessResult),schema 漏声明 untrusted 会在运行时
-// 抛 ToolOutputError,实现漏返回则会被该断言先抓住。
-test("web_extract/web_crawl: 每个返回分支都带 untrusted,schema 同步声明", async () => {
-  const { ctx, tools } = await makeLocalHarness();
-  const exec = {
-    signal: new AbortController().signal,
-    agent: { session: undefined, options: { provider: "opencode-go", model: "deepseek-v4-flash" } },
-  };
-  // 正常单页分支
-  await withFetchTransport(
-    async () => ({
-      ok: true,
-      status: 200,
-      headers: { get: () => "text/plain" },
-      text: async () => "PAGE CONTENT 42",
-    }),
-    async () => {
-      const value = await runWebExtract(ctx.auxLlm, { url: "https://example.com/p" }, exec);
-      assert.equal(value.untrusted, true, "正常单页分支");
-    },
-  );
-  // JS-challenge 分支(不发起辅助调用,直接返回结构化标记)
-  await withFetchTransport(
-    async () => ({
-      ok: true,
-      status: 200,
-      headers: { get: () => "text/html" },
-      text: async () => "<html><head><title>Just a moment...</title></head><body>cf-browser-verification</body></html>",
-    }),
-    async () => {
-      const value = await runWebExtract(ctx.auxLlm, { url: "https://example.com/challenge" }, exec);
-      assert.equal(value.browserRequired, true, "应识别为 JS-challenge");
-      assert.equal(value.untrusted, true, "JS-challenge 分支");
-    },
-  );
-  // schema 与实现一致
+// 输出侧隔离必须落在 **render 文本** 上:模型读的是 render 产物,不是返回的
+// value —— dsh-agent-loop 用 `result.content`(= output.render() 的结果)构造
+// tool-result 消息,而 output.schema 与字段 description 永不下发给模型。把提示
+// 只写进 value/schema 等于什么都没做(原生 dsh-tool-web 也是把
+// EXTERNAL_WEB_CONTENT_NOTICE 放进 render 文本)。
+// 输入侧另有 <<<UNTRUSTED PAGE DATA <nonce>>> 数据块隔离(prompt.js),两者互补。
+test("web_extract/web_crawl: render 文本带模型可见的不可信提示(每个分支)", async () => {
+  const { tools } = await makeLocalHarness();
+  const notice = "不可信数据";
   for (const name of ["web_extract", "web_crawl"]) {
     const def = tools.find((t) => t.name === name);
     assert.ok(def, `${name} 应已注册`);
-    assert.equal(
-      def.output.schema.properties.untrusted?.type,
-      "boolean",
-      `${name} 的 output schema 必须声明 untrusted(否则 DSH 输出校验失败)`,
-    );
+    const shapes = [
+      {
+        label: "正常摘要",
+        value: {
+          url: "https://e.test/",
+          summary: "S",
+          keyPoints: ["k"],
+          root: "https://e.test/",
+          scope: "same-origin",
+          fetched: 1,
+          skipped: 0,
+          blocked: 0,
+          pages: [],
+          perPage: [],
+        },
+      },
+      {
+        label: "JS-challenge",
+        value: {
+          url: "https://e.test/",
+          browserRequired: true,
+          error: "需浏览器渲染",
+          summary: "被拦截",
+          keyPoints: [],
+        },
+      },
+      {
+        label: "逐页摘要",
+        value: {
+          root: "https://e.test/",
+          scope: "same-origin",
+          mode: "per-page",
+          fetched: 2,
+          skipped: 0,
+          blocked: 0,
+          pages: [],
+          perPage: [{ url: "https://e.test/a", summary: "sa", keyPoints: [] }],
+        },
+      },
+    ];
+    for (const { label, value } of shapes) {
+      const rendered = def.output.render({}, value);
+      const text = rendered.map((b) => b.text ?? "").join("\n");
+      assert.ok(text.includes(notice), `${name} 的 ${label} 分支 render 文本必须带不可信提示`);
+    }
   }
 });
 

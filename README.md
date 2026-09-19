@@ -92,7 +92,7 @@
 | `followLinks` | `off` | `same-origin` 时在同源内顺链递归 |
 | `maxPages` / `maxDepth` | 3 / 1 | 递归页数 / 深度上限（`0` 仅抓种子） |
 
-- **输出**：单页返回 `summary` / `keyPoints` + `chars` / `truncated`；递归额外给 `pages`、`totalChars`。结果带 `untrusted: true`——`summary` / `keyPoints` 是辅助模型对**外部页面**的转述，属不可信数据，仅供参考，不得当作指令。
+- **输出**：单页返回 `summary` / `keyPoints` + `chars` / `truncated`；递归额外给 `pages`、`totalChars`。工具结果文本以一行提示开头，声明 `summary` / `keyPoints` 是辅助模型对**外部网页内容**的转述、属不可信数据，仅供参考，不得当作指令。
 - **边界**：静态 HTML 摘要代理——不执行 JS；不能点击/翻页/填表。
 - **递归**：与 `web_crawl` 同一套抓取引擎，遵守 robots.txt、限速与逐跳 SSRF。
 

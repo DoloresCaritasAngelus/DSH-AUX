@@ -288,7 +288,6 @@ test("runWebCrawl: 模式 A 输出结构 + 单次聚合 aux 调用", async () =>
     assert.equal(value.summary, "OUTPUT_TEXT");
     assert.equal(value.provider, "opencode-go");
     assert.equal(value.model, "deepseek-v4-flash");
-    assert.equal(value.untrusted, true, "web_crawl 结果必须带输出侧 untrusted 标记");
     // 一次聚合 aux 调用
     assert.equal(streams.length, 1);
     const userText = streams[0].messages[0].content.find((b) => b.type === "text").text;
@@ -297,7 +296,7 @@ test("runWebCrawl: 模式 A 输出结构 + 单次聚合 aux 调用", async () =>
   });
 });
 
-test("runWebCrawl: JS-challenge 分支也带 untrusted(不发起辅助调用)", async () => {
+test("runWebCrawl: JS-challenge 分支返回结构化标记且不发起辅助调用", async () => {
   const { ctx, streams } = await makeLocalHarness();
   const map = {
     "https://a.example/robots.txt": "",
@@ -311,7 +310,6 @@ test("runWebCrawl: JS-challenge 分支也带 untrusted(不发起辅助调用)", 
     };
     const value = await runWebCrawl(ctx.auxLlm, { url: "https://a.example/root", maxPages: 1, maxDepth: 0 }, exec);
     assert.equal(value.browserRequired, true, "应识别为 JS-challenge 壳页");
-    assert.equal(value.untrusted, true, "JS-challenge 分支同样必须带 untrusted");
     assert.equal(streams.length, 0, "识别为挑战页时不应消耗辅助调用");
   });
 });

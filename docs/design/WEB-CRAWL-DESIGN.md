@@ -92,7 +92,6 @@
   "fetched": 10, "skipped": 2, "blocked": 1,
   "totalChars": 9200, "truncated": false,
   "summary": "…(整体摘要)…", "keyPoints": ["…"],
-  "untrusted": true,                          // 输出侧隔离标记,见下
   "perPage": [],                              // 模式 B 时填充
   "provider": "…", "model": "…",
   "warnings": ["robots.txt: /api 被 Disallow 跳过", "3 页为渲染结果"]
@@ -103,9 +102,12 @@
   `blocked` 因 SSRF/HTTP 错误拒绝。
 - `title` 从 `<title>`/`<h1>` 正则抽取(尽力而为,缺失省略)。
 - register 输出 schema 用 `additionalProperties:false` 全部说明。
-- `untrusted: true` 是**输出侧**隔离标记(0.4.6-fix.3 起,每个返回分支都有,含
-  JS-challenge 分支):`summary`/`keyPoints`/`perPage` 是辅助模型对**外部不可信页面**
-  的转述,仍可能夹带注入,以裸字段进入主模型上下文时须显式声明其不可信。输入侧另有
+- **输出侧不可信提示落在 render 文本上**(0.4.6-fix.3 起,每个返回分支都有,含
+  JS-challenge 分支):`summary`/`keyPoints`/`perPage` 是辅助模型对**外部网页内容**的
+  转述,仍可能夹带注入,故工具结果文本以一行提示开头,声明其属不可信数据、仅供参考、
+  不得当作指令。**不能放进返回的 value 或 schema** —— 模型读的是 `output.render()`
+  的产物(`dsh-agent-loop` 用 `result.content` 构造 tool-result 消息),schema 与字段
+  description 永不下发给模型;原生 `dsh-tool-web` 同理。输入侧另有
   `<<<UNTRUSTED PAGE DATA <nonce>>>` 数据块隔离(`src/prompt.js`),两者互补。
 
 ## 4. 并发与工具安全语义

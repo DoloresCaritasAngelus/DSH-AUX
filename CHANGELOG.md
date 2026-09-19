@@ -11,7 +11,7 @@
 - **修法**:收口点只取 `text` 块 —— 这正是 DSH 原生同类一次性调用方的既定惯例(`dsh-session-title-llm`、`dsh-compaction-basic`、`dsh-subagent` 都是块级 `filter(text)`,从不合并 reasoning)。AUX 的收口点与 `dsh-session-title-llm` 几乎逐行相同,唯独块过滤这一处偏离了原生,本次即回到原生惯例。
 - **不做"text 为空时回退 reasoning"**:原生把"完成但无内容"当作**可重试失败**(`EMPTY_RESPONSE`),从不拿思考凑数;回退会把一次明确的失败变成一次静默的错误答案(且这正是 `stripThinkBlocks` 注释里已记录过的"思考吃光 token 预算"故障模式)。因此仅 reasoning 块时按既有路径抛 `produced no text`,失败分类为 `other` 并自动走主模型兜底,属**可观测降级**。
 - **块间连接符 `" "` → `"\n"`**:块边界是语义换行,用空格连接会把思考散文与紧随其后的 `SUMMARY:` 压到同一行,打穿 `extractKeyPoints` 的行首锚定正则,使泄漏文本被当作摘要正文保留;改换行后分节行仍独立成行,锚定成立。
-- **输出侧补 untrusted 标记**:`web_extract` / `web_crawl` 的**每个**返回分支(含正常单页、`followLinks` 聚合、两个 JS-challenge 分支)新增 `untrusted: true`,并在工具输出 schema 中同步声明。输入侧本就有 `<<<UNTRUSTED PAGE DATA <nonce>>>` 数据块隔离,本次补齐输出侧:`summary` / `keyPoints` 是辅助模型对不可信页面的转述,仍可能夹带注入,以裸字段进入主模型上下文时应显式声明其不可信。
+- **输出侧加模型可见的不可信提示**:`web_extract` / `web_crawl` 的**每个**返回分支(含正常单页、`followLinks` 聚合、两个 JS-challenge 分支)在 **render 文本**前置一行提示,声明 `summary` / `keyPoints` 是辅助模型对外部网页内容的转述、属不可信数据,仅供参考、不得当作指令。提示必须落在 render 文本上——模型读的是 `output.render()` 的产物(`dsh-agent-loop` 用 `result.content` 构造 tool-result 消息),而 `output.schema` 与字段 description **永不下发给模型**;原生 `dsh-tool-web` 同样把 `EXTERNAL_WEB_CONTENT_NOTICE` 放进 render 文本。输入侧另有 `<<<UNTRUSTED PAGE DATA <nonce>>>` 数据块隔离(`prompt.js`),两者互补。
 - **测试盲区已补**:此前全仓 mock 流只发 `blockType: "text"`,从未构造 `reasoning` 块,因此该缺陷自 0.1.0-rc.6 起一直未被测试发现。本次新增覆盖:混合/顺序颠倒/仅 reasoning 三种块形态、多 `text` 块换行连接、以及 untrusted 分支与 schema 一致性;并已用变异测试验证这些用例确实能捕获缺陷(把收口点改回旧写法时,新用例逐条转红)。
 - **测试基线** 628 → 636。
 

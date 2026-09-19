@@ -97,7 +97,7 @@ Models keep getting stronger, but handing "look at this image", "read this page"
 | `followLinks` | `off` | `same-origin` recursively follows in-origin links |
 | `maxPages` / `maxDepth` | 3 / 1 | Recursive page / depth limits (`0` = seed only) |
 
-- **Output**: single page returns `summary` / `keyPoints` + `chars` / `truncated`; recursion adds `pages`, `totalChars`. Results carry `untrusted: true`—`summary` / `keyPoints` are the auxiliary model's restatement of **external page content**, i.e. untrusted data to reference, never to follow as instructions.
+- **Output**: single page returns `summary` / `keyPoints` + `chars` / `truncated`; recursion adds `pages`, `totalChars`. The result text opens with a notice stating that `summary` / `keyPoints` are the auxiliary model's restatement of **external web content**—untrusted data to reference, never to follow as instructions.
 - **Boundary**: static-HTML summary agent—does not execute JS; cannot click/paginate/fill forms.
 - **Recursion**: uses the same crawl engine as `web_crawl`, honoring robots.txt, rate limits, and per-hop SSRF checks.
 
