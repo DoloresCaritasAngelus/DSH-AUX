@@ -86,6 +86,7 @@ import {
   clampTargetRatio,
   compressSystemPrompt,
   compressUserMessage,
+  extractKeyPoints,
   htmlToText,
   stripThinkBlocks,
   webExtractSystemPrompt,
@@ -615,6 +616,22 @@ async function makeHarness(config) {
   return { ctx, fiber, tools, projections, commands, appended, streams, sections };
 }
 
+/**
+ * Harness whose LLM stream is produced by `factory` (a generator function
+ * yielding raw chunks). Used to feed block shapes the default harness never
+ * emits — notably `reasoning` blocks, which are the whole point of the
+ * reasoning-leak regression below.
+ */
+async function makeHarnessWithStream(factory) {
+  const harness = await makeHarness();
+  const llm = harness.ctx.get("llm");
+  llm.stream = function (options) {
+    harness.streams.push(options);
+    return factory();
+  };
+  return harness;
+}
+
 function makeSession() {
   const events = [];
   const session = {
@@ -963,6 +980,68 @@ test("call: request.reasoningEffort 覆盖任务配置", async () => {
   });
   await ctx.auxLlm.call("compress", { messages: [], session: makeSession(), reasoningEffort: "low" });
   assert.equal(streams[0].reasoningEffort, "low");
+});
+
+test("call: reasoning 块绝不进入可见输出(只有 text 块算正文)", async () => {
+  // DSH 原生把模型输出分型为 text / reasoning(ReasoningBlock 的语义是
+  // "distinct from visible text")。AUX 收口点必须只取 text 块 —— 与原生
+  // 一次性调用方(session-title-llm / compaction-basic / subagent)一致。
+  const { ctx } = await makeHarnessWithStream(function* () {
+    yield { type: "block-start", index: 0, blockType: "text" };
+    yield { type: "text-delta", index: 0, text: "SUMMARY: 真摘要 42" };
+    yield { type: "block-end", index: 0, block: { type: "text", text: "SUMMARY: 真摘要 42" } };
+    yield { type: "block-start", index: 1, blockType: "reasoning" };
+    yield { type: "reasoning-delta", index: 1, text: "Let me think about this carefully." };
+    yield { type: "block-end", index: 1, block: { type: "reasoning", text: "Let me think about this carefully." } };
+    yield { type: "finish", reason: { kind: "stop" } };
+  });
+  const result = await ctx.auxLlm.call("web_extract", { messages: [], session: makeSession() });
+  assert.equal(result.text, "SUMMARY: 真摘要 42", "reasoning 不得进入可见输出");
+  assert.ok(!result.text.includes("Let me think"), "思考散文不得泄漏");
+});
+
+test("call: reasoning 在前、text 在后时同样只取 text(块顺序无关)", async () => {
+  const { ctx } = await makeHarnessWithStream(function* () {
+    yield { type: "block-start", index: 0, blockType: "reasoning" };
+    yield { type: "reasoning-delta", index: 0, text: "Thinking first." };
+    yield { type: "block-end", index: 0, block: { type: "reasoning", text: "Thinking first." } };
+    yield { type: "block-start", index: 1, blockType: "text" };
+    yield { type: "text-delta", index: 1, text: "SUMMARY: 真摘要" };
+    yield { type: "block-end", index: 1, block: { type: "text", text: "SUMMARY: 真摘要" } };
+    yield { type: "finish", reason: { kind: "stop" } };
+  });
+  const result = await ctx.auxLlm.call("web_extract", { messages: [], session: makeSession() });
+  assert.equal(result.text, "SUMMARY: 真摘要");
+});
+
+test("call: 仅 reasoning 块视为失败,不把思考当正文(对齐原生 EMPTY_RESPONSE 语义)", async () => {
+  // 原生把"完成但无内容"当作可重试失败(EMPTY_RESPONSE),从不拿思考凑数;
+  // 回退 reasoning 会把明确的失败变成静默的错误答案,故此处必须抛错。
+  const { ctx } = await makeHarnessWithStream(function* () {
+    yield { type: "block-start", index: 0, blockType: "reasoning" };
+    yield { type: "reasoning-delta", index: 0, text: "Only thinking, no answer." };
+    yield { type: "block-end", index: 0, block: { type: "reasoning", text: "Only thinking, no answer." } };
+    yield { type: "finish", reason: { kind: "stop" } };
+  });
+  await assert.rejects(
+    () => ctx.auxLlm.call("web_extract", { messages: [], session: makeSession() }),
+    /produced no text/,
+  );
+});
+
+test("call: 多 text 块用换行连接,不压平块边界", async () => {
+  const { ctx } = await makeHarnessWithStream(function* () {
+    yield { type: "block-start", index: 0, blockType: "text" };
+    yield { type: "text-delta", index: 0, text: "SUMMARY: 真摘要" };
+    yield { type: "block-end", index: 0, block: { type: "text", text: "SUMMARY: 真摘要" } };
+    yield { type: "block-start", index: 1, blockType: "text" };
+    yield { type: "text-delta", index: 1, text: "KEY POINTS:" };
+    yield { type: "block-end", index: 1, block: { type: "text", text: "KEY POINTS:" } };
+    yield { type: "finish", reason: { kind: "stop" } };
+  });
+  const result = await ctx.auxLlm.call("web_extract", { messages: [], session: makeSession() });
+  assert.equal(result.text, "SUMMARY: 真摘要\nKEY POINTS:", "块边界必须是换行(join 空格会打穿行首锚定)");
+  assert.deepEqual(extractKeyPoints(result.text).keyPoints, [], "解析器仍能认出分节");
 });
 
 test("call: fullToolTrace=true 时写入 aux/debug 事件", async () => {

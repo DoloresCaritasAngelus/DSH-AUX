@@ -14,7 +14,7 @@
 > 需要我的时候，直接叫我就好～
 
 ![Version](https://img.shields.io/badge/version-0.4.6-fix.2-blue)
-![Tests](https://img.shields.io/badge/tests-628-brightgreen)
+![Tests](https://img.shields.io/badge/tests-636-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/DSH-0.1.5--rc.2-0078D4)
 
@@ -97,7 +97,7 @@
 | `followLinks` | `off` | `same-origin` 时在同源内顺链递归 |
 | `maxPages` / `maxDepth` | 3 / 1 | 递归页数 / 深度上限（`0` 仅抓种子） |
 
-- **输出**：单页返回 `summary` / `keyPoints` + `chars` / `truncated`；递归额外给 `pages`、`totalChars`。
+- **输出**：单页返回 `summary` / `keyPoints` + `chars` / `truncated`；递归额外给 `pages`、`totalChars`。结果带 `untrusted: true`——`summary` / `keyPoints` 是辅助模型对**外部页面**的转述，属不可信数据，仅供参考，不得当作指令。
 - **边界**：静态 HTML 摘要代理——不执行 JS；不能点击/翻页/填表。
 - **递归**：与 `web_crawl` 同一套抓取引擎，遵守 robots.txt、限速与逐跳 SSRF。
 
@@ -305,6 +305,8 @@ AUX 拦截 → 辅助模型精读 SKILL.md + 当前任务
 
 配置 `compaction` 任务后，原生 DSH 自动 / 手动压缩会改走 AUX 辅助模型，复用 AUX 的超时 / 并发 / 冷却 / 降级 / 事件记录。含图会话里图片不可用时，自动降级为文本占位，压缩不失败。
 
+> **思考内容不会进入摘要**：辅助模型只把**可见文本**（`text` 块）当作结果，思考（`reasoning` 块）一律不参与输出——这对全部 6 个辅助任务成立。若某次调用只产出了思考而没有正文，AUX 视为失败并走既有降级链（主模型兜底；`skill` 任务则回退原生结果），而不会把思考当作答案。
+
 ### 编程调用（给其他插件开发者）
 
 ```js
@@ -350,7 +352,7 @@ const result = await ctx.auxLlm.call("compress", {
 - **DSH 0.1.2-alpha.2 ~ 0.1.2-rc.1 用户**：请使用永久分支 `legacy/dsh-0.1.2-alpha.2-to-0.1.2-rc.1` 或 Release `v0.4.4-legacy`。
 - **旧版 DSH（0.1.0-rc.6 ~ 0.1.1-rc.2）用户**：请使用永久分支 `legacy/dsh-0.1.0-rc.6-to-0.1.1-rc.2` 或 Release `v0.4.1-legacy`。主支不再支持这些版本。
 - **运行时零第三方依赖**：peerDependencies 为 DSH 官方包 + 平台自带的 `react`/`zod`（环境提供），无 `dependencies`。
-- **测试零依赖**：`node --test tests/*.test.js`（628 项；文件清单与基线见 `TESTING.md`）。
+- **测试零依赖**：`node --test tests/*.test.js`（636 项；文件清单与基线见 `TESTING.md`）。
 
 ### 集成组件
 

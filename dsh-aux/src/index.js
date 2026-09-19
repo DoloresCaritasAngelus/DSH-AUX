@@ -868,9 +868,9 @@ export class AuxLlmService extends Service {
       }
       const text = stripThinkBlocks(
         blocks
-          .filter((block) => block.type === "text" || block.type === "reasoning")
+          .filter((block) => block.type === "text")
           .map((block) => block.text)
-          .join(" "),
+          .join("\n"),
       );
       if (text.length === 0) throw new Error("aux: task model produced no text");
       return text;

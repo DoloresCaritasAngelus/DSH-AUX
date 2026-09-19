@@ -93,6 +93,7 @@ export async function runWebExtract(service, args, exec) {
         error: `该站使用 JS Challenge(${page.challenge.provider}) 阻止脚本抓取;需要浏览器渲染(若 DSH 配置了浏览器/渲染 provider 可重试)`,
         summary: "该页为 JS-Challenge 拦截页,未获取到可用正文。",
         keyPoints: [],
+        untrusted: true,
         chars: page.chars,
         truncated: false,
       };
@@ -108,6 +109,7 @@ export async function runWebExtract(service, args, exec) {
       url: page.finalUrl,
       summary: extracted.summary || result.text,
       keyPoints: extracted.keyPoints,
+      untrusted: true,
       provider: result.provider,
       model: result.model,
       chars: page.chars,
@@ -137,6 +139,7 @@ export async function runWebExtract(service, args, exec) {
         error: `目标页面均被 JS Challenge 拦截,需浏览器渲染`,
         summary: "未获取到内容:站点页面均为 JS-Challenge 拦截页。",
         keyPoints: [],
+        untrusted: true,
         pages: [],
         totalChars: 0,
         truncated: false,
@@ -161,6 +164,7 @@ export async function runWebExtract(service, args, exec) {
     truncated: crawl.pages.some((p) => p.truncated),
     summary: extracted.summary || result.text,
     keyPoints: extracted.keyPoints,
+    untrusted: true,
     provider: result.provider,
     model: result.model,
   };

@@ -1,7 +1,7 @@
 # web_crawl 设计稿(深度站点抓取)
 
 > 状态:✅ 活跃
-> 最后核实:2026-09-09
+> 最后核实:2026-09-19
 > 🔻 版本快照:核心 P0–P3 已上线;P4 的 domain/PSL、渲染 provider、web_search 联动明确延后(见文末)
 > 承接 `WEB-EXTRACT-REVIEW.md` 的 **F1/F2**:web_extract 已落地
 > 同源 BFS(`followLinks: "same-origin"` + 聚合摘要);web_crawl 把它升级为**独立
@@ -92,6 +92,7 @@
   "fetched": 10, "skipped": 2, "blocked": 1,
   "totalChars": 9200, "truncated": false,
   "summary": "…(整体摘要)…", "keyPoints": ["…"],
+  "untrusted": true,                          // 输出侧隔离标记,见下
   "perPage": [],                              // 模式 B 时填充
   "provider": "…", "model": "…",
   "warnings": ["robots.txt: /api 被 Disallow 跳过", "3 页为渲染结果"]
@@ -102,6 +103,10 @@
   `blocked` 因 SSRF/HTTP 错误拒绝。
 - `title` 从 `<title>`/`<h1>` 正则抽取(尽力而为,缺失省略)。
 - register 输出 schema 用 `additionalProperties:false` 全部说明。
+- `untrusted: true` 是**输出侧**隔离标记(0.4.6-fix.3 起,每个返回分支都有,含
+  JS-challenge 分支):`summary`/`keyPoints`/`perPage` 是辅助模型对**外部不可信页面**
+  的转述,仍可能夹带注入,以裸字段进入主模型上下文时须显式声明其不可信。输入侧另有
+  `<<<UNTRUSTED PAGE DATA <nonce>>>` 数据块隔离(`src/prompt.js`),两者互补。
 
 ## 4. 并发与工具安全语义
 

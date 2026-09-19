@@ -111,6 +111,29 @@ test("extractKeyPoints: 空输入", () => {
   assert.deepEqual(extractKeyPoints("  \n  "), { summary: "", keyPoints: [] });
 });
 
+// 块边界必须是换行而非空格:join(" ") 会把 reasoning 散文与紧随其后的
+// "SUMMARY:" 压到同一行,打穿下面的行首锚定 —— 这正是 P1 的成因。
+// 收口点改 join("\n") 后,分节行仍独立成行,锚定成立。
+test("extractKeyPoints: 分节标签独立成行时锚定成立(join 空格会打穿)", () => {
+  const newlineJoined = "前言散文。\nSUMMARY: 真摘要\nKEY POINTS:\n- 要点1";
+  assert.equal(extractKeyPoints(newlineJoined).summary, "真摘要");
+  // 反证:同一内容若被空格压平,行首锚定失配 → 前言被当摘要(即缺陷现象)。
+  const spaceJoined = "前言散文。 SUMMARY: 真摘要\nKEY POINTS:\n- 要点1";
+  assert.equal(extractKeyPoints(spaceJoined).summary, "前言散文。 SUMMARY: 真摘要");
+});
+
+// 已知限制(刻意不做行内兜底):模型若把前言与标签写在同一行,解析器不认。
+// 曾评估过"行内放宽"的加固,但它会把正文里正常出现的 "摘要:" 误判为分节
+// (下方第二条断言即该误判),收益不抵风险,故保留现状并在此锁定。
+test("extractKeyPoints: 行内前言不解析为分节(已知限制,锁定现状)", () => {
+  const inlinePreamble = "Here is the summary. SUMMARY: 真摘要\nKEY POINTS:\n- 要点1";
+  assert.equal(extractKeyPoints(inlinePreamble).summary, "Here is the summary. SUMMARY: 真摘要");
+  // 行内放宽的误命中:普通正文提到 "摘要:" 就会被当成分节。
+  const proseMentionsLabel = "本文讨论摘要:技术。\n- a\n- b";
+  assert.equal(extractKeyPoints(proseMentionsLabel).summary, "本文讨论摘要:技术。");
+  assert.deepEqual(extractKeyPoints(proseMentionsLabel).keyPoints, ["a", "b"]);
+});
+
 // ── H5 注入加固(离线 prompt 结构) ─────────────────────────────────────────
 
 test("wrapUntrustedPageData: 返回闭合数据块且两次 nonce 不同", () => {
@@ -358,8 +381,59 @@ test("H1: seam 缺失(web 无 fetch 能力)时回退本地逐跳抓取", async (
       const userText = streams[0].messages[0].content.find((b) => b.type === "text").text;
       assert.ok(userText.includes("本地回退"));
       assert.ok(!userText.includes("<html>"));
+      assert.equal(value.untrusted, true, "抓取类结果必须带输出侧 untrusted 标记");
     },
   );
+});
+
+// 输出侧隔离:summary/keyPoints 是辅助模型对不可信页面的转述,可能夹带注入,
+// 故每个返回分支都必须显式标注 untrusted(输入侧已有 nonce 数据块隔离)。
+// 同时锁定 register.js 的 output schema 与实现一致 —— DSH 会强制校验工具
+// 输出(dsh-tools createSuccessResult),schema 漏声明 untrusted 会在运行时
+// 抛 ToolOutputError,实现漏返回则会被该断言先抓住。
+test("web_extract/web_crawl: 每个返回分支都带 untrusted,schema 同步声明", async () => {
+  const { ctx, tools } = await makeLocalHarness();
+  const exec = {
+    signal: new AbortController().signal,
+    agent: { session: undefined, options: { provider: "opencode-go", model: "deepseek-v4-flash" } },
+  };
+  // 正常单页分支
+  await withFetchTransport(
+    async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => "text/plain" },
+      text: async () => "PAGE CONTENT 42",
+    }),
+    async () => {
+      const value = await runWebExtract(ctx.auxLlm, { url: "https://example.com/p" }, exec);
+      assert.equal(value.untrusted, true, "正常单页分支");
+    },
+  );
+  // JS-challenge 分支(不发起辅助调用,直接返回结构化标记)
+  await withFetchTransport(
+    async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => "text/html" },
+      text: async () => "<html><head><title>Just a moment...</title></head><body>cf-browser-verification</body></html>",
+    }),
+    async () => {
+      const value = await runWebExtract(ctx.auxLlm, { url: "https://example.com/challenge" }, exec);
+      assert.equal(value.browserRequired, true, "应识别为 JS-challenge");
+      assert.equal(value.untrusted, true, "JS-challenge 分支");
+    },
+  );
+  // schema 与实现一致
+  for (const name of ["web_extract", "web_crawl"]) {
+    const def = tools.find((t) => t.name === name);
+    assert.ok(def, `${name} 应已注册`);
+    assert.equal(
+      def.output.schema.properties.untrusted?.type,
+      "boolean",
+      `${name} 的 output schema 必须声明 untrusted(否则 DSH 输出校验失败)`,
+    );
+  }
 });
 
 test("H2: provider 返回缺 final URL 时拒绝(不信任事后缺失)", async () => {
