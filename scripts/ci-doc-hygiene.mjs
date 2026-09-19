@@ -90,7 +90,7 @@ if (msgHits > 0) {
 // 基线 v0.4.6-fix.1 时的已发布版本段数量。
 // 哨兵刻意停在 0.4.6:该正则末尾的 \b 让它同时匹配 "## 0.4.6 (…)" 与 "## 0.4.6-fix.N (…)",
 // 后续补丁版只需跟着涨这个数字,不必再动哨兵那一行。
-const CHANGELOG_RELEASE_BASELINE = 27;
+const CHANGELOG_RELEASE_BASELINE = 28;
 
 /**
  * 按 `## ` 切 CHANGELOG 段,并判断每段是否有正文。
