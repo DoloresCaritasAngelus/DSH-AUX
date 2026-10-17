@@ -30,6 +30,6 @@ jobs:
           languages: javascript-typescript
           build-mode: none
       - name: 执行分析
-        uses: github/codeql-action/analyze@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           category: "/language:javascript-typescript"
